@@ -1,4 +1,5 @@
 class AccountsController < ApplicationController
+  before_action :authenticate_user!
   before_action :set_account, only: %i[ show edit update destroy ]
 
   # GET /accounts or /accounts.json
@@ -22,6 +23,7 @@ class AccountsController < ApplicationController
   # POST /accounts or /accounts.json
   def create
     @account = Account.new(account_params)
+    @account.user = current_user
 
     respond_to do |format|
       if @account.save
