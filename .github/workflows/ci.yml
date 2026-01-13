@@ -107,6 +107,11 @@ jobs:
       - name: Coveralls
         uses: coverallsapp/github-action@v2
 
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   system-test:
     runs-on: ubuntu-latest
 
