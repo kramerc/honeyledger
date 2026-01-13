@@ -1,6 +1,12 @@
 require "simplecov"
 SimpleCov.start "rails"
 
+require "simplecov-cobertura"
+SimpleCov.formatters = [
+  SimpleCov::Formatter::CoberturaFormatter,
+  SimpleCov::Formatter::HTMLFormatter
+]
+
 ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
