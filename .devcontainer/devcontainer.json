@@ -31,5 +31,5 @@
   // "remoteUser": "root",
 
   // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "sudo chown -R $(id -u):$(id -g) /workspaces/${localWorkspaceFolderBasename} && bin/setup --skip-server"
+  "postCreateCommand": "bin/setup --skip-server"
 }
