@@ -8,7 +8,7 @@ one:
   dest_account: one
   description: Grocery Store
   amount_minor: 5000
-  currency: one
+  currency: usd
   fx_amount_minor:
   fx_currency:
   notes: Weekly groceries
@@ -27,7 +27,7 @@ two:
   dest_account: two
   description: Salary Deposit
   amount_minor: 250000
-  currency: one
+  currency: usd
   fx_amount_minor:
   fx_currency:
   notes: Monthly salary

@@ -14,4 +14,15 @@
     <%= account.currency.code %>
   </div>
 
+  <div>
+    <strong>Opening Balance:</strong>
+    <% if account.opening_balance_transaction %>
+      <%= transaction_amount_with_currency(account.opening_balance_transaction) %>
+      on
+      <%= account.opening_balance_transaction.transacted_at.strftime("%Y-%m-%d %H:%M") %>
+    <% else %>
+      N/A
+    <% end %>
+  </div>
+
 </div>

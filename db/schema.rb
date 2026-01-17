@@ -95,11 +95,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
     t.datetime "cleared_at", precision: nil
     t.datetime "created_at", null: false
     t.bigint "currency_id", null: false
-    t.string "description"
+    t.string "description", default: "", null: false
     t.bigint "dest_account_id", null: false
     t.integer "fx_amount_minor"
     t.bigint "fx_currency_id"
-    t.text "notes"
+    t.text "notes", default: "", null: false
     t.boolean "opening_balance", default: false, null: false
     t.bigint "parent_transaction_id"
     t.datetime "reconciled_at", precision: nil

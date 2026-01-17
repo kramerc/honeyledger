@@ -1,15 +1,33 @@
 # Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
 
-one:
+usd:
   name: US Dollar
   symbol: $
   code: USD
   decimal_places: 2
+  kind: fiat
   active: true
 
-two:
+eur:
   name: Euro
   symbol: €
   code: EUR
   decimal_places: 2
+  kind: fiat
+  active: true
+
+jpy:
+  name: Japanese Yen
+  symbol: ¥
+  code: JPY
+  decimal_places: 0
+  kind: fiat
+  active: true
+
+btc:
+  name: Bitcoin
+  symbol: ₿
+  code: BTC
+  decimal_places: 8
+  kind: crypto
   active: true

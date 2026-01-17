@@ -2,7 +2,7 @@ require "test_helper"
 
 class CurrenciesControllerTest < ActionDispatch::IntegrationTest
   setup do
-    @currency = currencies(:one)
+    @currency = currencies(:usd)
   end
 
   test "should get index" do

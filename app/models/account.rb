@@ -4,6 +4,8 @@ class Account < ApplicationRecord
 
   has_many :src_transactions, class_name: "Transaction", foreign_key: "src_account_id", dependent: :restrict_with_error
   has_many :dest_transactions, class_name: "Transaction", foreign_key: "dest_account_id", dependent: :restrict_with_error
+  has_one :opening_balance_transaction, -> { opening_balances }, class_name: "Transaction", foreign_key: "dest_account_id", dependent: :destroy
+  accepts_nested_attributes_for :opening_balance_transaction
 
   has_one :simplefin_account, dependent: :nullify
 

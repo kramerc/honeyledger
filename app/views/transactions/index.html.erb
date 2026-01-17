@@ -27,7 +27,7 @@
           <td><%= transaction.description %></td>
           <td><%= transaction.src_account&.name %></td>
           <td><%= transaction.dest_account&.name %></td>
-          <td><%= number_to_currency(transaction.amount, unit: transaction.currency.symbol) %></td>
+          <td><%= amount_to_currency(transaction.amount_minor, transaction.currency) %></td>
           <td><%= transaction.currency.code %></td>
           <td><%= transaction.category&.name %></td>
           <td><%= transaction.cleared_at ? "✓" : "" %></td>

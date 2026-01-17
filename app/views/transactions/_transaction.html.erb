@@ -6,17 +6,17 @@
 
   <div>
     <strong>Category:</strong>
-    <%= transaction.category_id %>
+    <%= transaction.category.name if transaction.category %>
   </div>
 
   <div>
     <strong>Src account:</strong>
-    <%= transaction.src_account_id %>
+    <%= transaction.src_account.name %>
   </div>
 
   <div>
     <strong>Dest account:</strong>
-    <%= transaction.dest_account_id %>
+    <%= transaction.dest_account.name %>
   </div>
 
   <div>
@@ -26,18 +26,20 @@
 
   <div>
     <strong>Amount:</strong>
-    <%= transaction.amount %>
+    <%= transaction_amount_with_currency(transaction) %>
   </div>
 
-  <div>
-    <strong>Fx amount:</strong>
-    <%= transaction.fx_amount %>
-  </div>
+  <% if transaction.has_fx? %>
+    <div>
+      <strong>Fx amount:</strong>
+      <%= transaction_fx_amount_with_currency(transaction) %>
+    </div>
 
-  <div>
-    <strong>Fx currency:</strong>
-    <%= transaction.fx_currency %>
-  </div>
+    <div>
+      <strong>Fx currency:</strong>
+      <%= transaction.fx_currency.code %>
+    </div>
+  <% end %>
 
   <div>
     <strong>Notes:</strong>

@@ -3,7 +3,7 @@ require "test_helper"
 class SimplefinTransactionTest < ActiveSupport::TestCase
   setup do
     @user = users(:one)
-    @currency = currencies(:one)  # USD with 2 decimal places
+    @currency = currencies(:usd)  # USD with 2 decimal places
 
     @bank_account = Account.create!(
       user: @user,
@@ -66,14 +66,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor handles amounts with different decimal places" do
-    # Create a currency with 0 decimal places (like JPY)
-    currency_jpy = Currency.create!(
-      name: "Japanese Yen",
-      symbol: "¥",
-      code: "JPY",
-      decimal_places: 0,
-      active: true
-    )
+    # Use a currency with 0 decimal places (like JPY)
+    currency_jpy = currencies(:jpy)
 
     jpy_account = Account.create!(
       user: @user,
@@ -147,15 +141,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor with cryptocurrency (8 decimal places)" do
-    # Create a cryptocurrency with 8 decimal places (like BTC)
-    currency_btc = Currency.create!(
-      name: "Bitcoin",
-      symbol: "₿",
-      code: "BTC",
-      decimal_places: 8,
-      kind: :crypto,
-      active: true
-    )
+    # Use a cryptocurrency with 8 decimal places (like BTC)
+    currency_btc = currencies(:btc)
 
     btc_account = Account.create!(
       user: @user,

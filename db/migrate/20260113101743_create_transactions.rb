@@ -10,14 +10,14 @@ class CreateTransactions < ActiveRecord::Migration[8.1]
       t.references :src_account, null: false, foreign_key: { to_table: :accounts }
       t.references :dest_account, null: false, foreign_key: { to_table: :accounts }
 
-      t.string :description
+      t.string :description, null: false, default: ""
       t.integer :amount_minor, null: false, default: 0
       t.references :currency, null: false, foreign_key: true
 
       t.integer :fx_amount_minor, null: true
       t.references :fx_currency, null: true, foreign_key: { to_table: :currencies }
 
-      t.text :notes
+      t.text :notes, null: false, default: ""
 
       t.timestamp :transacted_at, null: false
       t.timestamp :cleared_at, null: true

@@ -8,14 +8,8 @@ class TransactionTest < ActiveSupport::TestCase
   end
 
   test "amount handles different decimal places" do
-    # Create a currency with 0 decimal places (like JPY)
-    currency_jpy = Currency.create!(
-      name: "Japanese Yen",
-      symbol: "¥",
-      code: "JPY",
-      decimal_places: 0,
-      active: true
-    )
+    # Use a currency with 0 decimal places (like JPY)
+    currency_jpy = currencies(:jpy)
 
     transaction = Transaction.new(
       user: users(:one),
@@ -42,7 +36,7 @@ class TransactionTest < ActiveSupport::TestCase
 
   test "fx_amount returns correct decimal value when both fx_amount_minor and fx_currency are present" do
     transaction = transactions(:one)
-    transaction.fx_currency = currencies(:two)
+    transaction.fx_currency = currencies(:eur)
     transaction.fx_amount_minor = 4500
 
     # 4500 with 2 decimal places = 45.00
@@ -61,7 +55,7 @@ class TransactionTest < ActiveSupport::TestCase
       dest_account: accounts(:two),
       description: "Child transaction",
       amount_minor: 2500,
-      currency: currencies(:one),
+      currency: currencies(:usd),
       transacted_at: Time.current
     )
 
@@ -81,7 +75,7 @@ class TransactionTest < ActiveSupport::TestCase
       dest_account: accounts(:two),
       description: "Child transaction",
       amount_minor: 2500,
-      currency: currencies(:one),
+      currency: currencies(:usd),
       transacted_at: Time.current
     )
 
@@ -107,7 +101,7 @@ class TransactionTest < ActiveSupport::TestCase
       dest_account: accounts(:two),
       description: "Child transaction 1",
       amount_minor: 2500,
-      currency: currencies(:one),
+      currency: currencies(:usd),
       transacted_at: Time.current
     )
 
@@ -119,7 +113,7 @@ class TransactionTest < ActiveSupport::TestCase
       dest_account: accounts(:two),
       description: "Child transaction 2",
       amount_minor: 2500,
-      currency: currencies(:one),
+      currency: currencies(:usd),
       transacted_at: Time.current
     )
 
@@ -144,7 +138,7 @@ class TransactionTest < ActiveSupport::TestCase
       dest_account: accounts(:two),
       description: "Child transaction",
       amount_minor: 2500,
-      currency: currencies(:one),
+      currency: currencies(:usd),
       transacted_at: Time.current
     )
 

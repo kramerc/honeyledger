@@ -2,12 +2,12 @@
 
 one:
   user: one
-  currency: one
+  currency: usd
   name: MyString
   kind: 1
 
 two:
   user: two
-  currency: two
+  currency: eur
   name: MyString
   kind: 1

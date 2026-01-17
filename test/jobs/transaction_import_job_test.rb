@@ -3,7 +3,7 @@ require "test_helper"
 class TransactionImportJobTest < ActiveJob::TestCase
   setup do
     @user = users(:one)
-    @currency = currencies(:one)
+    @currency = currencies(:usd)
 
     # Create a bank account linked to SimpleFin
     @bank_account = Account.create!(

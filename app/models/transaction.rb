@@ -16,6 +16,8 @@ class Transaction < ApplicationRecord
   after_create :mark_parent_as_split, if: :parent_transaction_id?
   after_destroy :unmark_parent_if_last_child, if: :parent_transaction_id?
 
+  scope :opening_balances, -> { where(opening_balance: true) }
+
   def amount
     BigDecimal(amount_minor) / (10**currency.decimal_places)
   end
@@ -24,6 +26,10 @@ class Transaction < ApplicationRecord
     return nil unless fx_amount_minor && fx_currency
 
     BigDecimal(fx_amount_minor) / (10**fx_currency.decimal_places)
+  end
+
+  def has_fx?
+    fx_amount_minor.present? && fx_currency.present?
   end
 
   private
