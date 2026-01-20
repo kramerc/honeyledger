@@ -31,6 +31,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
     t.string "icon"
     t.string "name"
     t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id"], name: "index_categories_on_user_id"
   end
 
   create_table "currencies", force: :cascade do |t|
@@ -142,6 +144,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
 
   add_foreign_key "accounts", "currencies"
   add_foreign_key "accounts", "users"
+  add_foreign_key "categories", "users"
   add_foreign_key "simplefin_accounts", "accounts"
   add_foreign_key "simplefin_accounts", "simplefin_connections"
   add_foreign_key "simplefin_connections", "users"
