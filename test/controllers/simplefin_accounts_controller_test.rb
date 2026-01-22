@@ -31,4 +31,36 @@ class SimplefinAccountsControllerTest < ActionDispatch::IntegrationTest
     @simplefin_account.reload
     assert_nil @simplefin_account.account
   end
+
+  test "should reject link when account_id is blank" do
+    post link_simplefin_account_url(@simplefin_account), params: { simplefin_account: { account_id: "" } }
+
+    assert_redirected_to simplefin_connection_url
+    assert_equal "Please select an account to link.", flash[:alert]
+  end
+
+  test "should reject link when account does not belong to user" do
+    other_user_account = accounts(:two)
+
+    post link_simplefin_account_url(@simplefin_account), params: { simplefin_account: { account_id: other_user_account.id } }
+
+    assert_redirected_to simplefin_connection_url
+    assert_equal "Account not found.", flash[:alert]
+  end
+
+  test "should show error when link fails validation" do
+    # Link the account to something else first to trigger uniqueness validation
+    SimplefinAccount.create!(
+      simplefin_connection: @simplefin_account.simplefin_connection,
+      account: accounts(:asset_account),
+      remote_id: "test_remote_id",
+      name: "Test Account",
+      currency: "USD"
+    )
+
+    post link_simplefin_account_url(@simplefin_account), params: { simplefin_account: { account_id: accounts(:asset_account).id } }
+
+    assert_redirected_to simplefin_connection_url
+    assert_match(/Failed to link SimpleFIN account/, flash[:alert])
+  end
 end
