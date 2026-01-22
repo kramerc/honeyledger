@@ -12,7 +12,11 @@ class SimplefinRefreshJob < ApplicationJob
       simplefin_client = simplefin_connection.client
       simplefin_accounts = simplefin_client.accounts(start_date: 1.month.ago.to_i)
 
-      simplefin_accounts["errors"]&.any? && next
+      if simplefin_accounts["errors"]&.any?
+        errors = simplefin_accounts["errors"]
+        Rails.logger.error("SimpleFin API error for connection #{simplefin_connection.id}: #{errors.join(', ')}")
+        next
+      end
 
       simplefin_accounts["accounts"].each do |sf_account_data|
         sf_account = SimplefinAccount.find_or_initialize_by(

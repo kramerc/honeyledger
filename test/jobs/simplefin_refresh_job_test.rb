@@ -142,6 +142,42 @@ class SimplefinRefreshJobTest < ActiveJob::TestCase
     end
   end
 
+  test "logs error when API returns errors" do
+    mock_client = Minitest::Mock.new
+    def mock_client.accounts(start_date:)
+      { "errors" => [ "API Error" ], "accounts" => [] }
+    end
+
+    # Capture log output
+    log_output = StringIO.new
+    logger = ActiveSupport::Logger.new(log_output)
+    Rails.stub :logger, logger do
+      Simplefin.stub :new, mock_client do
+        SimplefinRefreshJob.perform_now(@connection.id)
+      end
+    end
+
+    assert_match(/SimpleFin API error for connection #{@connection.id}: #{Regexp.escape("API Error")}/, log_output.string)
+  end
+
+  test "logs reauthentication error" do
+    mock_client = Minitest::Mock.new
+    def mock_client.accounts(start_date:)
+      { "errors" => [ "You must reauthenticate." ], "accounts" => [] }
+    end
+
+    # Capture log output
+    log_output = StringIO.new
+    logger = ActiveSupport::Logger.new(log_output)
+    Rails.stub :logger, logger do
+      Simplefin.stub :new, mock_client do
+        SimplefinRefreshJob.perform_now(@connection.id)
+      end
+    end
+
+    assert_match(/SimpleFin API error for connection #{@connection.id}: #{Regexp.escape("You must reauthenticate.")}/, log_output.string)
+  end
+
   test "updates existing accounts and transactions" do
     # Create existing account
     existing_account = SimplefinAccount.create!(
