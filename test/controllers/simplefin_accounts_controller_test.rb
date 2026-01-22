@@ -21,6 +21,14 @@ class SimplefinAccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal account, @simplefin_account.account
   end
 
+  test "should enqueue TransactionImportJob when account is linked" do
+    account = accounts(:one)
+
+    assert_enqueued_with(job: TransactionImportJob, args: [ { simplefin_account_id: @simplefin_account.id } ]) do
+      post link_simplefin_account_url(@simplefin_account), params: { simplefin_account: { account_id: account.id } }
+    end
+  end
+
   test "should unlink account" do
     # Ensure the account is linked first
     assert_not_nil @simplefin_account.account
