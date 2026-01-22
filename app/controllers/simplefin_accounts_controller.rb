@@ -3,12 +3,21 @@ class SimplefinAccountsController < ApplicationController
   before_action :set_simplefin_account, only: [ :link, :unlink ]
 
   def link
-    if simplefin_account_params[:account_id].blank?
+    account_id = params.dig(:simplefin_account, :account_id)
+
+    if account_id.blank?
       redirect_to simplefin_connection_path, alert: "Please select an account to link."
       return
     end
 
-    if @simplefin_account.update(simplefin_account_params)
+    # Verify the account belongs to the current user
+    account = current_user.accounts.find_by(id: account_id)
+    unless account
+      redirect_to simplefin_connection_path, alert: "Account not found."
+      return
+    end
+
+    if @simplefin_account.update(account: account)
       redirect_to simplefin_connection_path, notice: "SimpleFIN account linked successfully."
     else
       redirect_to simplefin_connection_path, alert: "Failed to link SimpleFIN account: #{@simplefin_account.errors.full_messages.to_sentence}"
@@ -23,9 +32,5 @@ class SimplefinAccountsController < ApplicationController
   private
     def set_simplefin_account
       @simplefin_account = current_user.simplefin_accounts.find(params[:id])
-    end
-
-    def simplefin_account_params
-      params.require(:simplefin_account).permit(:account_id)
     end
 end
