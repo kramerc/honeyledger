@@ -63,4 +63,29 @@ class SimplefinAccountsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to simplefin_connection_url
     assert_match(/Failed to link SimpleFIN account/, flash[:alert])
   end
+
+  test "should show error when unlink fails" do
+    # Ensure the account is linked first
+    assert_not_nil @simplefin_account.account
+
+    # Override the update method to simulate failure
+    SimplefinAccount.class_eval do
+      alias_method :original_update, :update
+      define_method(:update) do |*args|
+        errors.add(:base, "Database error")
+        false
+      end
+    end
+
+    delete unlink_simplefin_account_url(@simplefin_account)
+
+    assert_redirected_to simplefin_connection_url
+    assert_match(/Failed to unlink SimpleFIN account/, flash[:alert])
+  ensure
+    # Restore the original method
+    SimplefinAccount.class_eval do
+      alias_method :update, :original_update
+      remove_method :original_update
+    end
+  end
 end
