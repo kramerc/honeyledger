@@ -4,8 +4,8 @@ one:
   user: one
   parent_transaction:
   category: one
-  src_account: one
-  dest_account: one
+  src_account: asset_account
+  dest_account: expense_account
   description: Grocery Store
   amount_minor: 5000
   currency: usd
@@ -23,8 +23,8 @@ two:
   user: one
   parent_transaction:
   category: one
-  src_account: one
-  dest_account: two
+  src_account: revenue_account
+  dest_account: asset_account
   description: Salary Deposit
   amount_minor: 250000
   currency: usd

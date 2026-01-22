@@ -21,4 +21,7 @@ class Account < ApplicationRecord
 
   scope :sourceable, -> { where(kind: [ :asset, :liability, :equity, :revenue ]) }
   scope :destinable, -> { where(kind: [ :asset, :liability, :equity, :expense ]) }
+
+  scope :linkable, -> { where(kind: [ :asset, :liability ]) }
+  scope :unlinked, -> { left_joins(:simplefin_account).where(simplefin_accounts: { id: nil }) }
 end

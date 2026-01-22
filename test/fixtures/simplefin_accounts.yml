@@ -1,21 +1,22 @@
 # Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
 
-one:
+linked_one:
   simplefin_connection: one
-  remote_id: MyString
-  org: 
-  name: MyString
-  currency: MyString
-  balance: MyString
-  available_balance: MyString
+  account: linked_asset
+  remote_id: remote_id_1
+  org: Test Bank
+  name: Test Checking
+  currency: USD
+  balance: "1000.00"
+  available_balance: "1000.00"
   balance_date: 2026-01-13 05:53:24
 
-two:
-  simplefin_connection: two
-  remote_id: MyString
-  org: 
-  name: MyString
-  currency: MyString
-  balance: MyString
-  available_balance: MyString
+unlinked_one:
+  simplefin_connection: one
+  remote_id: remote_id_2
+  org: Test Bank
+  name: Test Savings
+  currency: USD
+  balance: "5000.00"
+  available_balance: "5000.00"
   balance_date: 2026-01-13 05:53:24

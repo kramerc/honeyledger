@@ -1,12 +1,15 @@
 class TransactionImportJob < ApplicationJob
   queue_as :default
 
-  def perform(*args)
-    SimplefinTransaction
+  def perform(simplefin_account_id: nil)
+    scope = SimplefinTransaction
       .includes(simplefin_account: { simplefin_connection: :user, account: :currency }).where.not(simplefin_account: { account_id: nil })
       .left_joins(:ledger_transaction)
       .where("transactions.id IS NULL OR simplefin_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01')")
-      .find_each do |sft|
+
+    scope = scope.where(simplefin_account_id: simplefin_account_id) if simplefin_account_id
+
+    scope.find_each do |sft|
         user = sft.simplefin_account.simplefin_connection.user
         src_account = sft.simplefin_account.account
 

@@ -10,4 +10,5 @@ class User < ApplicationRecord
   has_many :transactions, dependent: :destroy
 
   has_one :simplefin_connection, dependent: :destroy
+  has_many :simplefin_accounts, through: :simplefin_connection, source: :accounts
 end

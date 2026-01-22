@@ -3,11 +3,47 @@
 one:
   user: one
   currency: usd
-  name: MyString
-  kind: 1
+  name: Account One
+  kind: asset
 
 two:
   user: two
   currency: eur
-  name: MyString
-  kind: 1
+  name: Account Two
+  kind: liability
+
+asset_account:
+  user: one
+  currency: usd
+  name: Asset Account
+  kind: asset
+
+liability_account:
+  user: one
+  currency: usd
+  name: Liability Account
+  kind: liability
+
+expense_account:
+  user: one
+  currency: usd
+  name: Expense Account
+  kind: expense
+
+revenue_account:
+  user: one
+  currency: usd
+  name: Revenue Account
+  kind: revenue
+
+linked_asset:
+  user: one
+  currency: usd
+  name: Linked Asset
+  kind: asset
+
+unlinked_liability:
+  user: one
+  currency: usd
+  name: Unlinked Liability
+  kind: liability

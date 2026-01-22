@@ -14,13 +14,7 @@
     <tr>
       <td><%= sf_account.org&.[]("name") %></td>
       <td><%= sf_account.name %></td>
-      <td>
-        <% if sf_account.account.present? %>
-          <%= link_to sf_account.account.name, sf_account.account %>
-        <% else %>
-          Not linked
-        <% end %>
-      </td>
+      <td><%= render partial: "simplefin_connections/link_form", locals: { sf_account: sf_account } %></td>
     </tr>
   <% end %>
 </table>

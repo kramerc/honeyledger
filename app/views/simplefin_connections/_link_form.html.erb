@@ -1,0 +1,17 @@
+<% if sf_account.unlinked? %>
+  <%= form_with model: sf_account, url: link_simplefin_account_path(sf_account), method: :post do |form| %>
+    <span>
+      <%= form.collection_select :account_id, current_user.accounts.linkable.unlinked.order(:name), :id, :name, prompt: "Not linked" %>
+    </span>
+    <span>
+      <%= form.submit "Link" %>
+    </span>
+  <% end %>
+<% else %>
+  <%= form_with model: sf_account, url: unlink_simplefin_account_path(sf_account), method: :delete, data: { turbo_confirm: "Are you sure you want to unlink this account?" } do |form| %>
+    <span><%= sf_account.account.name %></span>
+    <span>
+      <%= form.submit "Unlink" %>
+    </span>
+  <% end %>
+<% end %>

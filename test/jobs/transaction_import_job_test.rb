@@ -5,6 +5,9 @@ class TransactionImportJobTest < ActiveJob::TestCase
     @user = users(:one)
     @currency = currencies(:usd)
 
+    # Clear any SimpleFin transactions that would be imported from fixtures
+    SimplefinTransaction.where(simplefin_account: SimplefinAccount.where.not(account_id: nil)).destroy_all
+
     # Create a bank account linked to SimpleFin
     @bank_account = Account.create!(
       user: @user,
@@ -293,5 +296,131 @@ class TransactionImportJobTest < ActiveJob::TestCase
 
     # Verify the new transaction was created
     assert_not_nil Transaction.find_by(sourceable: sf_transaction_new)
+  end
+
+  test "imports only transactions for specified simplefin_account_id" do
+    # Create a second SimpleFin account
+    second_bank_account = Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "Savings Account",
+      kind: :asset
+    )
+
+    second_simplefin_account = SimplefinAccount.create!(
+      simplefin_connection: @simplefin_connection,
+      account: second_bank_account,
+      remote_id: "acc_test_2",
+      name: "Test Savings",
+      currency: "USD",
+      balance: "5000.00"
+    )
+
+    # Create transactions in both accounts
+    sf_transaction_first = SimplefinTransaction.create!(
+      simplefin_account: @simplefin_account,
+      remote_id: "txn_first_account",
+      amount: "-50.00",
+      description: "First Account Transaction",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    sf_transaction_second = SimplefinTransaction.create!(
+      simplefin_account: second_simplefin_account,
+      remote_id: "txn_second_account",
+      amount: "-75.00",
+      description: "Second Account Transaction",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    # Import only transactions from the first account
+    assert_difference "Transaction.count", 1 do
+      TransactionImportJob.perform_now(simplefin_account_id: @simplefin_account.id)
+    end
+
+    # Verify only the first account's transaction was imported
+    assert_not_nil Transaction.find_by(sourceable: sf_transaction_first)
+    assert_nil Transaction.find_by(sourceable: sf_transaction_second)
+  end
+
+  test "imports all transactions when simplefin_account_id is not specified" do
+    # Create a second SimpleFin account
+    second_bank_account = Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "Savings Account",
+      kind: :asset
+    )
+
+    second_simplefin_account = SimplefinAccount.create!(
+      simplefin_connection: @simplefin_connection,
+      account: second_bank_account,
+      remote_id: "acc_test_3",
+      name: "Test Savings",
+      currency: "USD",
+      balance: "5000.00"
+    )
+
+    # Create transactions in both accounts
+    sf_transaction_first = SimplefinTransaction.create!(
+      simplefin_account: @simplefin_account,
+      remote_id: "txn_all_first",
+      amount: "-50.00",
+      description: "First Account Transaction",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    sf_transaction_second = SimplefinTransaction.create!(
+      simplefin_account: second_simplefin_account,
+      remote_id: "txn_all_second",
+      amount: "-75.00",
+      description: "Second Account Transaction",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    # Import all transactions (no simplefin_account_id specified)
+    assert_difference "Transaction.count", 2 do
+      TransactionImportJob.perform_now
+    end
+
+    # Verify both transactions were imported
+    assert_not_nil Transaction.find_by(sourceable: sf_transaction_first)
+    assert_not_nil Transaction.find_by(sourceable: sf_transaction_second)
+  end
+
+  test "simplefin_account_id filter respects other scoping rules" do
+    # Create a second SimpleFin account that is NOT linked to a ledger account
+    unlinked_simplefin_account = SimplefinAccount.create!(
+      simplefin_connection: @simplefin_connection,
+      account: nil,  # Not linked
+      remote_id: "acc_unlinked_filter",
+      name: "Unlinked Account",
+      currency: "USD",
+      balance: "3000.00"
+    )
+
+    # Create transaction in unlinked account
+    _sf_transaction_unlinked = SimplefinTransaction.create!(
+      simplefin_account: unlinked_simplefin_account,
+      remote_id: "txn_unlinked_filter",
+      amount: "-25.00",
+      description: "Should Be Skipped",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    # Try to import with specific account_id - should still skip because account not linked
+    assert_no_difference "Transaction.count" do
+      TransactionImportJob.perform_now(simplefin_account_id: unlinked_simplefin_account.id)
+    end
   end
 end
