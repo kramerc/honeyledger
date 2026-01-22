@@ -25,8 +25,11 @@ class SimplefinAccountsController < ApplicationController
   end
 
   def unlink
-    @simplefin_account.update(account_id: nil)
-    redirect_to simplefin_connection_path, notice: "SimpleFIN account unlinked successfully."
+    if @simplefin_account.update(account_id: nil)
+      redirect_to simplefin_connection_path, notice: "SimpleFIN account unlinked successfully."
+    else
+      redirect_to simplefin_connection_path, alert: "Failed to unlink SimpleFIN account: #{@simplefin_account.errors.full_messages.to_sentence}"
+    end
   end
 
   private

@@ -16,6 +16,6 @@ class SimplefinAccount < ApplicationRecord
   end
 
   def enqueue_import!
-    TransactionImportJob.perform_later(simplefin_account_id: self.id)
+    TransactionImportJob.perform_later(simplefin_account_id: id)
   end
 end

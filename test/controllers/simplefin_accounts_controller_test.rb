@@ -12,7 +12,7 @@ class SimplefinAccountsControllerTest < ActionDispatch::IntegrationTest
   test "should link account" do
     account = accounts(:one)
 
-    assert_difference "Transaction.count", 0 do
+    assert_no_difference "Transaction.count" do
       post link_simplefin_account_url(@simplefin_account), params: { simplefin_account: { account_id: account.id } }
     end
 
@@ -49,7 +49,7 @@ class SimplefinAccountsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should show error when link fails validation" do
-    # Link the account to something else first to trigger uniqueness validation
+    # Pre-create a SimplefinAccount linked to the target account to trigger the uniqueness validation
     SimplefinAccount.create!(
       simplefin_connection: @simplefin_account.simplefin_connection,
       account: accounts(:asset_account),
