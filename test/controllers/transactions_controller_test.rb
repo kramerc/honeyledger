@@ -180,6 +180,35 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_nil Transaction.last.category_id
   end
 
+  test "should handle invalid amount_display gracefully" do
+    assert_difference("Transaction.count", 1) do
+      post transactions_url,
+        params: { transaction: {
+          transacted_at: @transaction.transacted_at,
+          src_account_id: @transaction.src_account_id,
+          dest_account_id: @transaction.dest_account_id,
+          description: "Test transaction",
+          amount_display: "not a number"
+        } }
+    end
+
+    # Transaction is created but amount_minor defaults to 0 (invalid input ignored)
+    assert_equal 0, Transaction.last.amount_minor
+  end
+
+  test "should handle invalid amount_display on update" do
+    original_amount = @transaction.amount_minor
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        amount_display: "invalid"
+      } }
+
+    @transaction.reload
+    # Original amount is preserved when invalid input provided
+    assert_equal original_amount, @transaction.amount_minor
+  end
+
   test "should handle validation errors with turbo_stream on create" do
     post transactions_url,
       params: { transaction: {
