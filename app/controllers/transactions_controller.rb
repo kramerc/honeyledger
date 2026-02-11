@@ -5,6 +5,14 @@ class TransactionsController < ApplicationController
   # GET /transactions or /transactions.json
   def index
     @transactions = current_user.transactions.includes(:category, :src_account, :dest_account, :currency, :fx_currency).order(transacted_at: :desc)
+
+    if params[:account_id].present?
+      @transactions = @transactions.where(src_account_id: params[:account_id]).or(
+        @transactions.where(dest_account_id: params[:account_id])
+      )
+    end
+
+    @accounts_by_type = current_user.accounts.order(:name).group_by { |a| a.kind.capitalize }
   end
 
   # GET /transactions/1 or /transactions/1.json

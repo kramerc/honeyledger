@@ -4,13 +4,30 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
   setup do
-    sign_in users(:one)
+    @user = users(:one)
+    sign_in @user
     @transaction = transactions(:one)
   end
 
   test "should get index" do
     get transactions_url
     assert_response :success
+  end
+
+  test "should filter transactions by account" do
+    account = accounts(:asset_account)
+    get transactions_url, params: { account_id: account.id }
+    assert_response :success
+    # Filtered results should include transactions involving the asset_account
+    assert_match account.name, response.body
+  end
+
+  test "should return all transactions when no account filter" do
+    get transactions_url
+    assert_response :success
+    # Without filter, both fixture transactions should appear
+    assert_match transactions(:one).description, response.body
+    assert_match transactions(:two).description, response.body
   end
 
   test "should get new" do

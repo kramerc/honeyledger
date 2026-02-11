@@ -4,11 +4,23 @@
 
 <h1>Transactions</h1>
 
+<%= form_with url: transactions_path, method: :get, local: true do |f| %>
+  <div>
+    <%= f.label :account_id, "Filter by Account" %>
+    <%= f.select :account_id, grouped_options_for_select(@accounts_by_type.map { |type, accounts| [type, accounts.map { |a| [a.name, a.id] }] }, params[:account_id]), { include_blank: "All Accounts" } %>
+    <%= f.submit "Filter" %>
+    <% if params[:account_id].present? %>
+      <%= link_to "Clear", transactions_path %>
+    <% end %>
+  </div>
+<% end %>
+
 <div id="transactions">
   <table>
     <thead>
       <tr>
         <th>Date</th>
+        <th>Type</th>
         <th>Description</th>
         <th>From</th>
         <th>To</th>
@@ -24,6 +36,7 @@
       <% @transactions.each do |transaction| %>
         <tr>
           <td><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
+          <td><%= transaction_type_indicator(transaction) %></td>
           <td><%= transaction.description %></td>
           <td><%= transaction.src_account&.name %></td>
           <td><%= transaction.dest_account&.name %></td>
