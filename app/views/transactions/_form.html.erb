@@ -16,9 +16,25 @@
     <%= form.datetime_select :transacted_at %>
   </div>
 
-  <div>
-    <%= form.label :category_id, style: "display: block" %>
-    <%= form.text_field :category_id %>
+  <div data-controller="category-picker">
+    <%= form.label :category_name, "Category", style: "display: block" %>
+    <%= form.select :_category_select,
+          options_for_select(
+            [["— None —", ""]] +
+            current_user.categories.order(:name).map { |c| [c.name, c.id] } +
+            [["+ New category…", "__new__"]],
+            transaction.category_id
+          ),
+          {},
+          data: { category_picker_target: "select", action: "change->category-picker#changed" } %>
+    <div class="category-new-input" style="display:none" data-category-picker-target="newWrapper">
+      <%= form.text_field :_category_new,
+            value: "",
+            placeholder: "New category name",
+            data: { category_picker_target: "textInput", action: "input->category-picker#typed" } %>
+      <a href="#" class="category-new-cancel" data-action="click->category-picker#back" title="Back to list">&times;</a>
+    </div>
+    <%= form.hidden_field :category_name, value: transaction.category&.name, data: { category_picker_target: "nameField" } %>
   </div>
 
   <div>
@@ -41,10 +57,6 @@
     <%= form.text_field :amount_minor %>
   </div>
 
-  <div>
-    <%= form.label :currency_id, style: "display: block" %>
-    <%= form.select :currency_id, Currency.all.collect { |c| [c.code, c.id] } %>
-  </div>
 
   <div>
     <%= form.label :fx_amount_minor, style: "display: block" %>

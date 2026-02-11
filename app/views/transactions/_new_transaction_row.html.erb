@@ -1,0 +1,59 @@
+<tr id="new_transaction_row" data-controller="transaction-type">
+  <% form_id = "new_transaction_inline_form" %>
+  <td>
+    <%= date_field_tag "transaction[transacted_at]", Date.today.strftime("%Y-%m-%d"), form: form_id %>
+  </td>
+  <td><span data-transaction-type-target="indicator"></span></td>
+  <td>
+    <%= text_field_tag "transaction[description]", transaction.description, form: form_id, placeholder: "Description" %>
+  </td>
+  <td>
+    <%= select_tag "transaction[src_account_id]",
+          account_options_with_kind(src_accounts, transaction.src_account_id, prompt: "From…"),
+          form: form_id,
+          data: { transaction_type_target: "src", action: "change->transaction-type#update" } %>
+  </td>
+  <td>
+    <%= select_tag "transaction[dest_account_id]",
+          account_options_with_kind(dest_accounts, transaction.dest_account_id, prompt: "To…"),
+          form: form_id,
+          data: { transaction_type_target: "dest", action: "change->transaction-type#update" } %>
+  </td>
+  <td>
+    <%= text_field_tag "transaction[amount_display]", nil, form: form_id, placeholder: "0.00" %>
+  </td>
+  <td><span data-transaction-type-target="currency"></span></td>
+  <td data-controller="category-picker">
+    <%= select_tag "_category_select",
+          options_for_select(
+            [["— None —", ""]] +
+            categories.map { |c| [c.name, c.id] } +
+            [["+ New category…", "__new__"]],
+            transaction.category_id
+          ),
+          form: form_id,
+          data: { category_picker_target: "select", action: "change->category-picker#changed" } %>
+    <div class="category-new-input" style="display:none" data-category-picker-target="newWrapper">
+      <%= text_field_tag "_category_new", "",
+            form: form_id,
+            placeholder: "New category",
+            data: { category_picker_target: "textInput", action: "input->category-picker#typed" } %>
+      <a href="#" class="category-new-cancel" data-action="click->category-picker#back" title="Back to list">&times;</a>
+    </div>
+    <%= hidden_field_tag "transaction[category_name]", transaction.category&.name, form: form_id, data: { category_picker_target: "nameField" } %>
+  </td>
+  <td></td>
+  <td></td>
+  <td>
+    <% if transaction.errors.any? %>
+      <div style="color: red; font-size: 0.85em;">
+        <% transaction.errors.full_messages.each do |msg| %>
+          <div><%= msg %></div>
+        <% end %>
+      </div>
+    <% end %>
+    <%= form_with(url: transactions_path, method: :post, id: form_id) do |f| %>
+      <%= f.submit "Add" %>
+    <% end %>
+  </td>
+</tr>

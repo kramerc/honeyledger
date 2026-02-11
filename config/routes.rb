@@ -4,7 +4,11 @@ Rails.application.routes.draw do
   resources :accounts
   resources :categories
   resources :currencies
-  resources :transactions
+  resources :transactions do
+    member do
+      get :inline_edit
+    end
+  end
 
   # SimpleFIN integration routes
   resources :simplefin_accounts, only: [] do

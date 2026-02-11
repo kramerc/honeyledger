@@ -33,23 +33,14 @@
       </tr>
     </thead>
     <tbody>
+      <%= render "new_transaction_row",
+            transaction: @new_transaction,
+            src_accounts: @src_accounts,
+            dest_accounts: @dest_accounts,
+            categories: @categories %>
       <% @transactions.each do |transaction| %>
-        <tr>
-          <td><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
-          <td><%= transaction_type_indicator(transaction) %></td>
-          <td><%= transaction.description %></td>
-          <td><%= transaction.src_account&.name %></td>
-          <td><%= transaction.dest_account&.name %></td>
-          <td><%= amount_to_currency(transaction.amount_minor, transaction.currency) %></td>
-          <td><%= transaction.currency.code %></td>
-          <td><%= transaction.category&.name %></td>
-          <td><%= transaction.cleared_at ? "✓" : "" %></td>
-          <td><%= transaction.split ? "Split" : "" %></td>
-          <td><%= link_to "Show", transaction %></td>
-        </tr>
+        <%= render "transaction_row", transaction: transaction %>
       <% end %>
     </tbody>
   </table>
 </div>
-
-<%= link_to "New transaction", new_transaction_path %>

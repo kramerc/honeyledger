@@ -1,0 +1,62 @@
+/* Transactions table and inline-edit form styling */
+
+#transactions table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+#transactions th,
+#transactions td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+#transactions th {
+  font-weight: 600;
+  background: #f7f7f7;
+}
+
+#transactions tbody tr:hover {
+  background: #fafafa;
+}
+
+/* Make inline-edit inputs fill their cells */
+#transactions input[type="text"],
+#transactions input[type="date"],
+#transactions input[type="number"],
+#transactions select,
+#transactions textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.25rem 0.35rem;
+  font: inherit;
+}
+
+/* Category new-input combo */
+.category-new-input {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.category-new-input input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.category-new-cancel {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  text-decoration: none;
+  color: #888;
+  padding: 0 0.2rem;
+}
+
+.category-new-cancel:hover {
+  color: #c00;
+}

@@ -148,4 +148,42 @@ class TransactionTest < ActiveSupport::TestCase
 
     assert_nil Transaction.find_by(id: child_id), "Child transaction should be destroyed with parent"
   end
+
+  test "currency is automatically set from dest account" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      amount_minor: 1000,
+      description: "Test",
+      transacted_at: Time.current
+    )
+
+    assert transaction.valid?
+    assert_equal accounts(:expense_account).currency_id, transaction.currency_id
+  end
+
+  test "validation fails when currency does not match dest account" do
+    # Create a dest account with EUR currency to force a mismatch
+    eur_account = Account.create!(
+      user: users(:one),
+      currency: currencies(:eur),
+      name: "EUR Expense",
+      kind: :expense
+    )
+
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: eur_account,
+      amount_minor: 1000,
+      description: "Test",
+      currency: currencies(:usd), # mismatch
+      transacted_at: Time.current
+    )
+
+    # before_validation will correct it, so the validation should pass
+    assert transaction.valid?
+    assert_equal currencies(:eur).id, transaction.currency_id, "Currency should be auto-corrected to dest account currency"
+  end
 end
