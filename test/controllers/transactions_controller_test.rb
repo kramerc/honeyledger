@@ -65,4 +65,85 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to transactions_url
   end
+
+  test "should get inline_edit" do
+    get inline_edit_transaction_url(@transaction)
+    assert_response :success
+  end
+
+  test "should create transaction with turbo_stream" do
+    assert_difference("Transaction.count") do
+      post transactions_url,
+        params: { transaction: {
+          transacted_at: @transaction.transacted_at,
+          src_account_id: @transaction.src_account_id,
+          dest_account_id: @transaction.dest_account_id,
+          description: "New transaction",
+          amount_display: "50.00"
+        } },
+        as: :turbo_stream
+    end
+
+    assert_response :success
+  end
+
+  test "should update transaction with turbo_stream" do
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        description: "Updated description",
+        amount_display: "100.00"
+      } },
+      as: :turbo_stream
+
+    assert_response :success
+    @transaction.reload
+    assert_equal "Updated description", @transaction.description
+  end
+
+  test "should destroy transaction with turbo_stream" do
+    assert_difference("Transaction.count", -1) do
+      delete transaction_url(@transaction), as: :turbo_stream
+    end
+
+    assert_response :success
+  end
+
+  test "should create transaction with category_name" do
+    assert_difference([ "Transaction.count", "Category.count" ]) do
+      post transactions_url,
+        params: { transaction: {
+          transacted_at: @transaction.transacted_at,
+          src_account_id: @transaction.src_account_id,
+          dest_account_id: @transaction.dest_account_id,
+          description: "Test transaction",
+          amount_display: "25.50",
+          category_name: "New Test Category"
+        } }
+    end
+
+    assert_equal "New Test Category", Transaction.last.category.name
+  end
+
+  test "should update transaction with existing category_name" do
+    existing_category = categories(:one)
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_name: existing_category.name
+      } }
+
+    @transaction.reload
+    assert_equal existing_category.id, @transaction.category_id
+  end
+
+  test "should handle validation errors with turbo_stream" do
+    post transactions_url,
+      params: { transaction: {
+        description: "Invalid transaction"
+        # Missing required fields
+      } },
+      as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
 end

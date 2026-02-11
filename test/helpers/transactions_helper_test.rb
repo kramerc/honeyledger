@@ -47,4 +47,26 @@ class TransactionsHelperTest < ActionView::TestCase
 
     assert_equal "₿1.00000000", result
   end
+
+  test "account_options_with_kind includes data attributes" do
+    accounts = [
+      accounts(:asset_account),
+      accounts(:expense_account)
+    ]
+
+    result = account_options_with_kind(accounts, accounts(:asset_account).id)
+
+    assert_match /data-kind="asset"/, result
+    assert_match /data-currency="USD"/, result
+    assert_match /selected/, result
+  end
+
+  test "account_options_with_kind with prompt" do
+    accounts = [ accounts(:asset_account) ]
+
+    result = account_options_with_kind(accounts, nil, prompt: "Select account")
+
+    assert_match /Select account/, result
+    assert_match /value=""/, result
+  end
 end

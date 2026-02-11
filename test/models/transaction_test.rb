@@ -186,4 +186,31 @@ class TransactionTest < ActiveSupport::TestCase
     assert transaction.valid?
     assert_equal currencies(:eur).id, transaction.currency_id, "Currency should be auto-corrected to dest account currency"
   end
+
+  test "validation error when currency manually set to mismatch after auto-correction" do
+    eur_account = Account.create!(
+      user: users(:one),
+      currency: currencies(:eur),
+      name: "EUR Expense",
+      kind: :expense
+    )
+
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: eur_account,
+      amount_minor: 1000,
+      description: "Test",
+      transacted_at: Time.current
+    )
+
+    # Skip callbacks to test validation directly
+    transaction.currency_id = currencies(:usd).id
+
+    # Manually run just the validation without before_validation
+    transaction.send(:currency_matches_dest_account)
+
+    # Check validation errors
+    assert_includes transaction.errors[:currency], "must match the destination account's currency"
+  end
 end
