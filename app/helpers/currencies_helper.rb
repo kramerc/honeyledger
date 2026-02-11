@@ -4,6 +4,7 @@ module CurrenciesHelper
   end
 
   def amount_minor_to_decimal(amount_minor, currency)
-    format("%.#{currency.decimal_places}f", amount_minor.to_f / (10 ** currency.decimal_places))
+    decimal_value = BigDecimal(amount_minor) / (10 ** currency.decimal_places)
+    format("%.#{currency.decimal_places}f", decimal_value)
   end
 end

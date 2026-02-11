@@ -19,7 +19,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     get transactions_url, params: { account_id: account.id }
     assert_response :success
     # Filtered results should include transactions involving the asset_account
-    assert_match account.name, response.body
+    assert_match transactions(:one).description, response.body # src_account is asset_account
+    assert_match transactions(:two).description, response.body # dest_account is asset_account
   end
 
   test "should return all transactions when no account filter" do
@@ -136,11 +137,21 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal existing_category.id, @transaction.category_id
   end
 
-  test "should handle validation errors with turbo_stream" do
+  test "should handle validation errors with turbo_stream on create" do
     post transactions_url,
       params: { transaction: {
         description: "Invalid transaction"
         # Missing required fields
+      } },
+      as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
+
+  test "should handle validation errors with turbo_stream on update" do
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        src_account_id: nil  # Make it invalid
       } },
       as: :turbo_stream
 

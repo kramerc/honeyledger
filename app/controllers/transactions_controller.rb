@@ -152,8 +152,16 @@ class TransactionsController < ApplicationController
 
     # If category_name is provided, find or create the category and set category_id.
     def resolve_category!(attrs)
+      # If the client did not send category_name at all, leave category_id unchanged.
+      return unless attrs.key?(:category_name)
+
       name = attrs.delete(:category_name)&.strip
-      return if name.blank?
+
+      # Explicitly clear the category when a blank name is submitted.
+      if name.blank?
+        attrs[:category_id] = nil
+        return
+      end
 
       category = current_user.categories.find_or_create_by!(name: name)
       attrs[:category_id] = category.id
@@ -164,9 +172,17 @@ class TransactionsController < ApplicationController
       display = attrs.delete(:amount_display)
       return if display.blank?
 
+      begin
+        decimal_amount = BigDecimal(display)
+      rescue ArgumentError, TypeError
+        # Leave amount_minor unset so model validations can handle invalid input
+        return
+      end
+
       dest_account = current_user.accounts.find_by(id: attrs[:dest_account_id])
       decimal_places = dest_account&.currency&.decimal_places || 2
-      attrs[:amount_minor] = (BigDecimal(display) * (10**decimal_places)).to_i
+      scale = 10**decimal_places
+      attrs[:amount_minor] = (decimal_amount * scale).round.to_i
     end
 
     def set_form_collections

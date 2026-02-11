@@ -1,5 +1,7 @@
 module TransactionsHelper
   def transaction_type_indicator(transaction)
+    return "" if transaction.dest_account.nil? || transaction.src_account.nil?
+
     if transaction.dest_account.expense?
       tag.span("↓ Withdrawal", style: "color: red;")
     elsif transaction.src_account.revenue?

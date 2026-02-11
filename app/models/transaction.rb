@@ -13,7 +13,6 @@ class Transaction < ApplicationRecord
   belongs_to :parent_transaction, class_name: "Transaction", optional: true
   has_many :child_transactions, class_name: "Transaction", foreign_key: "parent_transaction_id", dependent: :destroy
 
-  validate :currency_matches_dest_account
   before_validation :set_currency_from_dest_account
 
   after_create :mark_parent_as_split, if: :parent_transaction_id?
@@ -39,14 +38,6 @@ class Transaction < ApplicationRecord
 
   def set_currency_from_dest_account
     self.currency_id = dest_account.currency_id if dest_account.present?
-  end
-
-  def currency_matches_dest_account
-    return unless dest_account.present? && currency_id.present?
-
-    if currency_id != dest_account.currency_id
-      errors.add(:currency, "must match the destination account's currency")
-    end
   end
 
   def mark_parent_as_split

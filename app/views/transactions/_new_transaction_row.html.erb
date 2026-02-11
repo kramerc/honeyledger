@@ -1,7 +1,7 @@
 <tr id="new_transaction_row" data-controller="transaction-type">
   <% form_id = "new_transaction_inline_form" %>
   <td>
-    <%= date_field_tag "transaction[transacted_at]", Date.today.strftime("%Y-%m-%d"), form: form_id %>
+    <%= date_field_tag "transaction[transacted_at]", Date.current.strftime("%Y-%m-%d"), form: form_id %>
   </td>
   <td><span data-transaction-type-target="indicator"></span></td>
   <td>
