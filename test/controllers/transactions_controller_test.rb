@@ -137,6 +137,49 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal existing_category.id, @transaction.category_id
   end
 
+  test "should clear category when category_name is blank" do
+    @transaction.update!(category: categories(:one))
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_name: ""
+      } }
+
+    @transaction.reload
+    assert_nil @transaction.category_id
+  end
+
+  test "should preserve category when category_name not sent" do
+    @transaction.update!(category: categories(:one))
+    original_category_id = @transaction.category_id
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        description: "Updated description"
+      } }
+
+    @transaction.reload
+    assert_equal original_category_id, @transaction.category_id
+  end
+
+  test "should create transaction with blank category_name" do
+    assert_difference("Transaction.count", 1) do
+      assert_no_difference("Category.count") do
+        post transactions_url,
+          params: { transaction: {
+            transacted_at: @transaction.transacted_at,
+            src_account_id: @transaction.src_account_id,
+            dest_account_id: @transaction.dest_account_id,
+            description: "Test transaction",
+            amount_display: "25.50",
+            category_name: ""
+          } }
+      end
+    end
+
+    assert_nil Transaction.last.category_id
+  end
+
   test "should handle validation errors with turbo_stream on create" do
     post transactions_url,
       params: { transaction: {
