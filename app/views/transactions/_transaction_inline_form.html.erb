@@ -1,26 +1,28 @@
 <% form_id = dom_id(transaction, :inline_form) %>
 
 <td>
-  <%= datetime_field_tag "transaction[transacted_at]", transaction.transacted_at&.strftime("%Y-%m-%dT%H:%M"), form: form_id %>
+  <%= datetime_field_tag "transaction[transacted_at]", transaction.transacted_at&.strftime("%Y-%m-%dT%H:%M"), id: "#{form_id}_transacted_at", form: form_id %>
 </td>
 <td><span data-transaction-type-target="indicator"><%= transaction_type_indicator(transaction) %></span></td>
 <td>
-  <%= text_field_tag "transaction[description]", transaction.description, form: form_id %>
+  <%= text_field_tag "transaction[description]", transaction.description, id: "#{form_id}_description", form: form_id %>
 </td>
 <td>
   <%= select_tag "transaction[src_account_id]",
         account_options_with_kind(src_accounts, transaction.src_account_id),
+        id: "#{form_id}_src_account_id",
         form: form_id,
         data: { transaction_type_target: "src", action: "change->transaction-type#update" } %>
 </td>
 <td>
   <%= select_tag "transaction[dest_account_id]",
         account_options_with_kind(dest_accounts, transaction.dest_account_id),
+        id: "#{form_id}_dest_account_id",
         form: form_id,
         data: { transaction_type_target: "dest", action: "change->transaction-type#update" } %>
 </td>
 <td>
-  <%= text_field_tag "transaction[amount]", transaction.amount, form: form_id %>
+  <%= text_field_tag "transaction[amount]", transaction.amount, id: "#{form_id}_amount", form: form_id %>
 </td>
 <td><span data-transaction-type-target="currency"><%= transaction.currency.code %></span></td>
 <td data-controller="category-picker">
@@ -31,16 +33,18 @@
           [["+ New category…", "__new__"]],
           transaction.category_id
         ),
+        id: "#{form_id}_category_select",
         form: form_id,
         data: { category_picker_target: "select", action: "change->category-picker#changed" } %>
   <div class="category-new-input" style="display:none" data-category-picker-target="newWrapper">
     <%= text_field_tag "_category_new", "",
+          id: "#{form_id}_category_new",
           form: form_id,
           placeholder: "New category",
           data: { category_picker_target: "textInput", action: "input->category-picker#typed" } %>
     <a href="#" class="category-new-cancel" data-action="click->category-picker#back" title="Back to list">&times;</a>
   </div>
-  <%= hidden_field_tag "transaction[category_name]", transaction.category&.name, form: form_id, data: { category_picker_target: "nameField" } %>
+  <%= hidden_field_tag "transaction[category_name]", transaction.category&.name, id: "#{form_id}_category_name", form: form_id, data: { category_picker_target: "nameField" } %>
 </td>
 <td><%= transaction.cleared_at ? "✓" : "" %></td>
 <td><%= transaction.split ? "Split" : "" %></td>
