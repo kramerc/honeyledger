@@ -80,7 +80,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
           src_account_id: @transaction.src_account_id,
           dest_account_id: @transaction.dest_account_id,
           description: "New transaction",
-          amount_display: "50.00"
+          amount: "50.00"
         } },
         as: :turbo_stream
     end
@@ -92,7 +92,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     patch transaction_url(@transaction),
       params: { transaction: {
         description: "Updated description",
-        amount_display: "100.00"
+        amount: "100.00"
       } },
       as: :turbo_stream
 
@@ -117,7 +117,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
           src_account_id: @transaction.src_account_id,
           dest_account_id: @transaction.dest_account_id,
           description: "Test transaction",
-          amount_display: "25.50",
+          amount: "25.50",
           category_name: "New Test Category"
         } }
     end
@@ -171,7 +171,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
             src_account_id: @transaction.src_account_id,
             dest_account_id: @transaction.dest_account_id,
             description: "Test transaction",
-            amount_display: "25.50",
+            amount: "25.50",
             category_name: ""
           } }
       end
@@ -180,30 +180,30 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_nil Transaction.last.category_id
   end
 
-  test "should handle invalid amount_display gracefully" do
-    assert_difference("Transaction.count", 1) do
+  test "should handle invalid amount gracefully" do
+    assert_no_difference("Transaction.count") do
       post transactions_url,
         params: { transaction: {
           transacted_at: @transaction.transacted_at,
           src_account_id: @transaction.src_account_id,
           dest_account_id: @transaction.dest_account_id,
           description: "Test transaction",
-          amount_display: "not a number"
+          amount: "not a number"
         } }
     end
 
-    # Transaction is created but amount_minor defaults to 0 (invalid input ignored)
-    assert_equal 0, Transaction.last.amount_minor
+    assert_response :unprocessable_entity
   end
 
-  test "should handle invalid amount_display on update" do
+  test "should handle invalid amount on update" do
     original_amount = @transaction.amount_minor
 
     patch transaction_url(@transaction),
       params: { transaction: {
-        amount_display: "invalid"
+        amount: "invalid"
       } }
 
+    assert_response :unprocessable_entity
     @transaction.reload
     # Original amount is preserved when invalid input provided
     assert_equal original_amount, @transaction.amount_minor

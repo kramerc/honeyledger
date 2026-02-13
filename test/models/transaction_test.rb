@@ -43,148 +43,241 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal BigDecimal("45.00"), transaction.fx_amount
   end
 
-  test "amount= setter converts decimal to minor units with 2 decimal places" do
+  test "amount= setter converts decimal to minor units on save with 2 decimal places" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       transacted_at: Time.current
     )
 
     transaction.amount = "123.45"
+    transaction.save!
     assert_equal 12345, transaction.amount_minor
   end
 
-  test "amount= setter converts decimal to minor units with 0 decimal places" do
+  test "amount= setter converts decimal to minor units on save with 0 decimal places" do
+    jpy_account = Account.create!(user: users(:one), currency: currencies(:jpy), name: "JPY Account", kind: :expense)
+
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:jpy),
+      dest_account: jpy_account,
       transacted_at: Time.current
     )
 
     transaction.amount = "5000"
+    transaction.save!
     assert_equal 5000, transaction.amount_minor
   end
 
-  test "amount= setter converts decimal to minor units with 8 decimal places" do
+  test "amount= setter converts decimal to minor units on save with 8 decimal places" do
+    btc_account = Account.create!(user: users(:one), currency: currencies(:btc), name: "BTC Account", kind: :asset)
+
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:btc),
+      dest_account: btc_account,
       transacted_at: Time.current
     )
 
     transaction.amount = "0.12345678"
+    transaction.save!
     assert_equal 12345678, transaction.amount_minor
   end
 
-  test "amount= setter rounds to nearest minor unit" do
+  test "amount= setter rounds to nearest minor unit on save" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       transacted_at: Time.current
     )
 
     # 123.456 should round to 123.46
     transaction.amount = "123.456"
+    transaction.save!
     assert_equal 12346, transaction.amount_minor
 
     # 123.454 should round to 123.45
     transaction.amount = "123.454"
+    transaction.save!
     assert_equal 12345, transaction.amount_minor
   end
 
-  test "amount= setter handles BigDecimal input" do
+  test "amount= setter handles BigDecimal input on save" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       transacted_at: Time.current
     )
 
     transaction.amount = BigDecimal("99.99")
+    transaction.save!
     assert_equal 9999, transaction.amount_minor
   end
 
-  test "amount= setter handles integer input" do
+  test "amount= setter handles integer input on save" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       transacted_at: Time.current
     )
 
     transaction.amount = 50
+    transaction.save!
     assert_equal 5000, transaction.amount_minor
   end
 
-  test "fx_amount= setter converts decimal to minor units with 2 decimal places" do
+  test "fx_amount= setter converts decimal to minor units on save with 2 decimal places" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       fx_currency: currencies(:eur),
+      amount: "100.00",
       transacted_at: Time.current
     )
 
     transaction.fx_amount = "87.65"
+    transaction.save!
     assert_equal 8765, transaction.fx_amount_minor
   end
 
-  test "fx_amount= setter converts decimal to minor units with 0 decimal places" do
+  test "fx_amount= setter converts decimal to minor units on save with 0 decimal places" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       fx_currency: currencies(:jpy),
+      amount: "100.00",
       transacted_at: Time.current
     )
 
     transaction.fx_amount = "10000"
+    transaction.save!
     assert_equal 10000, transaction.fx_amount_minor
   end
 
-  test "fx_amount= setter converts decimal to minor units with 8 decimal places" do
+  test "fx_amount= setter converts decimal to minor units on save with 8 decimal places" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       fx_currency: currencies(:btc),
+      amount: "100.00",
       transacted_at: Time.current
     )
 
     transaction.fx_amount = "0.00123456"
+    transaction.save!
     assert_equal 123456, transaction.fx_amount_minor
   end
 
-  test "fx_amount= setter rounds to nearest minor unit" do
+  test "fx_amount= setter rounds to nearest minor unit on save" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:one),
-      dest_account: accounts(:two),
-      currency: currencies(:usd),
+      dest_account: accounts(:expense_account),
       fx_currency: currencies(:eur),
+      amount: "100.00",
       transacted_at: Time.current
     )
 
     # 50.556 should round to 50.56
     transaction.fx_amount = "50.556"
+    transaction.save!
     assert_equal 5056, transaction.fx_amount_minor
 
     # 50.554 should round to 50.55
     transaction.fx_amount = "50.554"
+    transaction.save!
     assert_equal 5055, transaction.fx_amount_minor
+  end
+
+  test "validates amount is a valid number" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "not a number"
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount], "must be a valid number"
+  end
+
+  test "validates fx_amount is a valid number" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "100.00",
+      fx_currency: currencies(:eur),
+      fx_amount: "invalid"
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:fx_amount], "must be a valid number"
+  end
+
+  test "accepts valid numeric amount" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "123.45"
+    )
+
+    assert transaction.valid?
+    assert_empty transaction.errors[:amount]
+  end
+
+  test "accepts valid numeric fx_amount" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "100.00",
+      fx_currency: currencies(:eur),
+      fx_amount: "87.65"
+    )
+
+    assert transaction.valid?
+    assert_empty transaction.errors[:fx_amount]
+  end
+
+  test "allows nil amount when not set" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current
+    )
+
+    # Without setting amount, validation should pass (amount will be nil/0)
+    # Note: This may fail based on other validations, but amount numericality shouldn't be the issue
+    transaction.valid?
+    assert_empty transaction.errors[:amount]
+  end
+
+  test "allows nil fx_amount when not set" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "100.00"
+    )
+
+    transaction.valid?
+    assert_empty transaction.errors[:fx_amount]
   end
 
   test "creating child transaction marks parent as split" do
