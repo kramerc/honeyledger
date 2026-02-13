@@ -1,7 +1,7 @@
 <% form_id = dom_id(transaction, :inline_form) %>
 
 <td>
-  <%= date_field_tag "transaction[transacted_at]", transaction.transacted_at&.strftime("%Y-%m-%d"), form: form_id %>
+  <%= datetime_field_tag "transaction[transacted_at]", transaction.transacted_at&.strftime("%Y-%m-%dT%H:%M"), form: form_id %>
 </td>
 <td><span data-transaction-type-target="indicator"><%= transaction_type_indicator(transaction) %></span></td>
 <td>

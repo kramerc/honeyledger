@@ -1,5 +1,5 @@
 <tr id="<%= dom_id(transaction) %>" data-controller="inline-edit transaction-type" data-inline-edit-url-value="<%= inline_edit_transaction_path(transaction) %>">
-  <td><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
+  <td><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></td>
   <td><%= transaction_type_indicator(transaction) %></td>
   <td><%= transaction.description %></td>
   <td><%= transaction.src_account&.name %></td>
