@@ -4,7 +4,7 @@ Rails.application.routes.draw do
   resources :accounts
   resources :categories
   resources :currencies
-  resources :transactions do
+  resources :transactions, except: %i[new edit] do
     member do
       get :inline_edit
     end

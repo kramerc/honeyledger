@@ -31,40 +31,25 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_match transactions(:two).description, response.body
   end
 
-  test "should get new" do
-    get new_transaction_url
-    assert_response :success
-  end
-
   test "should create transaction" do
     assert_difference("Transaction.count") do
-      post transactions_url, params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }
+      post transactions_url, params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }, as: :json
     end
 
-    assert_redirected_to transaction_url(Transaction.last)
-  end
-
-  test "should show transaction" do
-    get transaction_url(@transaction)
-    assert_response :success
-  end
-
-  test "should get edit" do
-    get edit_transaction_url(@transaction)
-    assert_response :success
+    assert_response :created
   end
 
   test "should update transaction" do
-    patch transaction_url(@transaction), params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }
-    assert_redirected_to transaction_url(@transaction)
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }, as: :json
+    assert_response :ok
   end
 
   test "should destroy transaction" do
     assert_difference("Transaction.count", -1) do
-      delete transaction_url(@transaction)
+      delete transaction_url(@transaction), as: :json
     end
 
-    assert_redirected_to transactions_url
+    assert_response :no_content
   end
 
   test "should get inline_edit" do
@@ -119,7 +104,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
           description: "Test transaction",
           amount: "25.50",
           category_name: "New Test Category"
-        } }
+        } },
+        as: :json
     end
 
     assert_equal "New Test Category", Transaction.last.category.name
@@ -131,7 +117,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     patch transaction_url(@transaction),
       params: { transaction: {
         category_name: existing_category.name
-      } }
+      } },
+      as: :json
 
     @transaction.reload
     assert_equal existing_category.id, @transaction.category_id
@@ -143,7 +130,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     patch transaction_url(@transaction),
       params: { transaction: {
         category_name: ""
-      } }
+      } },
+      as: :json
 
     @transaction.reload
     assert_nil @transaction.category_id
@@ -156,7 +144,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     patch transaction_url(@transaction),
       params: { transaction: {
         description: "Updated description"
-      } }
+      } },
+      as: :json
 
     @transaction.reload
     assert_equal original_category_id, @transaction.category_id
@@ -173,7 +162,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
             description: "Test transaction",
             amount: "25.50",
             category_name: ""
-          } }
+          } },
+          as: :json
       end
     end
 
@@ -194,7 +184,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
             amount: "25.50",
             category_id: existing_category.id,
             category_name: ""
-          } }
+          } },
+          as: :json
       end
     end
 
@@ -210,7 +201,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
       params: { transaction: {
         category_id: new_category.id,
         category_name: ""
-      } }
+      } },
+      as: :json
 
     @transaction.reload
     assert_equal new_category.id, @transaction.category_id
@@ -223,7 +215,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
       params: { transaction: {
         category_id: "",
         category_name: ""
-      } }
+      } },
+      as: :json
 
     @transaction.reload
     assert_nil @transaction.category_id
@@ -238,7 +231,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
           dest_account_id: @transaction.dest_account_id,
           description: "Test transaction",
           amount: "not a number"
-        } }
+        } },
+        as: :json
     end
 
     assert_response :unprocessable_entity
@@ -250,7 +244,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     patch transaction_url(@transaction),
       params: { transaction: {
         amount: "invalid"
-      } }
+      } },
+      as: :json
 
     assert_response :unprocessable_entity
     @transaction.reload

@@ -2,7 +2,7 @@ class TransactionsController < ApplicationController
   include ActionView::RecordIdentifier
 
   before_action :authenticate_user!
-  before_action :set_transaction, only: %i[ show edit update destroy inline_edit ]
+  before_action :set_transaction, only: %i[ update destroy inline_edit ]
 
   # GET /transactions or /transactions.json
   def index
@@ -22,15 +22,6 @@ class TransactionsController < ApplicationController
 
   # GET /transactions/1 or /transactions/1.json
   def show
-  end
-
-  # GET /transactions/new
-  def new
-    @transaction = current_user.transactions.build
-  end
-
-  # GET /transactions/1/edit
-  def edit
   end
 
   # GET /transactions/1/inline_edit
@@ -70,7 +61,6 @@ class TransactionsController < ApplicationController
             )
           ]
         end
-        format.html { redirect_to @transaction, notice: "Transaction was successfully created." }
         format.json { render :show, status: :created, location: @transaction }
       else
         set_form_collections
@@ -85,7 +75,6 @@ class TransactionsController < ApplicationController
             }
           ), status: :unprocessable_entity
         end
-        format.html { render :new, status: :unprocessable_entity }
         format.json { render json: @transaction.errors, status: :unprocessable_entity }
       end
     end
@@ -102,7 +91,6 @@ class TransactionsController < ApplicationController
             locals: { transaction: @transaction }
           )
         end
-        format.html { redirect_to @transaction, notice: "Transaction was successfully updated.", status: :see_other }
         format.json { render :show, status: :ok, location: @transaction }
       else
         set_form_collections
@@ -119,7 +107,6 @@ class TransactionsController < ApplicationController
             }
           ), status: :unprocessable_entity
         end
-        format.html { render :edit, status: :unprocessable_entity }
         format.json { render json: @transaction.errors, status: :unprocessable_entity }
       end
     end
@@ -131,7 +118,6 @@ class TransactionsController < ApplicationController
 
     respond_to do |format|
       format.turbo_stream { render turbo_stream: turbo_stream.remove(dom_id(@transaction)) }
-      format.html { redirect_to transactions_path, notice: "Transaction was successfully destroyed.", status: :see_other }
       format.json { head :no_content }
     end
   end
