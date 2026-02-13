@@ -112,7 +112,10 @@ class Transaction < ApplicationRecord
   end
 
   def numeric?(value)
-    true if BigDecimal(value) rescue false
+    BigDecimal(value)
+    true
+  rescue ArgumentError, TypeError
+    false
   end
 
   def src_account_accessible_to_user
