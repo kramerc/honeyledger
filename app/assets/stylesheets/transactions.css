@@ -25,11 +25,11 @@
 }
 
 /* Make inline-edit inputs fill their cells */
-#transactions input[type="text"],
-#transactions input[type="date"],
-#transactions input[type="number"],
-#transactions select,
-#transactions textarea {
+#transactions table input[type="text"],
+#transactions table input[type="datetime-local"],
+#transactions table input[type="number"],
+#transactions table select,
+#transactions table textarea {
   width: 100%;
   box-sizing: border-box;
   padding: 0.25rem 0.35rem;

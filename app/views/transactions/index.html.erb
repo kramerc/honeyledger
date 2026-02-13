@@ -4,18 +4,18 @@
 
 <h1>Transactions</h1>
 
-<%= form_with url: transactions_path, method: :get, local: true do |f| %>
-  <div>
-    <%= f.label :account_id, "Filter by Account" %>
-    <%= f.select :account_id, grouped_options_for_select(@accounts_by_type.map { |type, accounts| [type, accounts.map { |a| [a.name, a.id] }] }, params[:account_id]), { include_blank: "All Accounts" } %>
-    <%= f.submit "Filter" %>
-    <% if params[:account_id].present? %>
-      <%= link_to "Clear", transactions_path %>
-    <% end %>
-  </div>
-<% end %>
+<%= turbo_frame_tag "transactions" do %>
+  <%= form_with url: transactions_path, method: :get, data: { turbo_frame: "transactions" } do |f| %>
+    <div>
+      <%= f.label :account_id, "Filter by Account" %>
+      <%= f.select :account_id, grouped_options_for_select(@accounts_by_type.map { |type, accounts| [type, accounts.map { |a| [a.name, a.id] }] }, params[:account_id]), { include_blank: "All Accounts" } %>
+      <%= f.submit "Filter" %>
+      <% if params[:account_id].present? %>
+        <%= link_to "Clear", transactions_path, data: { turbo_frame: "transactions" } %>
+      <% end %>
+    </div>
+  <% end %>
 
-<div id="transactions">
   <table>
     <thead>
       <tr>
@@ -43,4 +43,4 @@
       <% end %>
     </tbody>
   </table>
-</div>
+<% end %>
