@@ -25,6 +25,8 @@ class Transaction < ApplicationRecord
 
   attr_writer :amount, :fx_amount
   validate :virtual_amounts_numericality
+  validate :src_account_accessible_to_user
+  validate :dest_account_accessible_to_user
 
   def cleared
     return @cleared if defined?(@cleared)
@@ -80,7 +82,7 @@ class Transaction < ApplicationRecord
   end
 
   def set_amount_minor_from_amount
-    return unless @amount
+    return unless @amount && currency
 
     self.amount_minor = (@amount.to_d * (10**currency.decimal_places)).round.to_i
   end
@@ -111,5 +113,21 @@ class Transaction < ApplicationRecord
 
   def numeric?(value)
     true if BigDecimal(value) rescue false
+  end
+
+  def src_account_accessible_to_user
+    return if src_account.blank? || user.blank?
+
+    unless src_account.accessible_by?(user)
+      errors.add(:src_account, "must be accessible to you")
+    end
+  end
+
+  def dest_account_accessible_to_user
+    return if dest_account.blank? || user.blank?
+
+    unless dest_account.accessible_by?(user)
+      errors.add(:dest_account, "must be accessible to you")
+    end
   end
 end

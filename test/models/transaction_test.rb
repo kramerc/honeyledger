@@ -322,8 +322,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -342,8 +342,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -368,8 +368,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction 1",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -380,8 +380,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction 2",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -405,8 +405,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -520,5 +520,33 @@ class TransactionTest < ActiveSupport::TestCase
     transaction.valid?
 
     assert_equal original_cleared_at, transaction.cleared_at
+  end
+
+  test "validates src_account is accessible to user" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:two), # belongs to users(:two)
+      dest_account: accounts(:asset_account),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:src_account], "must be accessible to you"
+  end
+
+  test "validates dest_account is accessible to user" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:two), # belongs to users(:two)
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:dest_account], "must be accessible to you"
   end
 end
