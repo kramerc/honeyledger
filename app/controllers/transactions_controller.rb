@@ -8,10 +8,10 @@ class TransactionsController < ApplicationController
   def index
     @transactions = current_user.transactions.includes(:category, :src_account, :dest_account, :currency, :fx_currency).order(transacted_at: :desc)
 
-    if params[:account_id].present?
-      @transactions = @transactions.where(src_account_id: params[:account_id]).or(
-        @transactions.where(dest_account_id: params[:account_id])
-      )
+    # Filter by src/dest account if account_id param is provided
+    account = current_user.accounts.find_by(id: params[:account_id]) if params[:account_id].present?
+    if account
+      @transactions = @transactions.where(src_account_id: account).or(@transactions.where(dest_account_id: account))
     end
 
     @accounts_by_type = current_user.accounts.order(:name).group_by { |a| a.kind.capitalize }
