@@ -4,7 +4,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
   setup do
-    sign_in users(:one)
+    @user = users(:one)
+    sign_in @user
     @transaction = transactions(:one)
   end
 
@@ -13,39 +14,263 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "should get new" do
-    get new_transaction_url
+  test "should filter transactions by account" do
+    account = accounts(:asset_account)
+    get transactions_url, params: { account_id: account.id }
     assert_response :success
+    # Filtered results should include transactions involving the asset_account
+    assert_match transactions(:one).description, response.body # src_account is asset_account
+    assert_match transactions(:two).description, response.body # dest_account is asset_account
+  end
+
+  test "should return all transactions when no account filter" do
+    get transactions_url
+    assert_response :success
+    # Without filter, both fixture transactions should appear
+    assert_match transactions(:one).description, response.body
+    assert_match transactions(:two).description, response.body
   end
 
   test "should create transaction" do
     assert_difference("Transaction.count") do
-      post transactions_url, params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }
+      post transactions_url, params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }, as: :json
     end
 
-    assert_redirected_to transaction_url(Transaction.last)
-  end
-
-  test "should show transaction" do
-    get transaction_url(@transaction)
-    assert_response :success
-  end
-
-  test "should get edit" do
-    get edit_transaction_url(@transaction)
-    assert_response :success
+    assert_response :created
   end
 
   test "should update transaction" do
-    patch transaction_url(@transaction), params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }
-    assert_redirected_to transaction_url(@transaction)
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: @transaction.transacted_at, category_id: @transaction.category_id, src_account_id: @transaction.src_account_id, dest_account_id: @transaction.dest_account_id, description: @transaction.description, amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id, fx_amount_minor: @transaction.fx_amount_minor, fx_currency_id: @transaction.fx_currency_id, notes: @transaction.notes } }, as: :json
+    assert_response :ok
   end
 
   test "should destroy transaction" do
     assert_difference("Transaction.count", -1) do
-      delete transaction_url(@transaction)
+      delete transaction_url(@transaction), as: :json
     end
 
-    assert_redirected_to transactions_url
+    assert_response :no_content
+  end
+
+  test "should get inline_edit" do
+    get inline_edit_transaction_url(@transaction)
+    assert_response :success
+  end
+
+  test "should create transaction with turbo_stream" do
+    assert_difference("Transaction.count") do
+      post transactions_url,
+        params: { transaction: {
+          transacted_at: @transaction.transacted_at,
+          src_account_id: @transaction.src_account_id,
+          dest_account_id: @transaction.dest_account_id,
+          description: "New transaction",
+          amount: "50.00"
+        } },
+        as: :turbo_stream
+    end
+
+    assert_response :success
+  end
+
+  test "should update transaction with turbo_stream" do
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        description: "Updated description",
+        amount: "100.00"
+      } },
+      as: :turbo_stream
+
+    assert_response :success
+    @transaction.reload
+    assert_equal "Updated description", @transaction.description
+  end
+
+  test "should destroy transaction with turbo_stream" do
+    assert_difference("Transaction.count", -1) do
+      delete transaction_url(@transaction), as: :turbo_stream
+    end
+
+    assert_response :success
+  end
+
+  test "should create transaction with category_name" do
+    assert_difference([ "Transaction.count", "Category.count" ]) do
+      post transactions_url,
+        params: { transaction: {
+          transacted_at: @transaction.transacted_at,
+          src_account_id: @transaction.src_account_id,
+          dest_account_id: @transaction.dest_account_id,
+          description: "Test transaction",
+          amount: "25.50",
+          category_name: "New Test Category"
+        } },
+        as: :json
+    end
+
+    assert_equal "New Test Category", Transaction.last.category.name
+  end
+
+  test "should update transaction with existing category_name" do
+    existing_category = categories(:one)
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_name: existing_category.name
+      } },
+      as: :json
+
+    @transaction.reload
+    assert_equal existing_category.id, @transaction.category_id
+  end
+
+  test "should clear category when category_name is blank" do
+    @transaction.update!(category: categories(:one))
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_name: ""
+      } },
+      as: :json
+
+    @transaction.reload
+    assert_nil @transaction.category_id
+  end
+
+  test "should preserve category when category_name not sent" do
+    @transaction.update!(category: categories(:one))
+    original_category_id = @transaction.category_id
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        description: "Updated description"
+      } },
+      as: :json
+
+    @transaction.reload
+    assert_equal original_category_id, @transaction.category_id
+  end
+
+  test "should create transaction with blank category_name" do
+    assert_difference("Transaction.count", 1) do
+      assert_no_difference("Category.count") do
+        post transactions_url,
+          params: { transaction: {
+            transacted_at: @transaction.transacted_at,
+            src_account_id: @transaction.src_account_id,
+            dest_account_id: @transaction.dest_account_id,
+            description: "Test transaction",
+            amount: "25.50",
+            category_name: ""
+          } },
+          as: :json
+      end
+    end
+
+    assert_nil Transaction.last.category_id
+  end
+
+  test "should create transaction with category_id for existing category" do
+    existing_category = categories(:one)
+
+    assert_difference("Transaction.count", 1) do
+      assert_no_difference("Category.count") do
+        post transactions_url,
+          params: { transaction: {
+            transacted_at: @transaction.transacted_at,
+            src_account_id: @transaction.src_account_id,
+            dest_account_id: @transaction.dest_account_id,
+            description: "Test transaction",
+            amount: "25.50",
+            category_id: existing_category.id,
+            category_name: ""
+          } },
+          as: :json
+      end
+    end
+
+    assert_equal existing_category.id, Transaction.last.category_id
+  end
+
+  test "should update transaction with category_id for existing category" do
+    original_category = categories(:one)
+    new_category = categories(:two)
+    @transaction.update!(category: original_category)
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_id: new_category.id,
+        category_name: ""
+      } },
+      as: :json
+
+    @transaction.reload
+    assert_equal new_category.id, @transaction.category_id
+  end
+
+  test "should clear category when category_id is blank" do
+    @transaction.update!(category: categories(:one))
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_id: "",
+        category_name: ""
+      } },
+      as: :json
+
+    @transaction.reload
+    assert_nil @transaction.category_id
+  end
+
+  test "should handle invalid amount gracefully" do
+    assert_no_difference("Transaction.count") do
+      post transactions_url,
+        params: { transaction: {
+          transacted_at: @transaction.transacted_at,
+          src_account_id: @transaction.src_account_id,
+          dest_account_id: @transaction.dest_account_id,
+          description: "Test transaction",
+          amount: "not a number"
+        } },
+        as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "should handle invalid amount on update" do
+    original_amount = @transaction.amount_minor
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        amount: "invalid"
+      } },
+      as: :json
+
+    assert_response :unprocessable_entity
+    @transaction.reload
+    # Original amount is preserved when invalid input provided
+    assert_equal original_amount, @transaction.amount_minor
+  end
+
+  test "should handle validation errors with turbo_stream on create" do
+    post transactions_url,
+      params: { transaction: {
+        description: "Invalid transaction"
+        # Missing required fields
+      } },
+      as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
+
+  test "should handle validation errors with turbo_stream on update" do
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        src_account_id: nil  # Make it invalid
+      } },
+      as: :turbo_stream
+
+    assert_response :unprocessable_entity
   end
 end

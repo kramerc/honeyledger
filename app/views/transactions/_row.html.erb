@@ -1,0 +1,16 @@
+<tr id="<%= dom_id(transaction) %>" data-controller="inline-edit transaction-type" data-inline-edit-url-value="<%= inline_edit_transaction_path(transaction) %>">
+  <td><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></td>
+  <td><%= transaction_type_indicator(transaction) %></td>
+  <td><%= transaction.description %></td>
+  <td><%= transaction.src_account&.name %></td>
+  <td><%= transaction.dest_account&.name %></td>
+  <td><%= amount_to_currency(transaction.amount_minor, transaction.currency) %></td>
+  <td><%= transaction.currency.code %></td>
+  <td><%= transaction.category&.name %></td>
+  <td><%= transaction.cleared_at ? "✓" : "" %></td>
+  <td><%= transaction.split ? "Split" : "" %></td>
+  <td>
+    <a href="#" data-action="click->inline-edit#edit">Edit</a>
+    <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?" } %>
+  </td>
+</tr>

@@ -47,4 +47,37 @@ class TransactionsHelperTest < ActionView::TestCase
 
     assert_equal "₿1.00000000", result
   end
+
+  test "transaction_type_indicator for withdrawal" do
+    transaction = transactions(:one)
+    transaction.src_account = accounts(:asset_account)
+    transaction.dest_account = accounts(:expense_account)
+
+    result = transaction_type_indicator(transaction)
+
+    assert_match(/↓ Withdrawal/, result)
+    assert_match(/color: red/, result)
+  end
+
+  test "transaction_type_indicator for deposit" do
+    transaction = transactions(:one)
+    transaction.src_account = accounts(:revenue_account)
+    transaction.dest_account = accounts(:asset_account)
+
+    result = transaction_type_indicator(transaction)
+
+    assert_match(/↑ Deposit/, result)
+    assert_match(/color: green/, result)
+  end
+
+  test "transaction_type_indicator for transfer" do
+    transaction = transactions(:one)
+    transaction.src_account = accounts(:asset_account)
+    transaction.dest_account = accounts(:linked_asset)
+
+    result = transaction_type_indicator(transaction)
+
+    assert_match(/⇄ Transfer/, result)
+    assert_match(/color: gray/, result)
+  end
 end

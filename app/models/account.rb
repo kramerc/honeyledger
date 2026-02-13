@@ -24,4 +24,10 @@ class Account < ApplicationRecord
 
   scope :linkable, -> { where(kind: [ :asset, :liability ]) }
   scope :unlinked, -> { left_joins(:simplefin_account).where(simplefin_accounts: { id: nil }) }
+
+  # Check if a user has access to this account
+  # Currently checks ownership, but can be extended for sharing
+  def accessible_by?(user)
+    user_id == user.id
+  end
 end

@@ -65,4 +65,28 @@ class CurrenciesHelperTest < ActionView::TestCase
 
     assert_equal "KWD1.2345", result
   end
+
+  test "amount_minor_to_decimal formats with 2 decimal places" do
+    currency = currencies(:usd)
+
+    result = amount_minor_to_decimal(1500, currency)
+
+    assert_equal "15.00", result
+  end
+
+  test "amount_minor_to_decimal formats with 0 decimal places" do
+    currency = currencies(:jpy)
+
+    result = amount_minor_to_decimal(1500, currency)
+
+    assert_equal "1500", result
+  end
+
+  test "amount_minor_to_decimal formats with 8 decimal places" do
+    currency = currencies(:btc)
+
+    result = amount_minor_to_decimal(100000000, currency)
+
+    assert_equal "1.00000000", result
+  end
 end

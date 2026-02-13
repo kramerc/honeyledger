@@ -4,11 +4,23 @@
 
 <h1>Transactions</h1>
 
-<div id="transactions">
+<%= turbo_frame_tag "transactions" do %>
+  <%= form_with url: transactions_path, method: :get, data: { turbo_frame: "transactions" } do |f| %>
+    <div>
+      <%= f.label :account_id, "Filter by Account" %>
+      <%= f.select :account_id, grouped_options_for_select(@accounts_by_type.map { |type, accounts| [type, accounts.map { |a| [a.name, a.id] }] }, params[:account_id]), { include_blank: "All Accounts" } %>
+      <%= f.submit "Filter" %>
+      <% if params[:account_id].present? %>
+        <%= link_to "Clear", transactions_path, data: { turbo_frame: "transactions" } %>
+      <% end %>
+    </div>
+  <% end %>
+
   <table>
     <thead>
       <tr>
         <th>Date</th>
+        <th>Type</th>
         <th>Description</th>
         <th>From</th>
         <th>To</th>
@@ -21,22 +33,16 @@
       </tr>
     </thead>
     <tbody>
+      <tr id="new_transaction_row" data-controller="transaction-type">
+        <%= render "form_row",
+              transaction: @new_transaction,
+              src_accounts: @src_accounts,
+              dest_accounts: @dest_accounts,
+              categories: @categories %>
+      </tr>
       <% @transactions.each do |transaction| %>
-        <tr>
-          <td><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
-          <td><%= transaction.description %></td>
-          <td><%= transaction.src_account&.name %></td>
-          <td><%= transaction.dest_account&.name %></td>
-          <td><%= amount_to_currency(transaction.amount_minor, transaction.currency) %></td>
-          <td><%= transaction.currency.code %></td>
-          <td><%= transaction.category&.name %></td>
-          <td><%= transaction.cleared_at ? "✓" : "" %></td>
-          <td><%= transaction.split ? "Split" : "" %></td>
-          <td><%= link_to "Show", transaction %></td>
-        </tr>
+        <%= render "row", transaction: transaction %>
       <% end %>
     </tbody>
   </table>
-</div>
-
-<%= link_to "New transaction", new_transaction_path %>
+<% end %>

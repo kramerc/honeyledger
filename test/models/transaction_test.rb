@@ -43,6 +43,277 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal BigDecimal("45.00"), transaction.fx_amount
   end
 
+  test "amount= setter converts decimal to minor units on save with 2 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = "123.45"
+    transaction.save!
+    assert_equal 12345, transaction.amount_minor
+  end
+
+  test "amount= setter converts decimal to minor units on save with 0 decimal places" do
+    jpy_account = Account.create!(user: users(:one), currency: currencies(:jpy), name: "JPY Account", kind: :expense)
+
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: jpy_account,
+      transacted_at: Time.current
+    )
+
+    transaction.amount = "5000"
+    transaction.save!
+    assert_equal 5000, transaction.amount_minor
+  end
+
+  test "amount= setter converts decimal to minor units on save with 8 decimal places" do
+    btc_account = Account.create!(user: users(:one), currency: currencies(:btc), name: "BTC Account", kind: :asset)
+
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: btc_account,
+      transacted_at: Time.current
+    )
+
+    transaction.amount = "0.12345678"
+    transaction.save!
+    assert_equal 12345678, transaction.amount_minor
+  end
+
+  test "amount= setter rounds to nearest minor unit on save" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current
+    )
+
+    # 123.456 should round to 123.46
+    transaction.amount = "123.456"
+    transaction.save!
+    assert_equal 12346, transaction.amount_minor
+
+    # 123.454 should round to 123.45
+    transaction.amount = "123.454"
+    transaction.save!
+    assert_equal 12345, transaction.amount_minor
+  end
+
+  test "amount= setter handles BigDecimal input on save" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = BigDecimal("99.99")
+    transaction.save!
+    assert_equal 9999, transaction.amount_minor
+  end
+
+  test "amount= setter handles integer input on save" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = 50
+    transaction.save!
+    assert_equal 5000, transaction.amount_minor
+  end
+
+  test "fx_amount= setter converts decimal to minor units on save with 2 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      fx_currency: currencies(:eur),
+      amount: "100.00",
+      transacted_at: Time.current
+    )
+
+    transaction.fx_amount = "87.65"
+    transaction.save!
+    assert_equal 8765, transaction.fx_amount_minor
+  end
+
+  test "fx_amount= setter converts decimal to minor units on save with 0 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      fx_currency: currencies(:jpy),
+      amount: "100.00",
+      transacted_at: Time.current
+    )
+
+    transaction.fx_amount = "10000"
+    transaction.save!
+    assert_equal 10000, transaction.fx_amount_minor
+  end
+
+  test "fx_amount= setter converts decimal to minor units on save with 8 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      fx_currency: currencies(:btc),
+      amount: "100.00",
+      transacted_at: Time.current
+    )
+
+    transaction.fx_amount = "0.00123456"
+    transaction.save!
+    assert_equal 123456, transaction.fx_amount_minor
+  end
+
+  test "fx_amount= setter rounds to nearest minor unit on save" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      fx_currency: currencies(:eur),
+      amount: "100.00",
+      transacted_at: Time.current
+    )
+
+    # 50.556 should round to 50.56
+    transaction.fx_amount = "50.556"
+    transaction.save!
+    assert_equal 5056, transaction.fx_amount_minor
+
+    # 50.554 should round to 50.55
+    transaction.fx_amount = "50.554"
+    transaction.save!
+    assert_equal 5055, transaction.fx_amount_minor
+  end
+
+  test "validates amount is a valid number" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "not a number"
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount], "must be a valid number"
+  end
+
+  test "validates fx_amount is a valid number" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "100.00",
+      fx_currency: currencies(:eur),
+      fx_amount: "invalid"
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:fx_amount], "must be a valid number"
+  end
+
+  test "accepts valid numeric amount" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "123.45"
+    )
+
+    assert transaction.valid?
+    assert_empty transaction.errors[:amount]
+  end
+
+  test "accepts valid numeric fx_amount" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "100.00",
+      fx_currency: currencies(:eur),
+      fx_amount: "87.65"
+    )
+
+    assert transaction.valid?
+    assert_empty transaction.errors[:fx_amount]
+  end
+
+  test "allows nil amount when not set" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current
+    )
+
+    # Without setting amount, validation should pass (amount will be nil/0)
+    # Note: This may fail based on other validations, but amount numericality shouldn't be the issue
+    transaction.valid?
+    assert_empty transaction.errors[:amount]
+  end
+
+  test "allows nil fx_amount when not set" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      transacted_at: Time.current,
+      amount: "100.00"
+    )
+
+    transaction.valid?
+    assert_empty transaction.errors[:fx_amount]
+  end
+
+  test "amount_minor= clears @amount to prevent stale decimal value" do
+    transaction = transactions(:one)
+
+    # First, read the amount (50.00 from amount_minor 5000)
+    original_amount = transaction.amount
+    assert_equal BigDecimal("50.00"), original_amount
+
+    # Directly set amount_minor to a new value
+    transaction.amount_minor = 7500
+
+    # The amount getter should recalculate from new amount_minor
+    # If @amount wasn't cleared, it could return a stale value
+    assert_equal BigDecimal("75.00"), transaction.amount
+    assert_not_equal original_amount, transaction.amount
+  end
+
+  test "fx_amount_minor= clears @fx_amount to prevent stale decimal value" do
+    transaction = transactions(:one)
+    transaction.fx_currency = currencies(:eur)
+    transaction.fx_amount_minor = 4500
+
+    # First, read the fx_amount (45.00 from fx_amount_minor 4500)
+    original_fx_amount = transaction.fx_amount
+    assert_equal BigDecimal("45.00"), original_fx_amount
+
+    # Directly set fx_amount_minor to a new value
+    transaction.fx_amount_minor = 6000
+
+    # The fx_amount getter should recalculate from new fx_amount_minor
+    # If @fx_amount wasn't cleared, it could return a stale value
+    assert_equal BigDecimal("60.00"), transaction.fx_amount
+    assert_not_equal original_fx_amount, transaction.fx_amount
+  end
+
   test "creating child transaction marks parent as split" do
     parent = transactions(:one)
     assert_not parent.split, "Parent should not be split initially"
@@ -51,8 +322,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -71,8 +342,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -97,8 +368,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction 1",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -109,8 +380,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction 2",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -134,8 +405,8 @@ class TransactionTest < ActiveSupport::TestCase
       user: users(:one),
       parent_transaction: parent,
       category: categories(:one),
-      src_account: accounts(:one),
-      dest_account: accounts(:two),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:liability_account),
       description: "Child transaction",
       amount_minor: 2500,
       currency: currencies(:usd),
@@ -147,5 +418,135 @@ class TransactionTest < ActiveSupport::TestCase
     parent.destroy
 
     assert_nil Transaction.find_by(id: child_id), "Child transaction should be destroyed with parent"
+  end
+
+  test "currency is automatically set from dest account" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:expense_account),
+      amount_minor: 1000,
+      description: "Test",
+      transacted_at: Time.current
+    )
+
+    assert transaction.valid?
+    assert_equal accounts(:expense_account).currency_id, transaction.currency_id
+  end
+
+  test "currency auto-corrected from dest account when initially mismatched" do
+    # Create a dest account with EUR currency to force a mismatch
+    eur_account = Account.create!(
+      user: users(:one),
+      currency: currencies(:eur),
+      name: "EUR Expense",
+      kind: :expense
+    )
+
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: eur_account,
+      amount_minor: 1000,
+      description: "Test",
+      currency: currencies(:usd), # mismatch
+      transacted_at: Time.current
+    )
+
+    # before_validation will correct it, so the validation should pass
+    assert transaction.valid?
+    assert_equal currencies(:eur).id, transaction.currency_id, "Currency should be auto-corrected to dest account currency"
+  end
+
+  # -- cleared virtual attribute --
+
+  test "cleared returns true when cleared_at is present" do
+    transaction = transactions(:one)
+    assert transaction.cleared_at.present?
+    assert_equal true, transaction.cleared
+  end
+
+  test "cleared returns false when cleared_at is nil" do
+    transaction = transactions(:one)
+    transaction.cleared_at = nil
+    assert_equal false, transaction.cleared
+  end
+
+  test "cleared setter casts string '1' to true" do
+    transaction = transactions(:one)
+    transaction.cleared = "1"
+    assert_equal true, transaction.cleared
+  end
+
+  test "cleared setter casts string '0' to false" do
+    transaction = transactions(:one)
+    transaction.cleared = "0"
+    assert_equal false, transaction.cleared
+  end
+
+  test "setting cleared to true sets cleared_at when nil" do
+    transaction = transactions(:one)
+    transaction.cleared_at = nil
+    transaction.cleared = "1"
+
+    freeze_time do
+      transaction.valid?
+      assert_equal Time.current, transaction.cleared_at
+    end
+  end
+
+  test "setting cleared to true preserves existing cleared_at timestamp" do
+    transaction = transactions(:one)
+    original_cleared_at = transaction.cleared_at
+    transaction.cleared = "1"
+    transaction.valid?
+
+    assert_equal original_cleared_at, transaction.cleared_at
+  end
+
+  test "setting cleared to false clears cleared_at" do
+    transaction = transactions(:one)
+    assert transaction.cleared_at.present?
+    transaction.cleared = "0"
+    transaction.valid?
+
+    assert_nil transaction.cleared_at
+  end
+
+  test "not setting cleared leaves cleared_at unchanged" do
+    transaction = transactions(:one)
+    original_cleared_at = transaction.cleared_at
+    transaction.description = "Updated"
+    transaction.valid?
+
+    assert_equal original_cleared_at, transaction.cleared_at
+  end
+
+  test "validates src_account is accessible to user" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:two), # belongs to users(:two)
+      dest_account: accounts(:asset_account),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:src_account], "must be accessible to you"
+  end
+
+  test "validates dest_account is accessible to user" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:two), # belongs to users(:two)
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:dest_account], "must be accessible to you"
   end
 end
