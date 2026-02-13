@@ -34,7 +34,8 @@
             data: { category_picker_target: "textInput", action: "input->category-picker#typed" } %>
       <a href="#" class="category-new-cancel" data-action="click->category-picker#back" title="Back to list">&times;</a>
     </div>
-    <%= form.hidden_field :category_name, value: transaction.category&.name, data: { category_picker_target: "nameField" } %>
+    <%= form.hidden_field :category_id, data: { category_picker_target: "idField" } %>
+    <%= form.hidden_field :category_name, value: "", data: { category_picker_target: "nameField" } %>
   </div>
 
   <div>

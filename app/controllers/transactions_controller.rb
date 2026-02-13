@@ -163,20 +163,22 @@ class TransactionsController < ApplicationController
     end
 
     # If category_name is provided, find or create the category and set category_id.
+    # If category_id is provided, use it directly (existing category selected).
     def resolve_category!(attrs)
-      # If the client did not send category_name at all, leave category_id unchanged.
-      return unless attrs.key?(:category_name)
+      # If neither category_id nor category_name were sent, leave category unchanged
+      return unless attrs.key?(:category_id) || attrs.key?(:category_name)
 
-      name = attrs.delete(:category_name)&.strip
-
-      # Explicitly clear the category when a blank name is submitted.
-      if name.blank?
-        attrs[:category_id] = nil
-        return
+      # If category_name has a value, it's a new category - find or create it
+      if attrs[:category_name].present?
+        name = attrs.delete(:category_name).strip
+        category = current_user.categories.find_or_create_by!(name: name)
+        attrs[:category_id] = category.id
+      else
+        # Remove the category_name key (it was just for transport)
+        attrs.delete(:category_name)
+        # If category_id is blank string, convert to nil for proper clearing
+        attrs[:category_id] = nil if attrs[:category_id].blank?
       end
-
-      category = current_user.categories.find_or_create_by!(name: name)
-      attrs[:category_id] = category.id
     end
 
     def set_form_collections

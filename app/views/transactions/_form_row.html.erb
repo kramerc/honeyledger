@@ -60,7 +60,8 @@
             data: { category_picker_target: "textInput", action: "input->category-picker#typed" } %>
       <a href="#" class="category-new-cancel" data-action="click->category-picker#back" title="Back to list">&times;</a>
     </div>
-    <%= hidden_field_tag "transaction[category_name]", transaction.category&.name, id: "#{form_id}_category_name", form: form_id, data: { category_picker_target: "nameField" } %>
+    <%= hidden_field_tag "transaction[category_id]", transaction.category_id, id: "#{form_id}_category_id", form: form_id, data: { category_picker_target: "idField" } %>
+    <%= hidden_field_tag "transaction[category_name]", "", id: "#{form_id}_category_name", form: form_id, data: { category_picker_target: "nameField" } %>
   </td>
   <td><%= hidden_field_tag "transaction[cleared]", "0", id: "#{form_id}_cleared_hidden", form: form_id %><%= check_box_tag "transaction[cleared]", "1", transaction.cleared, id: "#{form_id}_cleared", form: form_id %></td>
   <td><%= is_new_record ? "" : (transaction.split ? "Split" : "") %></td>

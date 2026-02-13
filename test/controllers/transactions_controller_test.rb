@@ -180,6 +180,55 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_nil Transaction.last.category_id
   end
 
+  test "should create transaction with category_id for existing category" do
+    existing_category = categories(:one)
+
+    assert_difference("Transaction.count", 1) do
+      assert_no_difference("Category.count") do
+        post transactions_url,
+          params: { transaction: {
+            transacted_at: @transaction.transacted_at,
+            src_account_id: @transaction.src_account_id,
+            dest_account_id: @transaction.dest_account_id,
+            description: "Test transaction",
+            amount: "25.50",
+            category_id: existing_category.id,
+            category_name: ""
+          } }
+      end
+    end
+
+    assert_equal existing_category.id, Transaction.last.category_id
+  end
+
+  test "should update transaction with category_id for existing category" do
+    original_category = categories(:one)
+    new_category = categories(:two)
+    @transaction.update!(category: original_category)
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_id: new_category.id,
+        category_name: ""
+      } }
+
+    @transaction.reload
+    assert_equal new_category.id, @transaction.category_id
+  end
+
+  test "should clear category when category_id is blank" do
+    @transaction.update!(category: categories(:one))
+
+    patch transaction_url(@transaction),
+      params: { transaction: {
+        category_id: "",
+        category_name: ""
+      } }
+
+    @transaction.reload
+    assert_nil @transaction.category_id
+  end
+
   test "should handle invalid amount gracefully" do
     assert_no_difference("Transaction.count") do
       post transactions_url,
