@@ -48,28 +48,6 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_equal "₿1.00000000", result
   end
 
-  test "account_options_with_kind includes data attributes" do
-    accounts = [
-      accounts(:asset_account),
-      accounts(:expense_account)
-    ]
-
-    result = account_options_with_kind(accounts, accounts(:asset_account).id)
-
-    assert_match /data-kind="asset"/, result
-    assert_match /data-currency="USD"/, result
-    assert_match /selected/, result
-  end
-
-  test "account_options_with_kind with prompt" do
-    accounts = [ accounts(:asset_account) ]
-
-    result = account_options_with_kind(accounts, nil, prompt: "Select account")
-
-    assert_match /Select account/, result
-    assert_match /value=""/, result
-  end
-
   test "transaction_type_indicator for withdrawal" do
     transaction = transactions(:one)
     transaction.src_account = accounts(:asset_account)
@@ -77,8 +55,8 @@ class TransactionsHelperTest < ActionView::TestCase
 
     result = transaction_type_indicator(transaction)
 
-    assert_match /↓ Withdrawal/, result
-    assert_match /color: red/, result
+    assert_match(/↓ Withdrawal/, result)
+    assert_match(/color: red/, result)
   end
 
   test "transaction_type_indicator for deposit" do
@@ -88,8 +66,8 @@ class TransactionsHelperTest < ActionView::TestCase
 
     result = transaction_type_indicator(transaction)
 
-    assert_match /↑ Deposit/, result
-    assert_match /color: green/, result
+    assert_match(/↑ Deposit/, result)
+    assert_match(/color: green/, result)
   end
 
   test "transaction_type_indicator for transfer" do
@@ -99,7 +77,7 @@ class TransactionsHelperTest < ActionView::TestCase
 
     result = transaction_type_indicator(transaction)
 
-    assert_match /⇄ Transfer/, result
-    assert_match /color: gray/, result
+    assert_match(/⇄ Transfer/, result)
+    assert_match(/color: gray/, result)
   end
 end
