@@ -144,7 +144,7 @@ class TransactionsController < ApplicationController
 
     # Only allow a list of trusted parameters through.
     def transaction_params
-      permitted = params.expect(transaction: [ :transacted_at, :category_id, :category_name, :src_account_id, :dest_account_id, :description, :amount_minor, :amount, :currency_id, :fx_amount_minor, :fx_currency_id, :notes ])
+      permitted = params.expect(transaction: [ :transacted_at, :category_id, :category_name, :src_account_id, :dest_account_id, :description, :amount_minor, :amount, :currency_id, :fx_amount_minor, :fx_currency_id, :notes, :cleared ])
       resolve_category!(permitted)
       permitted
     end

@@ -46,7 +46,7 @@
   </div>
   <%= hidden_field_tag "transaction[category_name]", transaction.category&.name, id: "#{form_id}_category_name", form: form_id, data: { category_picker_target: "nameField" } %>
 </td>
-<td><%= transaction.cleared_at ? "✓" : "" %></td>
+<td><%= hidden_field_tag "transaction[cleared]", "0", id: "#{form_id}_cleared_hidden", form: form_id %><%= check_box_tag "transaction[cleared]", "1", transaction.cleared, id: "#{form_id}_cleared", form: form_id %></td>
 <td><%= transaction.split ? "Split" : "" %></td>
 <td>
   <% if transaction.errors.any? %>

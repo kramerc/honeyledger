@@ -14,6 +14,7 @@ class Transaction < ApplicationRecord
   has_many :child_transactions, class_name: "Transaction", foreign_key: "parent_transaction_id", dependent: :destroy
 
   before_validation :set_currency_from_dest_account
+  before_validation :set_cleared_at_from_cleared
   before_save :set_amount_minor_from_amount
   before_save :set_fx_amount_minor_from_fx_amount
 
@@ -24,6 +25,15 @@ class Transaction < ApplicationRecord
 
   attr_writer :amount, :fx_amount
   validate :virtual_amounts_numericality
+
+  def cleared
+    return @cleared if defined?(@cleared)
+    cleared_at.present?
+  end
+
+  def cleared=(value)
+    @cleared = ActiveModel::Type::Boolean.new.cast(value)
+  end
 
   def amount_minor=(value)
     super(value)
@@ -57,6 +67,16 @@ class Transaction < ApplicationRecord
 
   def set_currency_from_dest_account
     self.currency_id = dest_account.currency_id if dest_account.present?
+  end
+
+  def set_cleared_at_from_cleared
+    return unless defined?(@cleared)
+
+    if @cleared
+      self.cleared_at ||= Time.current
+    else
+      self.cleared_at = nil
+    end
   end
 
   def set_amount_minor_from_amount

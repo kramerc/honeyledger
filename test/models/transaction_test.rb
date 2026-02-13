@@ -457,4 +457,68 @@ class TransactionTest < ActiveSupport::TestCase
     assert transaction.valid?
     assert_equal currencies(:eur).id, transaction.currency_id, "Currency should be auto-corrected to dest account currency"
   end
+
+  # -- cleared virtual attribute --
+
+  test "cleared returns true when cleared_at is present" do
+    transaction = transactions(:one)
+    assert transaction.cleared_at.present?
+    assert_equal true, transaction.cleared
+  end
+
+  test "cleared returns false when cleared_at is nil" do
+    transaction = transactions(:one)
+    transaction.cleared_at = nil
+    assert_equal false, transaction.cleared
+  end
+
+  test "cleared setter casts string '1' to true" do
+    transaction = transactions(:one)
+    transaction.cleared = "1"
+    assert_equal true, transaction.cleared
+  end
+
+  test "cleared setter casts string '0' to false" do
+    transaction = transactions(:one)
+    transaction.cleared = "0"
+    assert_equal false, transaction.cleared
+  end
+
+  test "setting cleared to true sets cleared_at when nil" do
+    transaction = transactions(:one)
+    transaction.cleared_at = nil
+    transaction.cleared = "1"
+
+    freeze_time do
+      transaction.valid?
+      assert_equal Time.current, transaction.cleared_at
+    end
+  end
+
+  test "setting cleared to true preserves existing cleared_at timestamp" do
+    transaction = transactions(:one)
+    original_cleared_at = transaction.cleared_at
+    transaction.cleared = "1"
+    transaction.valid?
+
+    assert_equal original_cleared_at, transaction.cleared_at
+  end
+
+  test "setting cleared to false clears cleared_at" do
+    transaction = transactions(:one)
+    assert transaction.cleared_at.present?
+    transaction.cleared = "0"
+    transaction.valid?
+
+    assert_nil transaction.cleared_at
+  end
+
+  test "not setting cleared leaves cleared_at unchanged" do
+    transaction = transactions(:one)
+    original_cleared_at = transaction.cleared_at
+    transaction.description = "Updated"
+    transaction.valid?
+
+    assert_equal original_cleared_at, transaction.cleared_at
+  end
 end
