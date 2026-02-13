@@ -33,13 +33,15 @@
       </tr>
     </thead>
     <tbody>
-      <%= render "new_transaction_row",
-            transaction: @new_transaction,
-            src_accounts: @src_accounts,
-            dest_accounts: @dest_accounts,
-            categories: @categories %>
+      <tr id="new_transaction_row" data-controller="transaction-type">
+        <%= render "form_row",
+              transaction: @new_transaction,
+              src_accounts: @src_accounts,
+              dest_accounts: @dest_accounts,
+              categories: @categories %>
+      </tr>
       <% @transactions.each do |transaction| %>
-        <%= render "transaction_row", transaction: transaction %>
+        <%= render "row", transaction: transaction %>
       <% end %>
     </tbody>
   </table>

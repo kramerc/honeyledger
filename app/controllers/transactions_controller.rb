@@ -36,7 +36,7 @@ class TransactionsController < ApplicationController
   # GET /transactions/1/inline_edit
   def inline_edit
     set_form_collections
-    render partial: "transaction_inline_form", locals: {
+    render partial: "form_row", locals: {
       transaction: @transaction,
       src_accounts: @src_accounts,
       dest_accounts: @dest_accounts,
@@ -56,11 +56,11 @@ class TransactionsController < ApplicationController
           new_transaction = current_user.transactions.build
           render turbo_stream: [
             turbo_stream.after("new_transaction_row",
-              partial: "transactions/transaction_row",
+              partial: "transactions/row",
               locals: { transaction: @transaction }
             ),
             turbo_stream.replace("new_transaction_row",
-              partial: "transactions/new_transaction_row",
+              partial: "transactions/form_row",
               locals: {
                 transaction: new_transaction,
                 src_accounts: @src_accounts,
@@ -76,7 +76,7 @@ class TransactionsController < ApplicationController
         set_form_collections
         format.turbo_stream do
           render turbo_stream: turbo_stream.replace("new_transaction_row",
-            partial: "transactions/new_transaction_row",
+            partial: "transactions/form_row",
             locals: {
               transaction: @transaction,
               src_accounts: @src_accounts,
@@ -98,7 +98,7 @@ class TransactionsController < ApplicationController
         format.turbo_stream do
           render turbo_stream: turbo_stream.replace(
             dom_id(@transaction),
-            partial: "transactions/transaction_row",
+            partial: "transactions/row",
             locals: { transaction: @transaction }
           )
         end
@@ -109,7 +109,7 @@ class TransactionsController < ApplicationController
         format.turbo_stream do
           render turbo_stream: turbo_stream.update(
             dom_id(@transaction),
-            partial: "transactions/transaction_inline_form",
+            partial: "transactions/form_row",
             locals: {
               transaction: @transaction,
               src_accounts: @src_accounts,
