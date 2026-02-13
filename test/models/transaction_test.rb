@@ -43,6 +43,150 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal BigDecimal("45.00"), transaction.fx_amount
   end
 
+  test "amount= setter converts decimal to minor units with 2 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = "123.45"
+    assert_equal 12345, transaction.amount_minor
+  end
+
+  test "amount= setter converts decimal to minor units with 0 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:jpy),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = "5000"
+    assert_equal 5000, transaction.amount_minor
+  end
+
+  test "amount= setter converts decimal to minor units with 8 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:btc),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = "0.12345678"
+    assert_equal 12345678, transaction.amount_minor
+  end
+
+  test "amount= setter rounds to nearest minor unit" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    # 123.456 should round to 123.46
+    transaction.amount = "123.456"
+    assert_equal 12346, transaction.amount_minor
+
+    # 123.454 should round to 123.45
+    transaction.amount = "123.454"
+    assert_equal 12345, transaction.amount_minor
+  end
+
+  test "amount= setter handles BigDecimal input" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = BigDecimal("99.99")
+    assert_equal 9999, transaction.amount_minor
+  end
+
+  test "amount= setter handles integer input" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    transaction.amount = 50
+    assert_equal 5000, transaction.amount_minor
+  end
+
+  test "fx_amount= setter converts decimal to minor units with 2 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      fx_currency: currencies(:eur),
+      transacted_at: Time.current
+    )
+
+    transaction.fx_amount = "87.65"
+    assert_equal 8765, transaction.fx_amount_minor
+  end
+
+  test "fx_amount= setter converts decimal to minor units with 0 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      fx_currency: currencies(:jpy),
+      transacted_at: Time.current
+    )
+
+    transaction.fx_amount = "10000"
+    assert_equal 10000, transaction.fx_amount_minor
+  end
+
+  test "fx_amount= setter converts decimal to minor units with 8 decimal places" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      fx_currency: currencies(:btc),
+      transacted_at: Time.current
+    )
+
+    transaction.fx_amount = "0.00123456"
+    assert_equal 123456, transaction.fx_amount_minor
+  end
+
+  test "fx_amount= setter rounds to nearest minor unit" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:two),
+      currency: currencies(:usd),
+      fx_currency: currencies(:eur),
+      transacted_at: Time.current
+    )
+
+    # 50.556 should round to 50.56
+    transaction.fx_amount = "50.556"
+    assert_equal 5056, transaction.fx_amount_minor
+
+    # 50.554 should round to 50.55
+    transaction.fx_amount = "50.554"
+    assert_equal 5055, transaction.fx_amount_minor
+  end
+
   test "creating child transaction marks parent as split" do
     parent = transactions(:one)
     assert_not parent.split, "Parent should not be split initially"

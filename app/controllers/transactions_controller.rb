@@ -144,9 +144,8 @@ class TransactionsController < ApplicationController
 
     # Only allow a list of trusted parameters through.
     def transaction_params
-      permitted = params.expect(transaction: [ :transacted_at, :category_id, :category_name, :src_account_id, :dest_account_id, :description, :amount_minor, :amount_display, :currency_id, :fx_amount_minor, :fx_currency_id, :notes ])
+      permitted = params.expect(transaction: [ :transacted_at, :category_id, :category_name, :src_account_id, :dest_account_id, :description, :amount_minor, :amount, :currency_id, :fx_amount_minor, :fx_currency_id, :notes ])
       resolve_category!(permitted)
-      resolve_amount_display!(permitted)
       permitted
     end
 
@@ -165,24 +164,6 @@ class TransactionsController < ApplicationController
 
       category = current_user.categories.find_or_create_by!(name: name)
       attrs[:category_id] = category.id
-    end
-
-    # Convert a friendly decimal amount (e.g. "137.74") to minor units (e.g. 13774).
-    def resolve_amount_display!(attrs)
-      display = attrs.delete(:amount_display)
-      return if display.blank?
-
-      begin
-        decimal_amount = BigDecimal(display)
-      rescue ArgumentError, TypeError
-        # Leave amount_minor unset so model validations can handle invalid input
-        return
-      end
-
-      dest_account = current_user.accounts.find_by(id: attrs[:dest_account_id])
-      decimal_places = dest_account&.currency&.decimal_places || 2
-      scale = 10**decimal_places
-      attrs[:amount_minor] = (decimal_amount * scale).round.to_i
     end
 
     def set_form_collections

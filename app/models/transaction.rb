@@ -24,10 +24,18 @@ class Transaction < ApplicationRecord
     BigDecimal(amount_minor) / (10**currency.decimal_places)
   end
 
+  def amount=(value)
+    self.amount_minor = (BigDecimal(value.to_s) * (10**currency.decimal_places)).round.to_i
+  end
+
   def fx_amount
     return nil unless fx_amount_minor && fx_currency
 
     BigDecimal(fx_amount_minor) / (10**fx_currency.decimal_places)
+  end
+
+  def fx_amount=(value)
+    self.fx_amount_minor = (BigDecimal(value.to_s) * (10**fx_currency.decimal_places)).round.to_i
   end
 
   def has_fx?

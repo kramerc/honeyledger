@@ -20,7 +20,7 @@
           data: { transaction_type_target: "dest", action: "change->transaction-type#update" } %>
   </td>
   <td>
-    <%= text_field_tag "transaction[amount_display]", nil, form: form_id, placeholder: "0.00" %>
+    <%= text_field_tag "transaction[amount]", nil, form: form_id, placeholder: "0.00" %>
   </td>
   <td><span data-transaction-type-target="currency"></span></td>
   <td data-controller="category-picker">
