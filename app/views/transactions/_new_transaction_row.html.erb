@@ -1,7 +1,7 @@
 <tr id="new_transaction_row" data-controller="transaction-type">
   <% form_id = "new_transaction_inline_form" %>
   <td>
-    <%= datetime_field_tag "transaction[transacted_at]", Time.current.strftime("%Y-%m-%dT%H:%M"), form: form_id %>
+    <%= datetime_field_tag "transaction[transacted_at]", (transaction.transacted_at || Time.current).strftime("%Y-%m-%dT%H:%M"), form: form_id %>
   </td>
   <td><span data-transaction-type-target="indicator"></span></td>
   <td>
@@ -20,7 +20,7 @@
           data: { transaction_type_target: "dest", action: "change->transaction-type#update" } %>
   </td>
   <td>
-    <%= text_field_tag "transaction[amount]", nil, form: form_id, placeholder: "0.00" %>
+    <%= text_field_tag "transaction[amount]", transaction.amount, form: form_id, placeholder: "0.00" %>
   </td>
   <td><span data-transaction-type-target="currency"></span></td>
   <td data-controller="category-picker">
