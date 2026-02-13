@@ -280,6 +280,40 @@ class TransactionTest < ActiveSupport::TestCase
     assert_empty transaction.errors[:fx_amount]
   end
 
+  test "amount_minor= clears @amount to prevent stale decimal value" do
+    transaction = transactions(:one)
+
+    # First, read the amount (50.00 from amount_minor 5000)
+    original_amount = transaction.amount
+    assert_equal BigDecimal("50.00"), original_amount
+
+    # Directly set amount_minor to a new value
+    transaction.amount_minor = 7500
+
+    # The amount getter should recalculate from new amount_minor
+    # If @amount wasn't cleared, it could return a stale value
+    assert_equal BigDecimal("75.00"), transaction.amount
+    assert_not_equal original_amount, transaction.amount
+  end
+
+  test "fx_amount_minor= clears @fx_amount to prevent stale decimal value" do
+    transaction = transactions(:one)
+    transaction.fx_currency = currencies(:eur)
+    transaction.fx_amount_minor = 4500
+
+    # First, read the fx_amount (45.00 from fx_amount_minor 4500)
+    original_fx_amount = transaction.fx_amount
+    assert_equal BigDecimal("45.00"), original_fx_amount
+
+    # Directly set fx_amount_minor to a new value
+    transaction.fx_amount_minor = 6000
+
+    # The fx_amount getter should recalculate from new fx_amount_minor
+    # If @fx_amount wasn't cleared, it could return a stale value
+    assert_equal BigDecimal("60.00"), transaction.fx_amount
+    assert_not_equal original_fx_amount, transaction.fx_amount
+  end
+
   test "creating child transaction marks parent as split" do
     parent = transactions(:one)
     assert_not parent.split, "Parent should not be split initially"

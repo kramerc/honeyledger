@@ -25,13 +25,25 @@ class Transaction < ApplicationRecord
   attr_writer :amount, :fx_amount
   validate :virtual_amounts_numericality
 
+  def amount_minor=(value)
+    super(value)
+    @amount = nil
+  end
+
   def amount
+    return @amount if @amount.present?
     return nil unless amount_minor && currency
 
     BigDecimal(amount_minor) / (10**currency.decimal_places)
   end
 
+  def fx_amount_minor=(value)
+    super(value)
+    @fx_amount = nil
+  end
+
   def fx_amount
+    return @fx_amount if @fx_amount.present?
     return nil unless fx_amount_minor && fx_currency
 
     BigDecimal(fx_amount_minor) / (10**fx_currency.decimal_places)
