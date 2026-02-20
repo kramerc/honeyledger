@@ -4,7 +4,7 @@
   "name": "honeyledger",
   "dockerComposeFile": "compose.yaml",
   "service": "rails-app",
-  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceFolder": "/workspaces/honeyledger",
 
   // Features to add to the dev container. More info: https://containers.dev/features.
   "features": {

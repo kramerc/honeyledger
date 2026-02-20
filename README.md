@@ -26,7 +26,7 @@ The development server can be started with:
 bin/rails server
 ```
 
-Tests can be ran with:
+Tests can be run with:
 ```
 bin/rails test
 ```
