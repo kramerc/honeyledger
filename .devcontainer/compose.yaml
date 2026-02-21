@@ -1,7 +1,7 @@
 name: "honeyledger"
 
 services:
-  rails-app:
+  app:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
