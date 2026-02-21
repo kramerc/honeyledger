@@ -23,7 +23,12 @@
       "version": "4.0.0" // Make sure this matches the Ruby version in .ruby-version
     },
     "ghcr.io/rails/devcontainer/features/activestorage": {},
-    "ghcr.io/rails/devcontainer/features/postgres-client": {}
+    "ghcr.io/rails/devcontainer/features/postgres-client": {},
+
+    // Required for frontend
+    "ghcr.io/devcontainers/features/node": {
+      "version": "lts"
+    }
   },
 
   "containerEnv": {
@@ -34,7 +39,7 @@
   },
 
   // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  "forwardPorts": [3000, "postgres:5432"],
+  "forwardPorts": [3000, 3001, "postgres:5432"],
 
   // Configure tool-specific properties.
   // "customizations": {},
@@ -44,6 +49,7 @@
 
   // Use 'postCreateCommand' to run commands after the container is created.
   "postCreateCommand": {
-    "backend": "cd backend && bin/setup --skip-server"
+    "backend": "cd backend && bin/setup --skip-server",
+    "frontend": "cd frontend && npm install"
   }
 }
