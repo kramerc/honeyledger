@@ -31,6 +31,13 @@ For assets, the Vite development can be started with:
 bin/vite dev
 ```
 
+With the [Foreman](https://github.com/ddollar/foreman) gem installed, both servers can be started with:
+```
+foreman start
+```
+
+## Testing
+
 Tests can be run with:
 ```
 bin/rails test
