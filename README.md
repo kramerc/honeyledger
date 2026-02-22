@@ -21,9 +21,14 @@ The container will take a few minutes to build for the first time. Once complete
 
 ## Running
 
-The development server can be started with:
+The Rails development server can be started with:
 ```
 bin/rails server
+```
+
+For assets, the Vite development can be started with:
+```
+bin/vite dev
 ```
 
 Tests can be run with:

@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "removeComments": true,
+    "isolatedModules": true,
+    "moduleResolution": "bundler",
+    "strict": true,
+    "strictPropertyInitialization": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "jsx": "react",
+    "allowJs": false,
+    "module": "esnext",
+    "target": "es2021",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "baseUrl": ".", // Usually the root of your project
+    "paths": {
+      "@javascript/*": ["app/javascript/*"],
+      "@views/*": ["app/views/*"]
+    },
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "app/javascript/**/*",
+    "app/views/**/*"
+  ],
+}

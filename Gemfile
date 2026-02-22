@@ -46,6 +46,12 @@ gem "devise", "~> 5.0.1"
 # Client for API requests
 gem "httparty"
 
+# Frontend tooling
+gem "vite_rails"
+
+# React integration
+gem "superglue"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
