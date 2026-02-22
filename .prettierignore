@@ -1,0 +1,14 @@
+# Ignore artifacts
+build
+coverage
+
+# Ignore Rails config and default error pages
+config/
+public/400.html
+public/404.html
+public/406-unsupported-browser.html
+public/422.html
+public/500.html
+
+# Ignore Copilot instructions
+.github/copilot-instructions.md

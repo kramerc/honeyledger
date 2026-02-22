@@ -5,6 +5,7 @@
 ## Setting up development environment
 
 This project makes use of Dev Containers to provide a consistent development environment. To get started with [Visual Studio Code](https://code.visualstudio.com/):
+
 1. Set up Docker with [Docker Desktop](https://docs.docker.com/get-started/introduction/get-docker-desktop/) (Windows/Linux/Mac) or with [Docker Engine](https://docs.docker.com/engine/install/) (Linux).
 2. Set up Dev Containers in Visual Studio Code by following the [Dev Containers tutorial](https://code.visualstudio.com/docs/devcontainers/tutorial).
 3. Clone the repo. On Windows, this should be done under [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) for the best compatibility.
@@ -22,16 +23,19 @@ The container will take a few minutes to build for the first time. Once complete
 ## Running
 
 The Rails development server can be started with:
+
 ```
 bin/rails server
 ```
 
 For assets, the Vite development can be started with:
+
 ```
 bin/vite dev
 ```
 
 With the [Foreman](https://github.com/ddollar/foreman) gem installed, both servers can be started with:
+
 ```
 foreman start
 ```
@@ -39,6 +43,7 @@ foreman start
 ## Testing
 
 Tests can be run with:
+
 ```
 bin/rails test
 ```

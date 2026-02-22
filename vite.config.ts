@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // Stimulus controllers
-      "controllers": path.resolve(__dirname, "app/javascript/controllers"),
+      controllers: path.resolve(__dirname, "app/javascript/controllers"),
     },
   },
   plugins: [RubyPlugin(), StimulusHMRPlugin()],
