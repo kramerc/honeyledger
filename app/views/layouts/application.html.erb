@@ -20,6 +20,7 @@
 
     <%# Includes all stylesheet files in app/assets/stylesheets %>
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= preloaded_state_tag %>
     <%= vite_react_refresh_tag %>
     <%= vite_client_tag %>
     <%= vite_javascript_tag 'application.tsx' %>
