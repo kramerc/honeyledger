@@ -12,9 +12,9 @@ export const User = () => {
     <div>
       <h2>User State</h2>
       <p>
-        ID: {user.id}
+        {`ID: ${user.id}`}
         <br />
-        Email: {user.email}
+        {`Email: ${user.email}`}
       </p>
     </div>
   );

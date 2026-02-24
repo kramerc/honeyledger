@@ -22,6 +22,7 @@ export default defineConfig((configEnv) =>
         coverage: {
           enabled: true,
           include: ["**/*.{js,jsx,ts,tsx}"],
+          exclude: ["entrypoints/**"],
           reportOnFailure: true,
           reportsDirectory: path.resolve(projectRoot, "coverage-js"),
         },

@@ -19,13 +19,19 @@ export const makeStore = (preloadedState?: Partial<RootState>) => {
   return store;
 };
 
-// Hydrate the store with preloaded state from the server, if available
-const preloadedStateTag = document.getElementById("preloaded-state");
-const preloadedState: RootState = preloadedStateTag
-  ? JSON.parse(preloadedStateTag.textContent || "{}")
-  : {};
+// Reads and parses the preloaded state injected by the server, if available.
+// Returns an empty object if the tag is missing or the JSON is malformed.
+export const readPreloadedState = (): Partial<RootState> => {
+  const tag = document.getElementById("preloaded-state");
+  if (!tag) return {};
+  try {
+    return JSON.parse(tag.textContent || "{}");
+  } catch {
+    return {};
+  }
+};
 
-export const store = makeStore(preloadedState);
+export const store = makeStore(readPreloadedState());
 
 export type AppStore = typeof store;
 export type AppDispatch = AppStore["dispatch"];
