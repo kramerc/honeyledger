@@ -41,7 +41,7 @@ gem "thruster", require: false
 gem "image_processing", "~> 1.2"
 
 # User authentication
-gem "devise", "~> 5.0.1"
+gem "devise", "~> 5.0.2"
 
 # Client for API requests
 gem "httparty"
