@@ -16,7 +16,8 @@
     "ghcr.io/rails/devcontainer/features/postgres-client": {},
     "ghcr.io/devcontainers/features/node": {
       "version": "lts"
-    }
+    },
+    "ghcr.io/schlich/devcontainer-features/playwright": {}
   },
 
   "customizations": {
@@ -26,8 +27,6 @@
   },
 
   "containerEnv": {
-    "CAPYBARA_SERVER_PORT": "45678",
-    "SELENIUM_HOST": "selenium",
     "KAMAL_REGISTRY_PASSWORD": "$KAMAL_REGISTRY_PASSWORD",
     "DB_HOST": "postgres"
   },

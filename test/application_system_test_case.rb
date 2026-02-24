@@ -1,14 +1,11 @@
 require "test_helper"
 
-class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
-  if ENV["CAPYBARA_SERVER_PORT"]
-    served_by host: "rails-app", port: ENV["CAPYBARA_SERVER_PORT"]
+Capybara.register_driver :playwright do |app|
+  Capybara::Playwright::Driver.new(app,
+    browser_type: ENV["PLAYWRIGHT_BROWSER"]&.to_sym || :chromium,
+    headless: (false unless ENV["CI"] || ENV["PLAYWRIGHT_HEADLESS"]))
+end
 
-    driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ], options: {
-      browser: :remote,
-      url: "http://#{ENV["SELENIUM_HOST"]}:4444"
-    }
-  else
-    driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
-  end
+class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
+  driven_by :playwright
 end
