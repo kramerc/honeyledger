@@ -29,6 +29,9 @@ Rails.application.routes.draw do
   if Rails.env.development?
     get "/coverage", to: redirect("/coverage/index.html")
     mount Rack::Directory.new(Rails.root.join("coverage").to_s), at: "/coverage"
+
+    get "/coverage-js", to: redirect("/coverage-js/index.html")
+    mount Rack::Directory.new(Rails.root.join("coverage-js").to_s), at: "/coverage-js"
   end
 
   # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)

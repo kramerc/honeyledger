@@ -6,7 +6,12 @@ import reactPlugin from "eslint-plugin-react";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["coverage/**/*", "public/**/*"]),
+  globalIgnores([
+    "coverage/**/*",
+    "coverage-js/**/*",
+    "public/**/*",
+    "vendor/**/*",
+  ]),
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
     plugins: { js },

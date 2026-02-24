@@ -14,6 +14,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/browser-playwright": "^4.0.18",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
@@ -27,6 +28,9 @@
     "vite-plugin-stimulus-hmr": "^3.0.0",
     "vitest": "^4.0.18",
     "vitest-browser-react": "^2.0.5"
+  },
+  "overrides": {
+    "minimatch": ">=10.2.1"
   },
   "dependencies": {
     "@hotwired/stimulus": "^3.2.2",
