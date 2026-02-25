@@ -10,6 +10,7 @@ SimpleCov.formatters = [
 ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
+Minitest.load_plugins
 
 module ActiveSupport
   class TestCase
