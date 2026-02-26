@@ -1,13 +1,13 @@
 module TransactionsHelper
-  def transaction_type_indicator(transaction)
-    return "" if transaction.dest_account.nil? || transaction.src_account.nil?
+  def transaction_type_indicator(transaction, **html_options)
+    return tag.span("", **html_options) if transaction.dest_account.nil? || transaction.src_account.nil?
 
     if transaction.dest_account.expense?
-      tag.span("↓ Withdrawal", style: "color: red;")
+      tag.span("↓ Withdrawal", **{ style: "color: red;" }.merge(html_options))
     elsif transaction.src_account.revenue?
-      tag.span("↑ Deposit", style: "color: green;")
+      tag.span("↑ Deposit", **{ style: "color: green;" }.merge(html_options))
     else
-      tag.span("⇄ Transfer", style: "color: gray;")
+      tag.span("⇄ Transfer", **{ style: "color: gray;" }.merge(html_options))
     end
   end
 

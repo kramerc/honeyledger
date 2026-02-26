@@ -1,0 +1,28 @@
+<!-- Show -->
+<%= turbo_frame_tag transaction do %>
+  <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>">
+
+    <div class="row show">
+      <div><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></div>
+      <div><%= transaction_type_indicator(transaction) %></div>
+      <div><%= transaction.description %></div>
+      <div><%= transaction.src_account&.name %></div>
+      <div><%= transaction.dest_account&.name %></div>
+      <div class="numeric"><%= amount_to_currency(transaction.amount_minor, transaction.currency) %></div>
+      <div><%= transaction.currency.code %></div>
+      <div><%= transaction.category&.name %></div>
+      <div class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
+      <div class="actions">
+        <a href="#" data-action="transactions--row#edit">Edit</a>
+        <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
+      </div>
+    </div>
+
+    <!-- Edit -->
+    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction), loading: "lazy", class: "edit" do %>
+      <div class="row">
+        <div class="loading">Loading...</div>
+      </div>
+    <% end %>
+  </div>
+<% end %>

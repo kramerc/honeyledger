@@ -1,0 +1,18 @@
+<%= turbo_stream.replace :new_transaction do %>
+  <%= turbo_frame_tag :new_transaction do %>
+    <%= render partial: 'form', locals: {
+      transaction: @new_transaction,
+      src_accounts: @src_accounts,
+      dest_accounts: @dest_accounts,
+      categories: @categories
+    } %>
+  <% end %>
+<% end %>
+
+<% if @last_transaction %>
+  <%= turbo_stream.before dom_id(@last_transaction), @transaction %>
+<% else %>
+  <%= turbo_stream.prepend :transactions do %>
+    <%= render @transaction %>
+  <% end %>
+<% end %>

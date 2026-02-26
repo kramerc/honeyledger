@@ -1,14 +1,19 @@
 module AccountsHelper
-  # Build <option> tags with data-kind and data-currency attributes for account selects.
-  def account_options_with_kind(accounts, selected_id, prompt: nil)
-    opts = []
-    opts << content_tag(:option, html_escape(prompt), value: "") if prompt
-    accounts.each do |account|
-      opts << content_tag(:option, html_escape(account.name),
-        value: account.id,
-        selected: (account.id == selected_id ? "selected" : nil),
-        data: { kind: account.kind, currency: account.currency.code })
+  def account_options(accounts)
+    accounts.map do |account|
+      [ account.name, account.id, { data: { currency: account.currency.code, kind: account.kind } } ]
     end
-    safe_join(opts)
+  end
+
+  def grouped_account_options_for_select(accounts, groups, selected_key: nil)
+    accounts_by_kind = accounts.group_by(&:kind)
+
+    # Remove groups that don't have any accounts
+    groups = groups.reject { |kind| accounts_by_kind[kind.to_s].blank? }
+
+    grouped_options = groups.map do |kind|
+      [ kind.to_s.titleize, account_options(accounts_by_kind[kind.to_s] || []) ]
+    end
+    grouped_options_for_select(grouped_options, selected_key)
   end
 end
