@@ -10,6 +10,8 @@ class Account < ApplicationRecord
   has_one :simplefin_account, dependent: :nullify
 
   enum :kind, { asset: 0, liability: 1, equity: 2, expense: 3, revenue: 4 }
+  SOURCEABLE = [ :asset, :liability, :equity, :revenue ].freeze
+  DESTINABLE = [ :asset, :liability, :equity, :expense ].freeze
 
   validates :name, presence: true
 
@@ -19,8 +21,8 @@ class Account < ApplicationRecord
   scope :expenses, -> { where(kind: :expense) }
   scope :revenues, -> { where(kind: :revenue) }
 
-  scope :sourceable, -> { where(kind: [ :asset, :liability, :equity, :revenue ]) }
-  scope :destinable, -> { where(kind: [ :asset, :liability, :equity, :expense ]) }
+  scope :sourceable, -> { where(kind: SOURCEABLE) }
+  scope :destinable, -> { where(kind: DESTINABLE) }
 
   scope :linkable, -> { where(kind: [ :asset, :liability ]) }
   scope :unlinked, -> { left_joins(:simplefin_account).where(simplefin_accounts: { id: nil }) }

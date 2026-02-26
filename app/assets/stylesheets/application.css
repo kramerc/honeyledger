@@ -21,3 +21,12 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Flash messages */
+.notice {
+  color: green;
+}
+
+.alert {
+  color: red;
+}

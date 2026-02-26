@@ -1,48 +1,31 @@
-<p style="color: green"><%= notice %></p>
-
 <% content_for :title, "Transactions" %>
 
 <h1>Transactions</h1>
 
-<%= turbo_frame_tag "transactions" do %>
-  <%= form_with url: transactions_path, method: :get, data: { turbo_frame: "transactions" } do |f| %>
-    <div>
-      <%= f.label :account_id, "Filter by Account" %>
-      <%= f.select :account_id, grouped_options_for_select(@accounts_by_type.map { |type, accounts| [type, accounts.map { |a| [a.name, a.id] }] }, params[:account_id]), { include_blank: "All Accounts" } %>
-      <%= f.submit "Filter" %>
-      <% if params[:account_id].present? %>
-        <%= link_to "Clear", transactions_path, data: { turbo_frame: "transactions" } %>
-      <% end %>
-    </div>
+<div class="transactions">
+  <div class="row header">
+    <div>Date</div>
+    <div>Type</div>
+    <div>Description</div>
+    <div>From</div>
+    <div>To</div>
+    <div>Amount</div>
+    <div>Currency</div>
+    <div>Category</div>
+    <div>Cleared</div>
+    <div>Actions</div>
+  </div>
+
+  <%= turbo_frame_tag :new_transaction do %>
+    <%= render partial: 'form', locals: {
+      transaction: @new_transaction,
+      src_accounts: @src_accounts,
+      dest_accounts: @dest_accounts,
+      categories: @categories
+    } %>
   <% end %>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Date</th>
-        <th>Type</th>
-        <th>Description</th>
-        <th>From</th>
-        <th>To</th>
-        <th>Amount</th>
-        <th>Currency</th>
-        <th>Category</th>
-        <th>Cleared</th>
-        <th>Split</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr id="new_transaction_row" data-controller="transaction-type">
-        <%= render "form_row",
-              transaction: @new_transaction,
-              src_accounts: @src_accounts,
-              dest_accounts: @dest_accounts,
-              categories: @categories %>
-      </tr>
-      <% @transactions.each do |transaction| %>
-        <%= render "row", transaction: transaction %>
-      <% end %>
-    </tbody>
-  </table>
-<% end %>
+  <%= turbo_frame_tag :transactions do %>
+    <%= render @transactions %>
+  <% end %>
+</div>

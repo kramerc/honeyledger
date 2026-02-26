@@ -1,0 +1,10 @@
+<%= turbo_stream.replace dom_id(@transaction, :edit) do %>
+  <%= turbo_frame_tag dom_id(@transaction, :edit), class: "edit" do %>
+    <%= render partial: 'form', locals: {
+      transaction: @transaction,
+      src_accounts: @src_accounts,
+      dest_accounts: @dest_accounts,
+      categories: @categories
+    } %>
+  <% end %>
+<% end %>

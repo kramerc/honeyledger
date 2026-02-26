@@ -1,0 +1,72 @@
+<%= form_with(model: transaction, data: { controller: "transactions--form", action: "transactions--form#clearError", transactions__row_target: "form" }, html: { autocomplete: "off" }) do |form| %>
+  <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
+    <div>
+      <%= form.datetime_field :transacted_at, include_seconds: false %>
+    </div>
+
+    <div>
+      <%= transaction_type_indicator(transaction, data: { transactions__form_target: "type" }) %>
+    </div>
+
+    <div>
+      <%= form.text_field :description %>
+    </div>
+
+    <div>
+      <%= form.select :src_account_id,
+            grouped_account_options_for_select(src_accounts, Account::SOURCEABLE, selected_key: transaction.src_account_id),
+            { include_blank: "From…" },
+            data: {
+              action: "transactions--form#updateEnabledAccounts transactions--form#updateType",
+              transactions__form_target: "srcAccount"
+            } %>
+    </div>
+
+    <div>
+      <%= form.select :dest_account_id,
+            grouped_account_options_for_select(dest_accounts, Account::DESTINABLE, selected_key: transaction.dest_account_id),
+            { include_blank: "To…" },
+            data: {
+              action: "transactions--form#updateEnabledAccounts transactions--form#updateCurrency transactions--form#updateType",
+              transactions__form_target: "destAccount"
+            } %>
+    </div>
+
+    <div class="numeric">
+      <%= form.text_field :amount %>
+    </div>
+
+    <div data-transactions--form-target="currency">
+      <%= transaction.currency&.code %>
+    </div>
+
+    <div>
+      <%= form.select :category_id, options_from_collection_for_select(categories, :id, :name), include_blank: true %>
+    </div>
+
+    <div class="boolean">
+      <%= form.check_box :cleared %>
+    </div>
+
+    <div class="actions">
+      <% if transaction.new_record? %>
+        <%= form.submit "Create" %>
+      <% else %>
+        <%= form.submit "Save" %>
+        <a href="#" data-action="transactions--row#cancelEdit transactions--form#clearError">Cancel</a>
+      <% end %>
+
+      <% if transaction.errors.any? %>
+        <div class="error" data-controller="error" data-transactions--form-target="error">
+          <button data-action="error#close" class="close">&times;</button>
+          <h4>Transaction could not be saved:</h4>
+          <ul>
+            <% transaction.errors.full_messages.each do |message| %>
+              <li><%= message %></li>
+            <% end %>
+          </ul>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>

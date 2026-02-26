@@ -1,62 +1,133 @@
-/* Transactions table and inline-edit form styling */
-
-#transactions table {
+/* Transactions table */
+.transactions {
+  border-left: 1px solid #ddd;
+  border-top: 1px solid #ddd;
   width: 100%;
-  border-collapse: collapse;
-  table-layout: auto;
 }
 
-#transactions th,
-#transactions td {
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #e0e0e0;
-  text-align: left;
-  vertical-align: middle;
-  white-space: nowrap;
+/* Table header row */
+.transactions .row.header {
+  background-color: #f2f2f2;
+  font-weight: bold;
 }
 
-#transactions th {
-  font-weight: 600;
-  background: #f7f7f7;
+/* Table row */
+.transactions .row {
+  display: grid;
+  grid-template-columns:
+    250px                   /* Date */
+    130px                   /* Type */
+    minmax(100px, 1fr)      /* Description */
+    175px                   /* From */
+    175px                   /* To */
+    110px                   /* Amount */
+    90px                    /* Currency */
+    140px                   /* Category */
+    90px                    /* Cleared */
+    170px;                  /* Actions */
+  gap: 0;
+  align-items: stretch;
 }
 
-#transactions tbody tr:hover {
-  background: #fafafa;
+.transactions .row:hover:not(.header) {
+  background-color: #f9f9f9;
 }
 
-/* Make inline-edit inputs fill their cells */
-#transactions table input[type="text"],
-#transactions table input[type="datetime-local"],
-#transactions table input[type="number"],
-#transactions table select,
-#transactions table textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.25rem 0.35rem;
-  font: inherit;
-}
-
-/* Category new-input combo */
-.category-new-input {
+/* Cells */
+.transactions .row > div {
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  border-left: 0;
+  border-top: 0;
+  padding: 8px;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
 }
 
-.category-new-input input[type="text"] {
-  flex: 1;
-  min-width: 0;
+.transactions .numeric {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
-.category-new-cancel {
-  flex-shrink: 0;
-  font-size: 1.1rem;
+.transactions .boolean {
+  justify-content: center;
+}
+
+.transactions .actions {
+  gap: 6px;
+}
+
+/* Forms */
+.transactions form {
+  position: relative;
+}
+
+.transactions form input[type="text"],
+.transactions form input[type="datetime-local"],
+.transactions form select {
+  width: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+  padding: 4px;
+}
+
+.transactions form .numeric input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Error messages */
+.transactions form .error {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 300px;
+
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 4px 8px;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+}
+
+.transactions form .error .close {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  background: none;
+  border: 1px solid #721c24;
+  border-radius: 8px;
+  color: #721c24;
+  cursor: pointer;
+  font-size: 32px;
   line-height: 1;
-  text-decoration: none;
-  color: #888;
-  padding: 0 0.2rem;
 }
 
-.category-new-cancel:hover {
-  color: #c00;
+.transactions form .error .close:hover {
+  background-color: #721c24;
+  color: #f8d7da;
+}
+
+.transactions form .error h4 {
+  margin: 1em 0;
+}
+
+/* Loading state */
+.transaction .row > .loading {
+  grid-column: 1 / -1;
+  padding: 9px 8px;
+}
+
+/* Editing action */
+.transaction .edit {
+  display: none; /* Hide edit portion by default */
+}
+
+.transaction.editing .show {
+  display: none; /* Hide show portion when editing */
+}
+
+.transaction.editing .edit {
+  display: block; /* Show edit portion when editing */
 }

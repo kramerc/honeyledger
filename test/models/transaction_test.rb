@@ -458,8 +458,6 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal currencies(:eur).id, transaction.currency_id, "Currency should be auto-corrected to dest account currency"
   end
 
-  # -- cleared virtual attribute --
-
   test "cleared returns true when cleared_at is present" do
     transaction = transactions(:one)
     assert transaction.cleared_at.present?
@@ -548,5 +546,47 @@ class TransactionTest < ActiveSupport::TestCase
 
     assert_not transaction.valid?
     assert_includes transaction.errors[:dest_account], "must be accessible to you"
+  end
+
+  test "validates accounts cannot be the same" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:one),
+      dest_account: accounts(:one),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:src_account], "cannot be the same as dest account"
+  end
+
+  test "validates not revenue to expense" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:revenue_account),
+      dest_account: accounts(:expense_account),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:src_account], "cannot be a revenue account to an expense dest account"
+  end
+
+  test "validates not expense to revenue" do
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:expense_account),
+      dest_account: accounts(:revenue_account),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:src_account], "cannot be an expense account to a revenue dest account"
   end
 end

@@ -28,6 +28,10 @@ class Transaction < ApplicationRecord
   validate :src_account_accessible_to_user
   validate :dest_account_accessible_to_user
 
+  validate :accounts_cannot_be_same, unless: -> { src_account_id.nil? || dest_account_id.nil? }
+  validate :not_expense_to_revenue, if: -> { src_account&.expense? && dest_account&.revenue? }
+  validate :not_revenue_to_expense, if: -> { src_account&.revenue? && dest_account&.expense? }
+
   def cleared
     return @cleared if defined?(@cleared)
     cleared_at.present?
@@ -46,7 +50,7 @@ class Transaction < ApplicationRecord
     return @amount if @amount.present?
     return nil unless amount_minor && currency
 
-    BigDecimal(amount_minor) / (10**currency.decimal_places)
+    BigDecimal(amount_minor) / (10 ** currency.decimal_places)
   end
 
   def fx_amount_minor=(value)
@@ -58,7 +62,7 @@ class Transaction < ApplicationRecord
     return @fx_amount if @fx_amount.present?
     return nil unless fx_amount_minor && fx_currency
 
-    BigDecimal(fx_amount_minor) / (10**fx_currency.decimal_places)
+    BigDecimal(fx_amount_minor) / (10 ** fx_currency.decimal_places)
   end
 
   def has_fx?
@@ -67,70 +71,88 @@ class Transaction < ApplicationRecord
 
   private
 
-  def set_currency_from_dest_account
-    self.currency_id = dest_account.currency_id if dest_account.present?
-  end
-
-  def set_cleared_at_from_cleared
-    return unless defined?(@cleared)
-
-    if @cleared
-      self.cleared_at ||= Time.current
-    else
-      self.cleared_at = nil
-    end
-  end
-
-  def set_amount_minor_from_amount
-    return unless @amount && currency
-
-    self.amount_minor = (@amount.to_d * (10**currency.decimal_places)).round.to_i
-  end
-
-  def set_fx_amount_minor_from_fx_amount
-    return unless @fx_amount && fx_currency
-
-    self.fx_amount_minor = (@fx_amount.to_d * (10**fx_currency.decimal_places)).round.to_i
-  end
-
-  def virtual_amounts_numericality
-    if @amount.present? && !numeric?(@amount)
-      errors.add(:amount, "must be a valid number")
+    def set_currency_from_dest_account
+      self.currency_id = dest_account.currency_id if dest_account.present?
     end
 
-    if @fx_amount.present? && !numeric?(@fx_amount)
-      errors.add(:fx_amount, "must be a valid number")
+    def set_cleared_at_from_cleared
+      return unless defined?(@cleared)
+
+      if @cleared
+        self.cleared_at ||= Time.current
+      else
+        self.cleared_at = nil
+      end
     end
-  end
 
-  def mark_parent_as_split
-    parent_transaction.update(split: true)
-  end
+    def set_amount_minor_from_amount
+      return unless @amount && currency
 
-  def unmark_parent_if_last_child
-    parent_transaction.update(split: false) if parent_transaction.child_transactions.empty?
-  end
-
-  def numeric?(value)
-    BigDecimal(value)
-    true
-  rescue ArgumentError, TypeError
-    false
-  end
-
-  def src_account_accessible_to_user
-    return if src_account.blank? || user.blank?
-
-    unless src_account.accessible_by?(user)
-      errors.add(:src_account, "must be accessible to you")
+      self.amount_minor = (@amount.to_d * (10 ** currency.decimal_places)).round.to_i
     end
-  end
 
-  def dest_account_accessible_to_user
-    return if dest_account.blank? || user.blank?
+    def set_fx_amount_minor_from_fx_amount
+      return unless @fx_amount && fx_currency
 
-    unless dest_account.accessible_by?(user)
-      errors.add(:dest_account, "must be accessible to you")
+      self.fx_amount_minor = (@fx_amount.to_d * (10 ** fx_currency.decimal_places)).round.to_i
     end
-  end
+
+    def virtual_amounts_numericality
+      if @amount.present? && !numeric?(@amount)
+        errors.add(:amount, "must be a valid number")
+      end
+
+      if @fx_amount.present? && !numeric?(@fx_amount)
+        errors.add(:fx_amount, "must be a valid number")
+      end
+    end
+
+    def mark_parent_as_split
+      parent_transaction.update(split: true)
+    end
+
+    def unmark_parent_if_last_child
+      parent_transaction.update(split: false) if parent_transaction.child_transactions.empty?
+    end
+
+    def numeric?(value)
+      BigDecimal(value)
+      true
+    rescue ArgumentError, TypeError
+      false
+    end
+
+    def src_account_accessible_to_user
+      return if src_account.blank? || user.blank?
+
+      unless src_account.accessible_by?(user)
+        errors.add(:src_account, "must be accessible to you")
+      end
+    end
+
+    def dest_account_accessible_to_user
+      return if dest_account.blank? || user.blank?
+
+      unless dest_account.accessible_by?(user)
+        errors.add(:dest_account, "must be accessible to you")
+      end
+    end
+
+    def accounts_cannot_be_same
+      if src_account_id == dest_account_id
+        errors.add(:src_account, "cannot be the same as dest account")
+      end
+    end
+
+    def not_revenue_to_expense
+      if src_account.revenue? && dest_account.expense?
+        errors.add(:src_account, "cannot be a revenue account to an expense dest account")
+      end
+    end
+
+    def not_expense_to_revenue
+      if src_account.expense? && dest_account.revenue?
+        errors.add(:src_account, "cannot be an expense account to a revenue dest account")
+      end
+    end
 end

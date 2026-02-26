@@ -4,11 +4,7 @@ Rails.application.routes.draw do
   resources :accounts
   resources :categories
   resources :currencies
-  resources :transactions, except: %i[new edit] do
-    member do
-      get :inline_edit
-    end
-  end
+  resources :transactions
 
   # SimpleFIN integration routes
   resources :simplefin_accounts, only: [] do
