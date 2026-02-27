@@ -1,0 +1,2 @@
+module Simplefin::ConnectionsHelper
+end

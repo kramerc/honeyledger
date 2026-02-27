@@ -1,7 +1,7 @@
-class SimplefinConnection < ApplicationRecord
+class Simplefin::Connection < ApplicationRecord
   belongs_to :user
-  has_many :accounts, class_name: "SimplefinAccount", dependent: :destroy
-  has_many :transactions, class_name: "SimplefinTransaction", through: :accounts
+  has_many :accounts, dependent: :destroy
+  has_many :transactions, through: :accounts
 
   validates :user_id, uniqueness: true
 
@@ -10,7 +10,7 @@ class SimplefinConnection < ApplicationRecord
   DEMO_URL = "https://demo:demo@beta-bridge.simplefin.org/simplefin"
 
   def client
-    Simplefin.new(url: self.url)
+    SimplefinClient.new(url: self.url)
   end
 
   def claim!
@@ -34,6 +34,6 @@ class SimplefinConnection < ApplicationRecord
   end
 
   def refresh
-    SimplefinRefreshJob.perform_later(self.id)
+    Simplefin::RefreshJob.perform_later(self.id)
   end
 end

@@ -5,10 +5,10 @@ class TransactionImportJobTest < ActiveJob::TestCase
     @user = users(:one)
     @currency = currencies(:usd)
 
-    # Clear any SimpleFin transactions that would be imported from fixtures
-    SimplefinTransaction.where(simplefin_account: SimplefinAccount.where.not(account_id: nil)).destroy_all
+    # Clear any SimpleFIN transactions that would be imported from fixtures
+    Simplefin::Transaction.where(account: Simplefin::Account.where.not(ledger_account_id: nil)).destroy_all
 
-    # Create a bank account linked to SimpleFin
+    # Create a bank account linked to SimpleFIN
     @bank_account = Account.create!(
       user: @user,
       currency: @currency,
@@ -16,12 +16,12 @@ class TransactionImportJobTest < ActiveJob::TestCase
       kind: :asset
     )
 
-    # Use existing SimpleFin connection from fixtures
+    # Use existing SimpleFIN connection from fixtures
     @simplefin_connection = simplefin_connections(:one)
 
-    @simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: @bank_account,
+    @simplefin_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
+      ledger_account: @bank_account,
       remote_id: "acc_test",
       name: "Test Checking",
       currency: "USD",
@@ -30,9 +30,9 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports expense transaction (negative amount)" do
-    # Create a SimpleFin transaction with negative amount (money out)
-    sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    # Create a SimpleFIN transaction with negative amount (money out)
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_expense_1",
       amount: "-50.00",
       description: "Coffee Shop",
@@ -42,7 +42,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      assert_difference "Account.count", 1 do  # Creates expense account
+      assert_difference "Account.count", 1 do
+        # Creates expense account
         TransactionImportJob.perform_now
       end
     end
@@ -54,7 +55,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
     assert_equal "Coffee Shop", transaction.dest_account.name
     assert_equal "expense", transaction.dest_account.kind
     assert_equal "Coffee Shop", transaction.description
-    assert_equal 5000, transaction.amount_minor  # Absolute value
+    assert_equal 5000, transaction.amount_minor # Absolute value
     assert_equal @currency, transaction.currency
     assert_not_nil transaction.transacted_at
     assert_not_nil transaction.cleared_at
@@ -62,9 +63,9 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports revenue transaction (positive amount)" do
-    # Create a SimpleFin transaction with positive amount (money in)
-    sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    # Create a SimpleFIN transaction with positive amount (money in)
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_revenue_1",
       amount: "2500.00",
       description: "Salary Payment",
@@ -74,7 +75,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      assert_difference "Account.count", 1 do  # Creates revenue account
+      assert_difference "Account.count", 1 do
+        # Creates revenue account
         TransactionImportJob.perform_now
       end
     end
@@ -100,8 +102,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     # Create two transactions with the same description
-    sf_transaction1 = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction1 = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_1",
       amount: "-100.00",
       description: "Grocery Store",
@@ -110,8 +112,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    sf_transaction2 = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction2 = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_2",
       amount: "-150.00",
       description: "Grocery Store",
@@ -121,7 +123,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 2 do
-      assert_no_difference "Account.count" do  # Reuses existing account
+      assert_no_difference "Account.count" do
+        # Reuses existing account
         TransactionImportJob.perform_now
       end
     end
@@ -133,10 +136,10 @@ class TransactionImportJobTest < ActiveJob::TestCase
     assert_equal expense_account, transaction2.dest_account
   end
 
-  test "updates existing transaction when SimpleFin transaction is updated" do
+  test "updates existing transaction when SimpleFIN transaction is updated" do
     # Create and import a transaction
-    sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_update",
       amount: "-75.00",
       description: "Original Description",
@@ -150,7 +153,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
     transaction = Transaction.find_by(sourceable: sf_transaction)
     original_synced_at = transaction.synced_at
 
-    # Wait a moment and update the SimpleFin transaction with a new synced_at
+    # Wait a moment and update the SimpleFIN transaction with a new synced_at
     travel 2.seconds
 
     sf_transaction.update!(
@@ -170,18 +173,18 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "skips transactions without linked account" do
-    # Create a SimpleFin account without a linked ledger account
-    unlinked_sf_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: nil,  # No linked account
+    # Create a SimpleFIN account without a linked ledger account
+    unlinked_sf_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
+      ledger_account: nil, # No linked account
       remote_id: "acc_unlinked",
       name: "Unlinked Account",
       currency: "USD",
       balance: "500.00"
     )
 
-    _sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: unlinked_sf_account,
+    _sf_transaction = Simplefin::Transaction.create!(
+      account: unlinked_sf_account,
       remote_id: "txn_unlinked",
       amount: "-25.00",
       description: "Should Be Skipped",
@@ -196,8 +199,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "handles transaction without posted date" do
-    sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_no_posted",
       amount: "-30.00",
       description: "No Posted Date",
@@ -213,15 +216,15 @@ class TransactionImportJobTest < ActiveJob::TestCase
     transaction = Transaction.find_by(sourceable: sf_transaction)
     assert_not_nil transaction
     assert_not_nil transaction.transacted_at
-    assert_nil transaction.cleared_at  # No cleared_at when posted is nil
+    assert_nil transaction.cleared_at # No cleared_at when posted is nil
   end
 
   test "sanitizes long account names" do
-    sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_long_name",
       amount: "-20.00",
-      description: "A" * 100,  # Very long description
+      description: "A" * 100, # Very long description
       posted: 1.day.ago,
       transacted_at: 1.day.ago,
       pending: false
@@ -241,8 +244,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "sanitizes account names with extra whitespace" do
-    sf_transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_whitespace",
       amount: "-15.00",
       description: "  Multiple   Spaces   Store  ",
@@ -265,8 +268,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
 
   test "only imports transactions that are new or updated since last sync" do
     # Create an already-synced transaction
-    _sf_transaction_old = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    _sf_transaction_old = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_old",
       amount: "-50.00",
       description: "Old Transaction",
@@ -279,8 +282,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     TransactionImportJob.perform_now
 
     # Create a new transaction
-    sf_transaction_new = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction_new = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_new",
       amount: "-30.00",
       description: "New Transaction",
@@ -299,7 +302,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports only transactions for specified simplefin_account_id" do
-    # Create a second SimpleFin account
+    # Create a second SimpleFIN account
     second_bank_account = Account.create!(
       user: @user,
       currency: @currency,
@@ -307,9 +310,9 @@ class TransactionImportJobTest < ActiveJob::TestCase
       kind: :asset
     )
 
-    second_simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: second_bank_account,
+    second_simplefin_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
+      ledger_account: second_bank_account,
       remote_id: "acc_test_2",
       name: "Test Savings",
       currency: "USD",
@@ -317,8 +320,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     # Create transactions in both accounts
-    sf_transaction_first = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction_first = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_first_account",
       amount: "-50.00",
       description: "First Account Transaction",
@@ -327,8 +330,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    sf_transaction_second = SimplefinTransaction.create!(
-      simplefin_account: second_simplefin_account,
+    sf_transaction_second = Simplefin::Transaction.create!(
+      account: second_simplefin_account,
       remote_id: "txn_second_account",
       amount: "-75.00",
       description: "Second Account Transaction",
@@ -348,7 +351,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports all transactions when simplefin_account_id is not specified" do
-    # Create a second SimpleFin account
+    # Create a second SimpleFIN account
     second_bank_account = Account.create!(
       user: @user,
       currency: @currency,
@@ -356,9 +359,9 @@ class TransactionImportJobTest < ActiveJob::TestCase
       kind: :asset
     )
 
-    second_simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: second_bank_account,
+    second_simplefin_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
+      ledger_account: second_bank_account,
       remote_id: "acc_test_3",
       name: "Test Savings",
       currency: "USD",
@@ -366,8 +369,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     # Create transactions in both accounts
-    sf_transaction_first = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    sf_transaction_first = Simplefin::Transaction.create!(
+      account: @simplefin_account,
       remote_id: "txn_all_first",
       amount: "-50.00",
       description: "First Account Transaction",
@@ -376,8 +379,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    sf_transaction_second = SimplefinTransaction.create!(
-      simplefin_account: second_simplefin_account,
+    sf_transaction_second = Simplefin::Transaction.create!(
+      account: second_simplefin_account,
       remote_id: "txn_all_second",
       amount: "-75.00",
       description: "Second Account Transaction",
@@ -397,10 +400,10 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "simplefin_account_id filter respects other scoping rules" do
-    # Create a second SimpleFin account that is NOT linked to a ledger account
-    unlinked_simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: nil,  # Not linked
+    # Create a second SimpleFIN account that is NOT linked to a ledger account
+    unlinked_simplefin_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
+      ledger_account: nil, # Not linked
       remote_id: "acc_unlinked_filter",
       name: "Unlinked Account",
       currency: "USD",
@@ -408,8 +411,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     # Create transaction in unlinked account
-    _sf_transaction_unlinked = SimplefinTransaction.create!(
-      simplefin_account: unlinked_simplefin_account,
+    _sf_transaction_unlinked = Simplefin::Transaction.create!(
+      account: unlinked_simplefin_account,
       remote_id: "txn_unlinked_filter",
       amount: "-25.00",
       description: "Should Be Skipped",

@@ -1,7 +1,0 @@
-<% if user_signed_in? %>
-  <% if current_user.simplefin_connection.present? %>
-    <%= link_to "Manage Simplefin Connection", simplefin_connection_path %>
-  <% else %>
-    <%= link_to "Connect to Simplefin", new_simplefin_connection_path %>
-  <% end %>
-<% end %>

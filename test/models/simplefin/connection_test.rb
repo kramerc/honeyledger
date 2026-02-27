@@ -1,6 +1,6 @@
 require "test_helper"
 
-class SimplefinConnectionTest < ActiveSupport::TestCase
+class Simplefin::ConnectionTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
 
   setup do
@@ -9,7 +9,7 @@ class SimplefinConnectionTest < ActiveSupport::TestCase
   end
 
   test "should validate uniqueness of user_id" do
-    duplicate_connection = SimplefinConnection.new(
+    duplicate_connection = Simplefin::Connection.new(
       user: @user,
       url: "https://example.com/simplefin"
     )
@@ -18,20 +18,20 @@ class SimplefinConnectionTest < ActiveSupport::TestCase
     assert_includes duplicate_connection.errors[:user_id], "has already been taken"
   end
 
-  test "client returns a Simplefin instance" do
+  test "client returns a SimplefinClient instance" do
     client = @connection.client
 
-    assert_instance_of Simplefin, client
+    assert_instance_of SimplefinClient, client
   end
 
   test "claim_demo! sets demo URL and refreshes" do
     @connection.url = nil
 
-    assert_enqueued_with(job: SimplefinRefreshJob, args: [ @connection.id ]) do
+    assert_enqueued_with(job: Simplefin::RefreshJob, args: [ @connection.id ]) do
       @connection.claim_demo!
     end
 
-    assert_equal SimplefinConnection::DEMO_URL, @connection.url
+    assert_equal Simplefin::Connection::DEMO_URL, @connection.url
     assert_nil @connection.refreshed_at
   end
 
@@ -39,11 +39,11 @@ class SimplefinConnectionTest < ActiveSupport::TestCase
     @connection.demo = "1"
     @connection.url = nil
 
-    assert_enqueued_with(job: SimplefinRefreshJob) do
+    assert_enqueued_with(job: Simplefin::RefreshJob) do
       @connection.claim!
     end
 
-    assert_equal SimplefinConnection::DEMO_URL, @connection.url
+    assert_equal Simplefin::Connection::DEMO_URL, @connection.url
   end
 
   test "claim! with setup token claims connection" do
@@ -51,12 +51,12 @@ class SimplefinConnectionTest < ActiveSupport::TestCase
     @connection.demo = "0"
     claimed_url = "https://claimed.simplefin.org/simplefin"
 
-    # Mock the Simplefin client's claim method
+    # Mock the SimpleFIN client's claim method
     simplefin = Minitest::Mock.new
     simplefin.expect :claim, claimed_url, [ "test_token" ]
 
-    Simplefin.stub :new, simplefin do
-      assert_enqueued_with(job: SimplefinRefreshJob) do
+    SimplefinClient.stub :new, simplefin do
+      assert_enqueued_with(job: Simplefin::RefreshJob) do
         @connection.claim!
       end
     end
@@ -77,8 +77,8 @@ class SimplefinConnectionTest < ActiveSupport::TestCase
     assert_equal "Setup token required to claim connection", error.message
   end
 
-  test "refresh enqueues SimplefinRefreshJob" do
-    assert_enqueued_with(job: SimplefinRefreshJob, args: [ @connection.id ]) do
+  test "refresh enqueues Simplefin::RefreshJob" do
+    assert_enqueued_with(job: Simplefin::RefreshJob, args: [ @connection.id ]) do
       @connection.refresh
     end
   end

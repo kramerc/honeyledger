@@ -7,7 +7,7 @@ class Account < ApplicationRecord
   has_one :opening_balance_transaction, -> { opening_balances }, class_name: "Transaction", foreign_key: "dest_account_id", dependent: :destroy
   accepts_nested_attributes_for :opening_balance_transaction
 
-  has_one :simplefin_account, dependent: :nullify
+  has_one :simplefin_account, class_name: "Simplefin::Account", foreign_key: :ledger_account_id, dependent: :nullify
 
   enum :kind, { asset: 0, liability: 1, equity: 2, expense: 3, revenue: 4 }
   SOURCEABLE = [ :asset, :liability, :equity, :revenue ].freeze

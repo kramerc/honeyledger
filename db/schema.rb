@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_27_183216) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -49,23 +49,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
   end
 
   create_table "simplefin_accounts", force: :cascade do |t|
-    t.bigint "account_id"
     t.string "available_balance"
     t.string "balance"
     t.datetime "balance_date", precision: nil
+    t.bigint "connection_id", null: false
     t.datetime "created_at", null: false
     t.string "currency"
     t.jsonb "extra"
+    t.bigint "ledger_account_id"
     t.string "name"
     t.jsonb "org"
     t.string "remote_id"
-    t.bigint "simplefin_connection_id", null: false
     t.datetime "updated_at", null: false
-    t.index ["account_id"], name: "index_simplefin_accounts_on_account_id", unique: true
-    t.index ["simplefin_connection_id"], name: "index_simplefin_accounts_on_simplefin_connection_id"
+    t.index ["connection_id"], name: "index_simplefin_accounts_on_connection_id"
+    t.index ["ledger_account_id"], name: "index_simplefin_accounts_on_ledger_account_id", unique: true
   end
 
   create_table "simplefin_connections", force: :cascade do |t|
+    t.string "account_errors", default: [], null: false, array: true
     t.datetime "created_at", null: false
     t.datetime "refreshed_at", precision: nil
     t.datetime "updated_at", null: false
@@ -76,6 +77,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
   end
 
   create_table "simplefin_transactions", force: :cascade do |t|
+    t.bigint "account_id", null: false
     t.string "amount"
     t.datetime "created_at", null: false
     t.string "description"
@@ -83,11 +85,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
     t.boolean "pending"
     t.datetime "posted", precision: nil
     t.string "remote_id"
-    t.bigint "simplefin_account_id", null: false
     t.datetime "synced_at", precision: nil
     t.datetime "transacted_at", precision: nil
     t.datetime "updated_at", null: false
-    t.index ["simplefin_account_id"], name: "index_simplefin_transactions_on_simplefin_account_id"
+    t.index ["account_id"], name: "index_simplefin_transactions_on_account_id"
     t.index ["synced_at"], name: "index_simplefin_transactions_on_synced_at"
   end
 
@@ -145,10 +146,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_13_101743) do
   add_foreign_key "accounts", "currencies"
   add_foreign_key "accounts", "users"
   add_foreign_key "categories", "users"
-  add_foreign_key "simplefin_accounts", "accounts"
-  add_foreign_key "simplefin_accounts", "simplefin_connections"
+  add_foreign_key "simplefin_accounts", "accounts", column: "ledger_account_id"
+  add_foreign_key "simplefin_accounts", "simplefin_connections", column: "connection_id"
   add_foreign_key "simplefin_connections", "users"
-  add_foreign_key "simplefin_transactions", "simplefin_accounts"
+  add_foreign_key "simplefin_transactions", "simplefin_accounts", column: "account_id"
   add_foreign_key "transactions", "accounts", column: "dest_account_id"
   add_foreign_key "transactions", "accounts", column: "src_account_id"
   add_foreign_key "transactions", "categories"
