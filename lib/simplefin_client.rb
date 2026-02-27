@@ -1,4 +1,4 @@
-class Simplefin
+class SimplefinClient
   include HTTParty
   base_uri "https://beta-bridge.simplefin.org/simplefin"
 

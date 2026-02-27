@@ -1,9 +1,9 @@
 require "test_helper"
 
-class SimplefinTransactionTest < ActiveSupport::TestCase
+class Simplefin::TransactionTest < ActiveSupport::TestCase
   setup do
     @user = users(:one)
-    @currency = currencies(:usd)  # USD with 2 decimal places
+    @currency = currencies(:usd) # USD with 2 decimal places
 
     @bank_account = Account.create!(
       user: @user,
@@ -12,11 +12,11 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
       kind: :asset
     )
 
-    @simplefin_connection = simplefin_connections(:one)
+    @connection = simplefin_connections(:one)
 
-    @simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: @bank_account,
+    @account = Simplefin::Account.create!(
+      connection: @connection,
+      ledger_account: @bank_account,
       remote_id: "acc_test",
       name: "Test Account",
       currency: "USD",
@@ -25,8 +25,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor converts decimal amount based on currency decimal places" do
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: @account,
       remote_id: "txn_1",
       amount: "123.45",
       description: "Test Transaction",
@@ -39,8 +39,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor handles negative amounts" do
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: @account,
       remote_id: "txn_2",
       amount: "-50.00",
       description: "Expense",
@@ -53,8 +53,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor handles zero amount" do
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: @account,
       remote_id: "txn_3",
       amount: "0.00",
       description: "Zero Amount",
@@ -76,17 +76,17 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
       kind: :asset
     )
 
-    jpy_simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: jpy_account,
+    jpy_simplefin_account = Simplefin::Account.create!(
+      connection: @connection,
+      ledger_account: jpy_account,
       remote_id: "acc_jpy",
       name: "JPY Account",
       currency: "JPY",
       balance: "10000"
     )
 
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: jpy_simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: jpy_simplefin_account,
       remote_id: "txn_jpy",
       amount: "5000",
       description: "JPY Transaction",
@@ -99,8 +99,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor handles fractional cents properly" do
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: @account,
       remote_id: "txn_4",
       amount: "12.346",
       description: "Fractional Cents",
@@ -113,8 +113,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor handles large amounts" do
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: @account,
       remote_id: "txn_5",
       amount: "999999.99",
       description: "Large Amount",
@@ -127,8 +127,8 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
   end
 
   test "amount_minor handles very small amounts" do
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: @simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: @account,
       remote_id: "txn_6",
       amount: "0.01",
       description: "One Cent",
@@ -151,17 +151,17 @@ class SimplefinTransactionTest < ActiveSupport::TestCase
       kind: :asset
     )
 
-    btc_simplefin_account = SimplefinAccount.create!(
-      simplefin_connection: @simplefin_connection,
-      account: btc_account,
+    btc_simplefin_account = Simplefin::Account.create!(
+      connection: @connection,
+      ledger_account: btc_account,
       remote_id: "acc_btc",
       name: "BTC Account",
       currency: "BTC",
       balance: "1.00000000"
     )
 
-    transaction = SimplefinTransaction.create!(
-      simplefin_account: btc_simplefin_account,
+    transaction = Simplefin::Transaction.create!(
+      account: btc_simplefin_account,
       remote_id: "txn_btc",
       amount: "0.00012345",
       description: "BTC Transaction",

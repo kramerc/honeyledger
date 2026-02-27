@@ -7,13 +7,19 @@ Rails.application.routes.draw do
   resources :transactions
 
   # SimpleFIN integration routes
-  resources :simplefin_accounts, only: [] do
-    member do
-      post :link
-      delete :unlink
+  namespace :simplefin do
+    resources :accounts, only: [] do
+      member do
+        post :link
+        delete :unlink
+      end
+    end
+    resource :connection, only: %i[new create show destroy] do
+      member do
+        post :refresh
+      end
     end
   end
-  resource :simplefin_connection, only: %i[new create show destroy]
 
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 

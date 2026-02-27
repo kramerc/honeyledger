@@ -1,23 +1,23 @@
-class SimplefinAccountsController < ApplicationController
+class Simplefin::AccountsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_simplefin_account, only: [ :link, :unlink ]
 
   def link
-    account_id = params.dig(:simplefin_account, :account_id)
+    ledger_account_id = params.dig(:simplefin_account, :ledger_account_id)
 
-    if account_id.blank?
+    if ledger_account_id.blank?
       redirect_to simplefin_connection_path, alert: "Please select an account to link."
       return
     end
 
     # Verify the account belongs to the current user
-    account = current_user.accounts.find_by(id: account_id)
-    unless account
+    ledger_account = current_user.accounts.find_by(id: ledger_account_id)
+    unless ledger_account
       redirect_to simplefin_connection_path, alert: "Account not found."
       return
     end
 
-    if @simplefin_account.update(account: account)
+    if @simplefin_account.update(ledger_account: ledger_account)
       redirect_to simplefin_connection_path, notice: "SimpleFIN account linked successfully."
     else
       redirect_to simplefin_connection_path, alert: "Failed to link SimpleFIN account: #{@simplefin_account.errors.full_messages.to_sentence}"
@@ -25,7 +25,7 @@ class SimplefinAccountsController < ApplicationController
   end
 
   def unlink
-    if @simplefin_account.update(account_id: nil)
+    if @simplefin_account.update(ledger_account: nil)
       redirect_to simplefin_connection_path, notice: "SimpleFIN account unlinked successfully."
     else
       redirect_to simplefin_connection_path, alert: "Failed to unlink SimpleFIN account: #{@simplefin_account.errors.full_messages.to_sentence}"
@@ -33,7 +33,8 @@ class SimplefinAccountsController < ApplicationController
   end
 
   private
+
     def set_simplefin_account
-      @simplefin_account = current_user.simplefin_accounts.find(params[:id])
+      @simplefin_account = current_user.simplefin_accounts.find(params.expect(:id))
     end
 end

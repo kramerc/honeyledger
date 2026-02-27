@@ -1,7 +1,7 @@
 # Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
 
 transaction_one:
-  simplefin_account: linked_one
+  account: linked_one
   remote_id: fixture_txn_1
   posted: 2026-01-13 06:20:38
   amount: "-50.00"
@@ -11,7 +11,7 @@ transaction_one:
   extra:
 
 transaction_two:
-  simplefin_account: unlinked_one
+  account: unlinked_one
   remote_id: fixture_txn_2
   posted: 2026-01-13 06:20:38
   amount: "100.00"

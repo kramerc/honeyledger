@@ -1,8 +1,8 @@
 # Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
 
 linked_one:
-  simplefin_connection: one
-  account: linked_asset
+  connection: one
+  ledger_account: linked_asset
   remote_id: remote_id_1
   org: Test Bank
   name: Test Checking
@@ -12,7 +12,7 @@ linked_one:
   balance_date: 2026-01-13 05:53:24
 
 unlinked_one:
-  simplefin_connection: one
+  connection: one
   remote_id: remote_id_2
   org: Test Bank
   name: Test Savings

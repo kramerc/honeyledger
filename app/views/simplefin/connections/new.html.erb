@@ -1,9 +1,12 @@
-<h1>Connect to Simplefin</h1>
-<p><a href="https://beta-bridge.simplefin.org/simplefin/create">Create a new connection</a> on Simplefin under "Apps" in "My Account" and then paste the setup token here:</p>
+<h1>Connect to SimpleFIN</h1>
+<p>
+  <a href="https://beta-bridge.simplefin.org/simplefin/create">Create a new connection</a> on Simplefin under "Apps" in "My Account" and then paste the setup token here:
+</p>
+
 <%= form_with model: @simplefin_connection, url: simplefin_connection_path, method: :post, local: true, data: { controller: "toggle-field" } do |form| %>
   <% if @simplefin_connection.errors.any? %>
     <div style="color: red">
-      <h2><%= pluralize(@simplefin_connection.errors.count, "error") %> prohibited this Simplefin connection from being saved:</h2>
+      <h2><%= pluralize(@simplefin_connection.errors.count, "error") %> prohibited this SimpleFIN connection from being saved:</h2>
 
       <ul>
         <% @simplefin_connection.errors.each do |error| %>
@@ -24,6 +27,6 @@
   </div>
 
   <div class="actions">
-    <%= form.submit "Connect to Simplefin" %>
+    <%= form.submit "Connect to SimpleFIN" %>
   </div>
 <% end %>

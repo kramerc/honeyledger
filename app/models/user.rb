@@ -9,6 +9,6 @@ class User < ApplicationRecord
   has_many :categories, dependent: :destroy
   has_many :transactions, dependent: :destroy
 
-  has_one :simplefin_connection, dependent: :destroy
-  has_many :simplefin_accounts, through: :simplefin_connection, source: :accounts
+  has_one :simplefin_connection, class_name: "Simplefin::Connection", dependent: :destroy
+  has_many :simplefin_accounts, class_name: "Simplefin::Account", through: :simplefin_connection, source: :accounts
 end

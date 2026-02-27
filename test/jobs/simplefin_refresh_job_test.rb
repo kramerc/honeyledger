@@ -1,17 +1,18 @@
 require "test_helper"
 
-class SimplefinRefreshJobTest < ActiveJob::TestCase
+class Simplefin::RefreshJobTest < ActiveJob::TestCase
   setup do
-    @connection = simplefin_connections(:one)
+    @simplefin_connection = simplefin_connections(:one)
   end
 
   test "refreshes all stale connections when no ID provided" do
     # Set connection as stale (older than 1 day)
-    @connection.update!(refreshed_at: 2.days.ago)
+    @simplefin_connection.update!(refreshed_at: 2.days.ago)
     # Make sure other connections are fresh so only one is processed
-    SimplefinConnection.where.not(id: @connection.id).update_all(refreshed_at: Time.current)
+    Simplefin::Connection.where.not(id: @simplefin_connection.id).update_all(refreshed_at: Time.current)
 
     mock_client = Minitest::Mock.new
+
     def mock_client.accounts(start_date:)
       {
         "errors" => [],
@@ -34,22 +35,23 @@ class SimplefinRefreshJobTest < ActiveJob::TestCase
       }
     end
 
-    Simplefin.stub :new, mock_client do
-      assert_difference "SimplefinAccount.count", 1 do
-        SimplefinRefreshJob.perform_now
+    SimplefinClient.stub :new, mock_client do
+      assert_difference "Simplefin::Account.count", 1 do
+        Simplefin::RefreshJob.perform_now
       end
     end
 
-    @connection.reload
-    assert_not_nil @connection.refreshed_at
-    assert @connection.refreshed_at > 1.minute.ago
+    @simplefin_connection.reload
+    assert_not_nil @simplefin_connection.refreshed_at
+    assert @simplefin_connection.refreshed_at > 1.minute.ago
   end
 
   test "refreshes specific connection when ID provided" do
     # Set connection as recently refreshed (should still refresh when ID is specified)
-    @connection.update!(refreshed_at: 1.hour.ago)
+    @simplefin_connection.update!(refreshed_at: 1.hour.ago)
 
     mock_client = Minitest::Mock.new
+
     def mock_client.accounts(start_date:)
       {
         "errors" => [],
@@ -72,19 +74,20 @@ class SimplefinRefreshJobTest < ActiveJob::TestCase
       }
     end
 
-    Simplefin.stub :new, mock_client do
-      assert_difference "SimplefinAccount.count", 1 do
-        SimplefinRefreshJob.perform_now(@connection.id)
+    SimplefinClient.stub :new, mock_client do
+      assert_difference "Simplefin::Account.count", 1 do
+        Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       end
     end
 
-    account = SimplefinAccount.find_by(remote_id: "acc_456")
+    account = Simplefin::Account.find_by(remote_id: "acc_456")
     assert_equal "Savings", account.name
     assert_equal "5000.00", account.balance
   end
 
   test "creates transactions from account data" do
     mock_client = Minitest::Mock.new
+
     def mock_client.accounts(start_date:)
       {
         "errors" => [],
@@ -117,71 +120,51 @@ class SimplefinRefreshJobTest < ActiveJob::TestCase
       }
     end
 
-    Simplefin.stub :new, mock_client do
-      assert_difference "SimplefinTransaction.count", 1 do
-        SimplefinRefreshJob.perform_now(@connection.id)
+    SimplefinClient.stub :new, mock_client do
+      assert_difference "Simplefin::Transaction.count", 1 do
+        Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       end
     end
 
-    transaction = SimplefinTransaction.find_by(remote_id: "txn_1")
+    transaction = Simplefin::Transaction.find_by(remote_id: "txn_1")
     assert_equal "-50.00", transaction.amount
     assert_equal "Uncle Frank's Bait Shop", transaction.description
     assert_equal false, transaction.pending
   end
 
-  test "skips connection on API errors" do
+  test "clears account errors when API has no errors" do
     mock_client = Minitest::Mock.new
+
     def mock_client.accounts(start_date:)
-      { "errors" => [ "API Error" ], "accounts" => [] }
+      { "accounts" => [] }
     end
 
-    Simplefin.stub :new, mock_client do
-      assert_no_difference "SimplefinAccount.count" do
-        SimplefinRefreshJob.perform_now(@connection.id)
-      end
+    SimplefinClient.stub :new, mock_client do
+      @simplefin_connection.update!(account_errors: [ "Previous API Error" ])
+      Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+      @simplefin_connection.reload
+      assert_equal [], @simplefin_connection.account_errors
     end
   end
 
-  test "logs error when API returns errors" do
+  test "sets account errors on connection when API returns errors" do
     mock_client = Minitest::Mock.new
+
     def mock_client.accounts(start_date:)
-      { "errors" => [ "API Error" ], "accounts" => [] }
+      { "errors" => [ "Account Error" ], "accounts" => [] }
     end
 
-    # Capture log output
-    log_output = StringIO.new
-    logger = ActiveSupport::Logger.new(log_output)
-    Rails.stub :logger, logger do
-      Simplefin.stub :new, mock_client do
-        SimplefinRefreshJob.perform_now(@connection.id)
-      end
+    SimplefinClient.stub :new, mock_client do
+      Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+      @simplefin_connection.reload
+      assert_equal [ "Account Error" ], @simplefin_connection.account_errors
     end
-
-    assert_match(/SimpleFin API error for connection #{@connection.id}: #{Regexp.escape("API Error")}/, log_output.string)
-  end
-
-  test "logs reauthentication error" do
-    mock_client = Minitest::Mock.new
-    def mock_client.accounts(start_date:)
-      { "errors" => [ "You must reauthenticate." ], "accounts" => [] }
-    end
-
-    # Capture log output
-    log_output = StringIO.new
-    logger = ActiveSupport::Logger.new(log_output)
-    Rails.stub :logger, logger do
-      Simplefin.stub :new, mock_client do
-        SimplefinRefreshJob.perform_now(@connection.id)
-      end
-    end
-
-    assert_match(/SimpleFin API error for connection #{@connection.id}: #{Regexp.escape("You must reauthenticate.")}/, log_output.string)
   end
 
   test "updates existing accounts and transactions" do
     # Create existing account
-    existing_account = SimplefinAccount.create!(
-      simplefin_connection: @connection,
+    existing_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
       remote_id: "acc_existing",
       org: {
         "domain" => "oldbank.com",
@@ -193,6 +176,7 @@ class SimplefinRefreshJobTest < ActiveJob::TestCase
     )
 
     mock_client = Minitest::Mock.new
+
     def mock_client.accounts(start_date:)
       {
         "errors" => [],
@@ -215,9 +199,9 @@ class SimplefinRefreshJobTest < ActiveJob::TestCase
       }
     end
 
-    Simplefin.stub :new, mock_client do
-      assert_no_difference "SimplefinAccount.count" do
-        SimplefinRefreshJob.perform_now(@connection.id)
+    SimplefinClient.stub :new, mock_client do
+      assert_no_difference "Simplefin::Account.count" do
+        Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       end
     end
 
