@@ -47,14 +47,14 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
     assert_equal currencies(:usd), @unlinked_simplefin_account.ledger_currency
   end
 
-  test "build_opening_balance_ledger_transactions returns nil if no app currency" do
+  test "build_opening_balance_ledger_transaction returns nil if no app currency" do
     simplefin_account = Simplefin::Account.new(currency: "invalid")
     transaction = simplefin_account.build_opening_balance_ledger_transaction
 
     assert_nil transaction
   end
 
-  test "build_opening_balance_ledger_transactions amount aligns with SimpleFIN transactions" do
+  test "build_opening_balance_ledger_transaction amount aligns with SimpleFIN transactions" do
     assert_not_empty @reconciled_simplefin_account.transactions
 
     amount_sum = @reconciled_simplefin_account.transactions.reduce(0) do |sum, transaction|
@@ -66,7 +66,7 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
     assert_equal expected_amount, transaction.amount_minor
   end
 
-  test "build_opening_balance_ledger_transactions date aligns with SimpleFIN transactions" do
+  test "build_opening_balance_ledger_transaction date aligns with SimpleFIN transactions" do
     assert_not_empty @reconciled_simplefin_account.transactions
 
     oldest_date = @reconciled_simplefin_account.transactions.reduce(Time.current) do |date, transaction|

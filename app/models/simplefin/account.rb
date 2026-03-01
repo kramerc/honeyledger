@@ -33,7 +33,7 @@ class Simplefin::Account < ApplicationRecord
       amount_minor: balance_minor
     }.merge(params))
 
-    oldest_simplefin_transaction = nil
+    # Find the oldest date and calculate the opening balance from SimpleFIN transactions
     oldest_date = Time.current
     transactions.all.each do |simplefin_transaction|
       date = [
@@ -42,11 +42,7 @@ class Simplefin::Account < ApplicationRecord
         simplefin_transaction.created_at
       ].compact.min
 
-      if oldest_simplefin_transaction.nil? || date < oldest_date
-        oldest_simplefin_transaction = simplefin_transaction
-        oldest_date = date
-      end
-
+      oldest_date = date if date < oldest_date
       ledger_transaction.amount_minor -= simplefin_transaction.amount_minor
     end
 
