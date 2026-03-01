@@ -19,3 +19,40 @@ transaction_two:
   transacted_at: 2026-01-13 06:20:38
   pending: false
   extra:
+
+# Reconciled to $50.00 with $20.00 opening balance transaction
+reconciled_one:
+  account: reconciled_one
+  remote_id: fixture_txn_3
+  posted: <%= 4.days.ago %>
+  amount: "-30.00"
+  description: Test Transaction
+  transacted_at:
+  pending: false
+
+reconciled_two:
+  account: reconciled_one
+  remote_id: fixture_txn_4
+  posted: <%= 3.days.ago %>
+  amount: "25.00"
+  description: Test Transaction
+  transacted_at:
+  pending: false
+
+reconciled_three:
+  account: reconciled_one
+  remote_id: fixture_txn_5
+  posted: <%= 1.day.ago %>
+  amount: "10.00"
+  description: Test Transaction
+  transacted_at: <%= 2.days.ago %>
+  pending: false
+
+reconciled_four:
+  account: reconciled_one
+  remote_id: fixture_txn_6
+  posted: 2026-02-16 06:20:38
+  amount: "15.00"
+  description: Test Transaction
+  transacted_at: <%= 1.day.ago %>
+  pending: false

@@ -1,6 +1,7 @@
 class AccountsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_account, only: %i[ show edit update destroy ]
+  before_action :set_simplefin_account, only: %i[ new create ], if: -> { simplefin_account_id.present? }
 
   # GET /accounts or /accounts.json
   def index
@@ -15,6 +16,14 @@ class AccountsController < ApplicationController
   def new
     @account = current_user.accounts.build
     @account.build_opening_balance_transaction
+
+    if @simplefin_account
+      @account.name = @simplefin_account.name
+      @account.currency = Currency.find_by(code: @simplefin_account.currency)
+
+      opening_balance_transaction = @simplefin_account.build_opening_balance_ledger_transaction(user: current_user)
+      @account.opening_balance_transaction = opening_balance_transaction if opening_balance_transaction.present?
+    end
   end
 
   # GET /accounts/1/edit
@@ -27,6 +36,7 @@ class AccountsController < ApplicationController
   # POST /accounts or /accounts.json
   def create
     @account = current_user.accounts.build(account_params)
+    @account.simplefin_account = @simplefin_account
     update_opening_balance_transaction
 
     respond_to do |format|
@@ -34,7 +44,6 @@ class AccountsController < ApplicationController
         format.html { redirect_to @account, notice: "Account was successfully created." }
         format.json { render :show, status: :created, location: @account }
       else
-        p @account.errors
         format.html { render :new, status: :unprocessable_entity }
         format.json { render json: @account.errors, status: :unprocessable_entity }
       end
@@ -68,6 +77,7 @@ class AccountsController < ApplicationController
   end
 
   private
+
     # Use callbacks to share common setup or constraints between actions.
     def set_account
       @account = current_user.accounts.find(params.expect(:id))
@@ -94,5 +104,25 @@ class AccountsController < ApplicationController
       else
         @account.opening_balance_transaction = nil
       end
+    end
+
+    def set_simplefin_account
+      simplefin_connection = current_user.simplefin_connection
+      if simplefin_connection.nil?
+        redirect_to new_simplefin_connection_path, alert: "Cannot import SimpleFIN account without a connection."
+        return
+      end
+
+      @simplefin_account = current_user.simplefin_connection.accounts.find_by(id: simplefin_account_id)
+
+      if @simplefin_account.nil?
+        redirect_to simplefin_connection_path, alert: "SimpleFIN account to import was not found."
+      elsif @simplefin_account.linked?
+        redirect_to simplefin_connection_path, alert: "SimpleFIN account already linked to another account."
+      end
+    end
+
+    def simplefin_account_id
+      params.fetch(:simplefin_account_id, nil)
     end
 end
