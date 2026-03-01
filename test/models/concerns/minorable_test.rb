@@ -72,6 +72,12 @@ class MinorableTest < ActiveSupport::TestCase
     assert_equal 100, @test_model.decimal_amount_minor
   end
 
+  test "minorable handles nil values" do
+    @test_model.decimal_amount = nil
+
+    assert_nil @test_model.decimal_amount_minor
+  end
+
   test "minorable handles rounding to the nearest minor unit" do
     @test_model.decimal_amount = "12.345"
 
@@ -108,6 +114,20 @@ class MinorableTest < ActiveSupport::TestCase
     @test_model.save
 
     assert_equal 10000, @test_model.amount_minor
+  end
+
+  test "unminorable sets nil on amount_minor if amount has changed" do
+    @test_model.amount = nil
+
+    @test_model.save
+
+    assert_nil @test_model.amount_minor
+  end
+
+  test "unminorable does not set nil on amount_minor if amount is not changed" do
+    @test_model.save
+
+    assert_not_nil @test_model.amount_minor
   end
 
   test "resource is valid if unminorable amount is blank" do
@@ -154,6 +174,13 @@ class MinorableTest < ActiveSupport::TestCase
     assert_includes @test_model.errors[:amount], "cannot be saved without currency present"
   end
 
+  test "resource is not saved if unminorable amount is changed without a currency" do
+    @test_model.amount = "100.00"
+    @test_model.currency = nil
+
+    assert_not @test_model.save
+  end
+
   test "unminorable fx_amount_minor returns correct decimal value" do
     assert_equal BigDecimal(8.76543210), @test_model.fx_amount
   end
@@ -184,6 +211,20 @@ class MinorableTest < ActiveSupport::TestCase
     @test_model.save
 
     assert_equal 212345678, @test_model.fx_amount_minor
+  end
+
+  test "unminorable sets nil on fx_amount_minor if fx_amount has changed" do
+    @test_model.fx_amount = nil
+
+    @test_model.save
+
+    assert_nil @test_model.fx_amount_minor
+  end
+
+  test "unminorable does not set nil on fx_amount_minor if fx_amount is not changed" do
+    @test_model.save
+
+    assert_not_nil @test_model.fx_amount_minor
   end
 
   test "resource is valid if unminorable fx_amount is blank" do
@@ -231,6 +272,13 @@ class MinorableTest < ActiveSupport::TestCase
     assert_includes @test_model.errors[:fx_amount], "cannot be saved without fx currency present"
   end
 
+  test "resource is not saved if unminorable fx_amount is changed without a currency" do
+    @test_model.fx_amount = "100.00"
+    @test_model.fx_currency = nil
+
+    assert_not @test_model.save
+  end
+
   test "unminorable nested_amount_minor returns correct decimal value" do
     assert_equal BigDecimal(543.21), @test_model.nested_amount
   end
@@ -261,6 +309,20 @@ class MinorableTest < ActiveSupport::TestCase
     @test_model.save
 
     assert_equal 10000, @test_model.nested_amount_minor
+  end
+
+  test "unminorable sets nil on nested_amount_minor if nested_amount has changed" do
+    @test_model.nested_amount = nil
+
+    @test_model.save
+
+    assert_nil @test_model.nested_amount_minor
+  end
+
+  test "unminorable does not set nil on nested_amount_minor if nested_amount is not changed" do
+    @test_model.save
+
+    assert_not_nil @test_model.nested_amount_minor
   end
 
   test "resource is valid if unminorable nested_amount is blank" do
@@ -308,12 +370,28 @@ class MinorableTest < ActiveSupport::TestCase
     assert_includes @test_model.errors[:nested_amount], "cannot be saved without nested.currency present"
   end
 
+  test "resource is not saved if unminorable nested_amount is changed without a currency" do
+    @test_model.nested_amount = "100.00"
+    @test_model.currency = nil # alias of nested.currency
+
+    assert_not @test_model.save
+  end
+
   test "unminorable handles rounding to the nearest minor unit" do
     @test_model.amount = "12.345"
 
     @test_model.save
 
-    assert 1235, @test_model.amount_minor
+    assert_equal 1235, @test_model.amount_minor
+  end
+
+  test "unminorable handles zero decimal places" do
+    @test_model.currency = currencies(:jpy)
+    @test_model.amount = 100
+
+    @test_model.save
+
+    assert_equal 100, @test_model.amount_minor
   end
 
   test "unminorable minor writer handles minor attribute from ActiveRecord" do

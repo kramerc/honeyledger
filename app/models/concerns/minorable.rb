@@ -1,3 +1,13 @@
+# = Minorable
+#
+# Provides methods for creating minor representations of decimal attributes and decimal representations of minor
+# attributes.
+#
+# If being used outside ActiveRecord this concern depends on the following modules:
+#
+#   include ActiveModel::Model
+#   include ActiveModel::Callbacks
+#   include ActiveModel::Validations
 module Minorable
   extend ActiveSupport::Concern
 
@@ -33,7 +43,10 @@ module Minorable
 
         # def amount=
         # Updates are deferred to a save callback so currency can be set later
-        attr_writer unminored_attribute
+        define_method "#{unminored_attribute}=" do |value|
+          instance_variable_set("@#{unminored_attribute}", value)
+          instance_variable_set("@#{unminored_attribute}_written", true) # so nil can be set
+        end
 
         # def amount_minor=
         field_writer_method = instance_method("#{attribute}=") if method_defined?("#{attribute}=")
@@ -46,15 +59,23 @@ module Minorable
             super(value)
           end
           instance_variable_set("@#{unminored_attribute}", nil)
+          instance_variable_set("@#{unminored_attribute}_written", false)
         end
 
         # before_save :set_amount_minor_from_amount
         before_save -> {
+          return unless instance_variable_get("@#{unminored_attribute}_written")
+
           unminored = instance_variable_get("@#{unminored_attribute}")
           currency = Helpers.dig_send(self, with)
-          return nil unless unminored && currency
-
-          send("#{attribute}=", Helpers.minor_from(unminored, currency.decimal_places))
+          if unminored.nil?
+            send("#{attribute}=", nil)
+          elsif currency.nil?
+            # Cannot calculate new minor without a currency
+            throw :abort
+          else
+            send("#{attribute}=", Helpers.minor_from(unminored, currency.decimal_places))
+          end
         }
 
         # Validate amount is numeric
@@ -83,10 +104,12 @@ module Minorable
     end
 
     def self.minor_from(amount, decimal_places)
+      return nil if amount.nil?
       (amount.to_d * (10 ** decimal_places)).round.to_i
     end
 
     def self.unminor_from(amount_minor, decimal_places)
+      return nil if amount_minor.nil?
       amount_minor.to_d / (10 ** decimal_places)
     end
 

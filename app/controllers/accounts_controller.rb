@@ -20,7 +20,9 @@ class AccountsController < ApplicationController
     if @simplefin_account
       @account.name = @simplefin_account.name
       @account.currency = Currency.find_by(code: @simplefin_account.currency)
-      @account.opening_balance_transaction = @simplefin_account.build_opening_balance_ledger_transaction(user: current_user)
+
+      opening_balance_transaction = @simplefin_account.build_opening_balance_ledger_transaction(user: current_user)
+      @account.opening_balance_transaction = opening_balance_transaction if opening_balance_transaction.present?
     end
   end
 
@@ -105,6 +107,12 @@ class AccountsController < ApplicationController
     end
 
     def set_simplefin_account
+      simplefin_connection = current_user.simplefin_connection
+      if simplefin_connection.nil?
+        redirect_to new_simplefin_connection_path, alert: "Cannot import SimpleFIN account without a connection."
+        return
+      end
+
       @simplefin_account = current_user.simplefin_connection.accounts.find_by(id: simplefin_account_id)
 
       if @simplefin_account.nil?

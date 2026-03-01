@@ -4,7 +4,8 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers
 
   setup do
-    sign_in users(:one)
+    @user = users(:one)
+    sign_in @user
     @account = accounts(:one)
   end
 
@@ -26,6 +27,17 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     get new_account_url, params: { simplefin_account_id: simplefin_account.id }
 
     assert_response :success
+  end
+
+  test "should redirect on new with a SimpleFIN account but no connection" do
+    simplefin_account = simplefin_accounts(:unlinked_one)
+    @user.simplefin_connection = nil
+    @user.save!
+
+    get new_account_url, params: { simplefin_account_id: simplefin_account.id }
+
+    assert_redirected_to new_simplefin_connection_url
+    assert_equal "Cannot import SimpleFIN account without a connection.", flash[:alert]
   end
 
   test "should redirect on new with linked SimpleFIN account" do
@@ -123,7 +135,25 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to account_url(Account.last)
-    assert simplefin_account, Account.last.simplefin_account
+    assert_equal simplefin_account, Account.last.simplefin_account
+  end
+
+  test "should redirect on create with a SimpleFIN account but no connection" do
+    simplefin_account = simplefin_accounts(:unlinked_one)
+    @user.simplefin_connection = nil
+    @user.save!
+
+    post accounts_url, params: {
+      account: {
+        name: "New Account",
+        kind: "asset",
+        currency_id: @account.currency_id
+      },
+      simplefin_account_id: simplefin_account.id
+    }
+
+    assert_redirected_to new_simplefin_connection_url
+    assert_equal "Cannot import SimpleFIN account without a connection.", flash[:alert]
   end
 
   test "should redirect on create when given a linked SimpleFIN account" do
