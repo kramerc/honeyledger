@@ -22,18 +22,18 @@
 
   <div>
     <%= form.label :kind, style: "display: block" %>
-    <%= form.select :kind, Account.kinds.keys.map { |k| [k.humanize, k] } %>
+    <%= form.select :kind, Account.kinds.keys.map { |k| [ k.humanize, k ] } %>
   </div>
 
   <div>
     <%= form.label :currency_id, style: "display: block" %>
-    <%= form.select :currency_id, Currency.all.collect { |c| [c.code, c.id] } %>
+    <%= form.select :currency_id, Currency.all.collect { |c| [ c.code, c.id ] } %>
   </div>
 
   <%= form.fields_for :opening_balance_transaction do |opening_balance_form| %>
     <div>
-      <%= opening_balance_form.label :amount_minor, "Opening Balance Amount", style: "display: block" %>
-      <%= opening_balance_form.text_field :amount_minor %>
+      <%= opening_balance_form.label :amount, "Opening Balance Amount", style: "display: block" %>
+      <%= opening_balance_form.text_field :amount %>
     </div>
 
     <div>

@@ -34,7 +34,7 @@ module Minorable
         # def amount
         define_method unminored_attribute do
           unminored = instance_variable_get("@#{unminored_attribute}")
-          return unminored if unminored.present?
+          return unminored if send("#{unminored_attribute}_written?")
 
           currency = Helpers.dig_send(self, with)
           return nil if currency.nil?
@@ -62,9 +62,14 @@ module Minorable
           instance_variable_set("@#{unminored_attribute}_written", false)
         end
 
+        # def amount_written?
+        define_method "#{unminored_attribute}_written?" do
+          !!instance_variable_get("@#{unminored_attribute}_written")
+        end
+
         # before_save :set_amount_minor_from_amount
         before_save -> {
-          return unless instance_variable_get("@#{unminored_attribute}_written")
+          return unless send("#{unminored_attribute}_written?")
 
           unminored = instance_variable_get("@#{unminored_attribute}")
           currency = Helpers.dig_send(self, with)
@@ -79,12 +84,7 @@ module Minorable
         }
 
         # Validate amount is numeric
-        validate -> {
-          unminored = instance_variable_get("@#{unminored_attribute}")
-          if unminored.present? && !Helpers.numeric?(unminored)
-            errors.add(unminored_attribute, "must be a valid number")
-          end
-        }
+        validates unminored_attribute, numericality: { if: -> { send(unminored_attribute).present? } }
 
         # Validate currency is present if amount is set
         validate -> {
@@ -111,13 +111,6 @@ module Minorable
     def self.unminor_from(amount_minor, decimal_places)
       return nil if amount_minor.nil?
       amount_minor.to_d / (10 ** decimal_places)
-    end
-
-    def self.numeric?(value)
-      BigDecimal(value)
-      true
-    rescue ArgumentError, TypeError
-      false
     end
   end
 end
