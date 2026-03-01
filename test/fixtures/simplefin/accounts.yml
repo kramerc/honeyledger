@@ -20,3 +20,13 @@ unlinked_one:
   balance: "5000.00"
   available_balance: "5000.00"
   balance_date: 2026-01-13 05:53:24
+
+reconciled_one:
+  connection: one
+  remote_id: remote_id_3
+  org: Test Bank
+  name: Test Checking
+  currency: USD
+  balance: "50.00"
+  available_balance: "50.00"
+  balance_date: 2026-02-28 07:23:00

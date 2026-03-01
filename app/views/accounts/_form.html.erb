@@ -1,4 +1,8 @@
 <%= form_with(model: account) do |form| %>
+  <% if account.new_record? %>
+    <%= hidden_field_tag :simplefin_account_id, params[:simplefin_account_id] %>
+  <% end %>
+
   <% if account.errors.any? %>
     <div style="color: red">
       <h2><%= pluralize(account.errors.count, "error") %> prohibited this account from being saved:</h2>

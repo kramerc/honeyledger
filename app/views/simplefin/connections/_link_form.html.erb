@@ -7,6 +7,9 @@
     <span>
       <%= form.submit "Link", "aria-label": "Link SimpleFIN account" %>
     </span>
+    <span>
+      <%= link_to "Import", new_account_path(simplefin_account_id: sf_account.id) %>
+    </span>
   <% end %>
 <% else %>
   <%= form_with model: sf_account, url: unlink_simplefin_account_path(sf_account), method: :delete, data: { turbo_confirm: "Are you sure you want to unlink this account?" } do |form| %>
