@@ -37,3 +37,23 @@ two:
   reconciled_at: <%= 4.days.ago %>
   synced_at:
   opening_balance: false
+
+opening_balance_revenue:
+  user: two
+  src_account: opening_balance_revenue
+  dest_account: asset_account_with_opening_balance
+  amount_minor: 1000
+  currency: usd
+  transacted_at: <%= 1.month.ago %>
+  cleared_at: <%= 1.month.ago %>
+  opening_balance: true
+
+opening_balance_expense:
+  user: two
+  src_account: liability_account_with_opening_balance
+  dest_account: opening_balance_expense
+  amount_minor: -1000
+  currency: usd
+  transacted_at: <%= 1.month.ago %>
+  cleared_at: <%= 1.month.ago %>
+  opening_balance: true

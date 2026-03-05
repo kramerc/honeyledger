@@ -20,6 +20,7 @@ class MinorableTest < ActiveSupport::TestCase
     unminorable :amount_minor
     unminorable :fx_amount_minor, with: :fx_currency
     unminorable :nested_amount_minor, with: "nested.currency"
+    validates_presence_of :amount, :nested_amount
 
     def save
       run_callbacks :save do
@@ -116,6 +117,24 @@ class MinorableTest < ActiveSupport::TestCase
     assert_equal 10000, @test_model.amount_minor
   end
 
+  test "unminorable amount= has amount_written? return true" do
+    @test_model.amount = "100.00"
+
+    assert @test_model.amount_written?
+  end
+
+  test "unminorable amount_written? is false if not written" do
+    assert_not @test_model.amount_written?
+  end
+
+  test "unminorable amount_written? is false after save" do
+    @test_model.amount = "100.00"
+
+    @test_model.save
+
+    assert_not @test_model.amount_written?
+  end
+
   test "unminorable sets nil on amount_minor if amount has changed" do
     @test_model.amount = nil
 
@@ -130,10 +149,18 @@ class MinorableTest < ActiveSupport::TestCase
     assert_not_nil @test_model.amount_minor
   end
 
-  test "resource is valid if unminorable amount is blank" do
+  test "resource is invalid if unminorable amount is nil" do
     @test_model.amount = nil
 
-    assert @test_model.valid?
+    assert_not @test_model.valid?
+    assert_includes @test_model.errors[:amount], "can't be blank"
+  end
+
+  test "resource is invalid if unminorable amount is blank" do
+    @test_model.amount = ""
+
+    assert_not @test_model.valid?
+    assert_includes @test_model.errors[:amount], "can't be blank"
   end
 
   test "resource is valid if unminorable amount is a float" do
@@ -159,11 +186,12 @@ class MinorableTest < ActiveSupport::TestCase
 
     assert @test_model.valid?
   end
+
   test "resource is invalid if unminorable amount is not numeric" do
     @test_model.amount = "invalid"
 
     assert @test_model.invalid?
-    assert_includes @test_model.errors[:amount], "must be a valid number"
+    assert_includes @test_model.errors[:amount], "is not a number"
   end
 
   test "resource is invalid if unminorable amount is changed without a currency" do
@@ -213,6 +241,24 @@ class MinorableTest < ActiveSupport::TestCase
     assert_equal 212345678, @test_model.fx_amount_minor
   end
 
+  test "unminorable fx_amount= has fx_amount_written? return true" do
+    @test_model.fx_amount = "100.00"
+
+    assert @test_model.fx_amount_written?
+  end
+
+  test "unminorable fx_amount_written? is false if not written" do
+    assert_not @test_model.fx_amount_written?
+  end
+
+  test "unminorable fx_amount_written? is false after save" do
+    @test_model.fx_amount = "100.00"
+
+    @test_model.save
+
+    assert_not @test_model.fx_amount_written?
+  end
+
   test "unminorable sets nil on fx_amount_minor if fx_amount has changed" do
     @test_model.fx_amount = nil
 
@@ -227,8 +273,14 @@ class MinorableTest < ActiveSupport::TestCase
     assert_not_nil @test_model.fx_amount_minor
   end
 
-  test "resource is valid if unminorable fx_amount is blank" do
+  test "resource is valid if unminorable fx_amount is nil" do
     @test_model.fx_amount = nil
+
+    assert @test_model.valid?
+  end
+
+  test "resource is valid if unminorable fx_amount is blank" do
+    @test_model.fx_amount = ""
 
     assert @test_model.valid?
   end
@@ -261,7 +313,7 @@ class MinorableTest < ActiveSupport::TestCase
     @test_model.fx_amount = "invalid"
 
     assert @test_model.invalid?
-    assert_includes @test_model.errors[:fx_amount], "must be a valid number"
+    assert_includes @test_model.errors[:fx_amount], "is not a number"
   end
 
   test "resource is invalid if unminorable fx_amount is changed without a currency" do
@@ -311,6 +363,24 @@ class MinorableTest < ActiveSupport::TestCase
     assert_equal 10000, @test_model.nested_amount_minor
   end
 
+  test "unminorable nested_amount= has nested_amount_written? return true" do
+    @test_model.nested_amount = "100.00"
+
+    assert @test_model.nested_amount_written?
+  end
+
+  test "unminorable nested_amount_written? is false if not written" do
+    assert_not @test_model.nested_amount_written?
+  end
+
+  test "unminorable nested_amount_written? is false after save" do
+    @test_model.nested_amount = "100.00"
+
+    @test_model.save
+
+    assert_not @test_model.nested_amount_written?
+  end
+
   test "unminorable sets nil on nested_amount_minor if nested_amount has changed" do
     @test_model.nested_amount = nil
 
@@ -325,10 +395,18 @@ class MinorableTest < ActiveSupport::TestCase
     assert_not_nil @test_model.nested_amount_minor
   end
 
-  test "resource is valid if unminorable nested_amount is blank" do
+  test "resource is invalid if unminorable nested_amount is nil" do
     @test_model.nested_amount = nil
 
-    assert @test_model.valid?
+    assert_not @test_model.valid?
+    assert_includes @test_model.errors[:nested_amount], "can't be blank"
+  end
+
+  test "resource is invalid if unminorable nested_amount is blank" do
+    @test_model.nested_amount = ""
+
+    assert_not @test_model.valid?
+    assert_includes @test_model.errors[:nested_amount], "can't be blank"
   end
 
   test "resource is valid if unminorable nested_amount is a float" do
@@ -359,7 +437,7 @@ class MinorableTest < ActiveSupport::TestCase
     @test_model.nested_amount = "invalid"
 
     assert @test_model.invalid?
-    assert_includes @test_model.errors[:nested_amount], "must be a valid number"
+    assert_includes @test_model.errors[:nested_amount], "is not a number"
   end
 
   test "resource is invalid if unminorable nested_amount is changed without a currency" do

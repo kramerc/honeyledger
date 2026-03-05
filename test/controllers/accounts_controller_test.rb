@@ -109,15 +109,16 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
           kind: "asset",
           currency_id: @account.currency_id,
           opening_balance_transaction_attributes: {
-            amount_minor: 50000,
+            amount: "500.00",
             transacted_at: Time.current
           }
         }
       }
     end
 
-    assert_redirected_to account_url(Account.last)
-    assert_equal 50000, Account.last.opening_balance_transaction.amount_minor
+    new_account = Account.last(2).first
+    assert_redirected_to account_url(new_account)
+    assert_equal 50000, new_account.opening_balance_transaction.amount_minor
   end
 
   test "should create linked to a SimpleFIN account when given" do
@@ -241,14 +242,14 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Updated Name", @account.name
   end
 
-  test "should update account with opening balance" do
+  test "should update account with positive opening balance" do
     patch account_url(@account), params: {
       account: {
         name: @account.name,
         kind: @account.kind,
         currency_id: @account.currency_id,
         opening_balance_transaction_attributes: {
-          amount_minor: 10000,
+          amount: "100.00",
           transacted_at: Time.current
         }
       }
@@ -257,6 +258,27 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
 
     @account.reload
     assert_equal 10000, @account.opening_balance_transaction.amount_minor
+  end
+
+  test "should create account with negative opening balance" do
+    # Account + Opening Balance Account
+    assert_difference("Account.count", 2) do
+      post accounts_url, params: {
+        account: {
+          name: "New Account with Balance",
+          kind: "asset",
+          currency_id: @account.currency_id,
+          opening_balance_transaction_attributes: {
+            amount: "-500.00",
+            transacted_at: Time.current
+          }
+        }
+      }
+    end
+
+    new_account = Account.last(2).first
+    assert_redirected_to account_url(new_account)
+    assert_equal -50000, new_account.opening_balance_transaction.amount_minor
   end
 
   test "should validate on update" do

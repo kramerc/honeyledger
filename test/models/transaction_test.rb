@@ -1,6 +1,124 @@
 require "test_helper"
 
 class TransactionTest < ActiveSupport::TestCase
+  test "opening_balance_target_account returns nil if not opening balance transaction" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.opening_balance = false
+    transaction.opening_balance_target_account = accounts(:asset_account)
+
+    assert_nil transaction.opening_balance_target_account
+  end
+
+  test "opening_balance_target_account returns account written" do
+    transaction = Transaction.new
+    transaction.opening_balance = true
+    transaction.opening_balance_target_account = accounts(:asset_account)
+
+    assert_equal accounts(:asset_account), transaction.opening_balance_target_account
+  end
+
+  test "opening_balance_target_account returns source account" do
+    transaction = transactions(:opening_balance_expense)
+
+    assert_equal transaction.src_account, transaction.opening_balance_target_account
+  end
+
+  test "opening_balance_target_account returns destination account" do
+    transaction = transactions(:opening_balance_revenue)
+
+    assert_equal transaction.dest_account, transaction.opening_balance_target_account
+  end
+
+  test "opening balance transaction is invalid if opening_balance_target_account is blank" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.dest_account = nil # Target account
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:opening_balance_target_account], "is required for opening balance"
+  end
+
+  test "opening balance transaction is invalid if amount is blank" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.amount = ""
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount], "can't be blank for opening balance"
+  end
+
+  test "opening balance transaction is invalid if amount is zero" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.amount = 0
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount], "can't be zero for opening balance"
+  end
+
+  test "opening balance transaction is invalid if amount_minor is blank" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.amount_minor = ""
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount_minor], "can't be blank for opening balance"
+  end
+
+  test "opening balance transaction is invalid if amount_minor is zero" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.amount_minor = 0
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount_minor], "can't be zero for opening balance"
+  end
+
+  test "does not save without a opening_balance_target_account" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.dest_account = nil # Target account
+
+    assert_error_reported(StandardError) do
+      transaction.save(validate: false)
+    end
+  end
+
+  test "updates associated accounts on positive opening balance" do
+    transaction = transactions(:opening_balance_expense)
+    new_dest_account = transaction.src_account
+    transaction.amount_minor = 1000
+
+    transaction.save!
+
+    assert_equal Account.opening_balance_for(user: transaction.user, kind: :revenue), transaction.src_account
+    assert_equal new_dest_account, transaction.dest_account
+  end
+
+  test "updates associated accounts on negative opening balance" do
+    transaction = transactions(:opening_balance_revenue)
+    new_src_account = transaction.dest_account
+    transaction.amount_minor = -1000
+
+    transaction.save!
+
+    assert_equal new_src_account, transaction.src_account
+    assert_equal Account.opening_balance_for(user: transaction.user, kind: :expense), transaction.dest_account
+  end
+
+  test "opening balance matches opening_balance_target_account's currency" do
+    transaction = transactions(:opening_balance_expense)
+    transaction.currency = nil
+
+    transaction.save!
+
+    assert_equal transaction.opening_balance_target_account.currency, transaction.currency
+  end
+
+  test "cleared_at matches transacted_at for opening balance" do
+    transaction = transactions(:opening_balance_revenue)
+    transaction.cleared_at = nil
+    transaction.transacted_at = 6.months.ago
+
+    transaction.save!
+
+    assert_equal transaction.transacted_at, transaction.cleared_at
+  end
+
   test "creating child transaction marks parent as split" do
     parent = transactions(:one)
     assert_not parent.split, "Parent should not be split initially"

@@ -47,3 +47,35 @@ unlinked_liability:
   currency: usd
   name: Unlinked Liability
   kind: liability
+
+asset_account_with_opening_balance:
+  user: two
+  currency: usd
+  name: Asset Account
+  kind: asset
+
+liability_account_with_opening_balance:
+  user: two
+  currency: usd
+  name: Liability Account
+  kind: liability
+
+expense_account_with_opening_balance:
+  user: two
+  currency: usd
+  name: Expense Account
+  kind: expense
+
+opening_balance_revenue:
+  user: two
+  currency: usd
+  name: Opening Balance
+  kind: revenue
+  virtual: true
+
+opening_balance_expense:
+  user: two
+  currency: usd
+  name: Opening Balance
+  kind: expense
+  virtual: true

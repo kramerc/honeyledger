@@ -10,17 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_27_183216) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_02_175538) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   create_table "accounts", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.bigint "currency_id", null: false
+    t.bigint "currency_id"
     t.integer "kind"
     t.string "name"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.boolean "virtual", default: false, null: false
     t.index ["currency_id"], name: "index_accounts_on_currency_id"
     t.index ["user_id", "kind"], name: "index_accounts_on_user_id_and_kind"
     t.index ["user_id"], name: "index_accounts_on_user_id"

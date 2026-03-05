@@ -5,7 +5,7 @@ class AccountsController < ApplicationController
 
   # GET /accounts or /accounts.json
   def index
-    @accounts = current_user.accounts.includes(:currency, :opening_balance_transaction)
+    @accounts = current_user.accounts.real.includes(:currency)
   end
 
   # GET /accounts/1 or /accounts/1.json
@@ -28,7 +28,7 @@ class AccountsController < ApplicationController
 
   # GET /accounts/1/edit
   def edit
-    if @account.opening_balance_transaction.nil?
+    if @account.opening_balance_transaction.blank?
       @account.build_opening_balance_transaction
     end
   end
@@ -37,7 +37,6 @@ class AccountsController < ApplicationController
   def create
     @account = current_user.accounts.build(account_params)
     @account.simplefin_account = @simplefin_account
-    update_opening_balance_transaction
 
     respond_to do |format|
       if @account.save
@@ -53,7 +52,6 @@ class AccountsController < ApplicationController
   # PATCH/PUT /accounts/1 or /accounts/1.json
   def update
     @account.assign_attributes(account_params)
-    update_opening_balance_transaction
 
     respond_to do |format|
       if @account.save
@@ -85,25 +83,7 @@ class AccountsController < ApplicationController
 
     # Only allow a list of trusted parameters through.
     def account_params
-      params.expect(account: [ :name, :kind, :currency_id, opening_balance_transaction_attributes: [ :amount_minor, :transacted_at ] ])
-    end
-
-    def update_opening_balance_transaction
-      return unless @account.opening_balance_transaction.present?
-
-      # Handle opening balance transaction
-      if @account.opening_balance_transaction.amount_minor.positive?
-        opening_balance_tx = @account.opening_balance_transaction
-        opening_balance_tx.user = current_user
-        opening_balance_tx.src_account = Account.find_or_create_by(user: current_user, name: "Opening Balances", kind: :revenue, currency: @account.currency)
-        opening_balance_tx.dest_account = @account
-        opening_balance_tx.description = "Opening balance"
-        opening_balance_tx.currency = @account.currency
-        opening_balance_tx.opening_balance = true
-        opening_balance_tx.cleared_at = opening_balance_tx.transacted_at
-      else
-        @account.opening_balance_transaction = nil
-      end
+      params.expect(account: [ :name, :kind, :currency_id, opening_balance_transaction_attributes: [ :amount, :transacted_at ] ])
     end
 
     def set_simplefin_account

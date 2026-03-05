@@ -1,17 +1,41 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = [ "srcAccount", "destAccount", "type", "currency", "error" ]
+  static targets = [ "srcAccount", "destAccount", "type", "amount", "currency", "error" ]
+  static values = { accountName: String, openingBalance: Boolean, targetAccountName: String }
 
   connect() {
-    this.updateEnabledAccounts(false)
-    this.updateCurrency()
-    this.updateType()
+    if (this.isOpeningBalance()) {
+      this.updateFieldsFromOpeningBalanceAmount()
+    } else {
+      this.updateEnabledAccounts(false)
+      this.updateCurrency()
+      this.updateTypeFromSelectedAccounts()
+    }
   }
 
   clearError() {
     if (this.hasErrorTarget) {
       this.errorTarget.remove()
+    }
+  }
+
+  updateFieldsFromOpeningBalanceAmount() {
+    if (!this.isOpeningBalance() || !this.hasAmountTarget) return
+
+    const amount = this.amountTarget.value
+    if (amount > 0) {
+      this.updateTypeTarget("deposit")
+      this.updateSrcAccountSpan("Opening Balance")
+      this.updateDestAccountSpan(this.targetAccountNameValue)
+    } else if (amount < 0) {
+      this.updateTypeTarget("withdrawal")
+      this.updateSrcAccountSpan(this.targetAccountNameValue)
+      this.updateDestAccountSpan("Opening Balance")
+    } else {
+      this.updateTypeTarget("")
+      this.updateSrcAccountSpan("")
+      this.updateDestAccountSpan("")
     }
   }
 
@@ -56,28 +80,22 @@ export default class extends Controller {
     this.currencyTarget.textContent = currency
   }
 
-  updateType() {
-    if (!this.hasSrcAccountTarget || !this.hasDestAccountTarget || !this.hasTypeTarget) return
+  updateTypeFromSelectedAccounts() {
+    if (!this.hasSrcAccountTarget || !this.hasDestAccountTarget) return
 
     const { kind: srcKind } = this.selectedAccount(this.srcAccountTarget)
     const { kind: destKind } = this.selectedAccount(this.destAccountTarget)
 
-    let label = ""
-    let color = "gray"
-
+    let type = undefined
     if (destKind === "expense") {
-      label = "↓ Withdrawal"
-      color = "red"
+      type = "withdrawal"
     } else if (srcKind === "revenue") {
-      label = "↑ Deposit"
-      color = "green"
+      type = "deposit"
     } else if (srcKind && destKind) {
-      label = "⇄ Transfer"
-      color = "gray"
+      type = "transfer"
     }
 
-    this.typeTarget.textContent = label
-    this.typeTarget.style.color = color
+    this.updateTypeTarget(type)
   }
 
   selectedAccount(select) {
@@ -90,5 +108,40 @@ export default class extends Controller {
       kind: option.dataset.kind || undefined,
       currency: option.dataset.currency || undefined
     }
+  }
+
+  typeLabel(type) {
+    switch (type) {
+      case "withdrawal":
+        return [ "↓ Withdrawal", "red" ]
+      case "deposit":
+        return [ "↑ Deposit", "green" ]
+      case "transfer":
+        return [ "⇄ Transfer", "gray" ]
+      default:
+        return [ "", "" ]
+    }
+  }
+
+  updateTypeTarget(type) {
+    if (!this.hasTypeTarget) return
+
+    const [ label, color ] = this.typeLabel(type)
+    this.typeTarget.textContent = label
+    this.typeTarget.style.color = color
+  }
+
+  updateSrcAccountSpan(accountName) {
+    if (!this.hasSrcAccountTarget || this.srcAccountTarget.tagName !== "SPAN") return
+    this.srcAccountTarget.textContent = accountName
+  }
+
+  updateDestAccountSpan(accountName) {
+    if (!this.hasDestAccountTarget || this.destAccountTarget.tagName !== "SPAN") return
+    this.destAccountTarget.textContent = accountName
+  }
+
+  isOpeningBalance() {
+    return this.hasOpeningBalanceValue && this.openingBalanceValue
   }
 }
