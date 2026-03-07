@@ -266,6 +266,70 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal original_balance - transaction.amount_minor, dest.reload.balance_minor
   end
 
+  test "creating a transaction decrements src account balance_minor" do
+    src = accounts(:asset_account)
+    src.reset_balance
+    original_balance = src.balance_minor
+
+    Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: src,
+      dest_account: accounts(:expense_account),
+      description: "New purchase",
+      amount_minor: 3000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_equal original_balance - 3000, src.reload.balance_minor
+  end
+
+  test "creating a transaction increments dest account balance_minor" do
+    dest = accounts(:asset_account)
+    dest.reset_balance
+    original_balance = dest.balance_minor
+
+    Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: accounts(:revenue_account),
+      dest_account: dest,
+      description: "Income",
+      amount_minor: 7500,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_equal original_balance + 7500, dest.reload.balance_minor
+  end
+
+  test "moving a transaction to different accounts updates all affected balances" do
+    transaction = transactions(:one)
+    old_src = transaction.src_account
+    old_dest = transaction.dest_account
+    new_src = accounts(:revenue_account)
+    new_dest = accounts(:liability_account)
+
+    old_src.reset_balance
+    old_dest.reset_balance
+    new_src.reset_balance
+    new_dest.reset_balance
+
+    old_src_balance = old_src.balance_minor
+    old_dest_balance = old_dest.balance_minor
+    new_src_balance = new_src.balance_minor
+    new_dest_balance = new_dest.balance_minor
+    amount = transaction.amount_minor
+
+    transaction.update!(src_account: new_src, dest_account: new_dest)
+
+    assert_equal old_src_balance + amount, old_src.reload.balance_minor
+    assert_equal old_dest_balance - amount, old_dest.reload.balance_minor
+    assert_equal new_src_balance - amount, new_src.reload.balance_minor
+    assert_equal new_dest_balance + amount, new_dest.reload.balance_minor
+  end
+
   test "validates src_account is accessible to user" do
     transaction = Transaction.new(
       user: users(:one),

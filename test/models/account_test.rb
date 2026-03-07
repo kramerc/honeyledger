@@ -61,7 +61,7 @@ class AccountTest < ActiveSupport::TestCase
     end
   end
 
-  test "reset_balances recalculates balance from sum of transactions" do
+  test "reset_balance recalculates balance from sum of transactions" do
     account = accounts(:asset_account)
     deposits = Transaction.where(dest_account: account).sum(:amount_minor)
     withdrawals = Transaction.where(src_account: account).sum(:amount_minor)
@@ -73,7 +73,7 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal expected, account.balance_minor
   end
 
-  test "reset_balances does not recalculate balances for virtual accounts" do
+  test "reset_balance does not recalculate balances for virtual accounts" do
     account = accounts(:opening_balance_expense)
 
     assert_not account.reset_balance
