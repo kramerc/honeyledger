@@ -209,6 +209,16 @@ class AccountTest < ActiveSupport::TestCase
     assert @account.valid?
   end
 
+  test "account is valid when both opening balance fields submitted blank (e.g. from form)" do
+    # Regression: assigning blank values for both fields should not trigger
+    # opening balance callbacks, so a nil transacted_at must not cause a
+    # validation error when no opening balance is being set.
+    @account.opening_balance_amount = ""
+    @account.opening_balance_transacted_at = nil
+
+    assert @account.valid?
+  end
+
   test "account is valid if opening_balance_amount is zero" do
     @account.opening_balance_amount = 0
     @account.opening_balance_transacted_at = 1.month.ago
@@ -274,6 +284,20 @@ class AccountTest < ActiveSupport::TestCase
 
     account.save!
 
+    assert_in_delta new_date, account.opening_balance_transaction.transacted_at, 1.second
+  end
+
+  test "updating only opening_balance_transacted_at preserves direction of a negative opening balance" do
+    # Regression: direction must be derived from src/dest account roles, not from
+    # the sign of amount_minor (which is now always stored positive).
+    account = accounts(:liability_account_with_opening_balance)
+    original_src = account.opening_balance_transaction.src_account
+    new_date = 3.months.ago
+    account.opening_balance_transacted_at = new_date
+
+    account.save!
+
+    assert_equal original_src, account.opening_balance_transaction.src_account
     assert_in_delta new_date, account.opening_balance_transaction.transacted_at, 1.second
   end
 

@@ -13,7 +13,7 @@
       <div><%= transaction.category&.name %></div>
       <div class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
       <div class="actions">
-        <% if transaction.opening_balance? %>
+        <% if transaction.opening_balance? && transaction.opening_balance_target_account.present? %>
           <%= link_to "Edit Account", edit_account_path(transaction.opening_balance_target_account), data: { turbo_frame: "_top" } %>
         <% else %>
           <a href="#" data-action="transactions--row#edit">Edit</a>

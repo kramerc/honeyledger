@@ -93,15 +93,32 @@ class Account < ApplicationRecord
   private
 
     def opening_balance_not_allowed_for_kind
-      if expense? || revenue?
-        errors.add(:opening_balance_amount, "is not allowed for #{kind} accounts")
-      end
+      # Only block when the user is actively supplying an amount — existing
+      # transactions on unusual accounts (bug data) should not prevent saving.
+      return unless expense? || revenue?
+      return unless instance_variable_defined?(:@opening_balance_amount) && @opening_balance_amount.present?
+
+      errors.add(:opening_balance_amount, "is not allowed for #{kind} accounts")
     end
 
     def opening_balance_callback_needed?
-      opening_balance_transaction.present? ||
-        instance_variable_defined?(:@opening_balance_amount) ||
-        instance_variable_defined?(:@opening_balance_transacted_at)
+      # Always run if there is already an opening balance transaction to maintain.
+      return true if opening_balance_transaction.present?
+
+      # Otherwise only run if a meaningful (non-blank, non-zero) amount is provided.
+      return false unless instance_variable_defined?(:@opening_balance_amount)
+
+      raw_amount = @opening_balance_amount
+      return false if raw_amount.blank?
+
+      amount_decimal = begin
+        BigDecimal(raw_amount)
+      rescue ArgumentError, TypeError
+        # Unparseable input (e.g. "hello"): let validations handle it.
+        return true
+      end
+
+      !amount_decimal.zero?
     end
 
     def assign_opening_balance_transaction_attributes
@@ -123,7 +140,9 @@ class Account < ApplicationRecord
         negative = amount_decimal.negative?
         t.amount = amount_decimal.abs
       else
-        negative = t.amount_minor.to_i.negative?
+        # Derive direction from the existing account roles. Amount_minor is now
+        # always stored as a positive value so its sign cannot be used.
+        negative = t.src_account_id == id
         t.amount_minor = t.amount_minor.to_i.abs
         return if t.amount_minor.zero?
       end
