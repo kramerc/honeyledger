@@ -88,10 +88,8 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
           name: "New Account with Zero Balance",
           kind: "asset",
           currency_id: @account.currency_id,
-          opening_balance_transaction_attributes: {
-            amount_minor: 0,
-            transacted_at: Time.current
-          }
+          opening_balance_amount: "0",
+          opening_balance_transacted_at: Time.current
         }
       }
     end
@@ -108,15 +106,13 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
           name: "New Account with Balance",
           kind: "asset",
           currency_id: @account.currency_id,
-          opening_balance_transaction_attributes: {
-            amount: "500.00",
-            transacted_at: Time.current
-          }
+          opening_balance_amount: "500.00",
+          opening_balance_transacted_at: Time.current
         }
       }
     end
 
-    new_account = Account.last(2).first
+    new_account = Account.last
     assert_redirected_to account_url(new_account)
     assert_equal 50000, new_account.opening_balance_transaction.amount_minor
   end
@@ -248,10 +244,8 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
         name: @account.name,
         kind: @account.kind,
         currency_id: @account.currency_id,
-        opening_balance_transaction_attributes: {
-          amount: "100.00",
-          transacted_at: Time.current
-        }
+        opening_balance_amount: "100.00",
+        opening_balance_transacted_at: Time.current
       }
     }
     assert_redirected_to account_url(@account)
@@ -268,17 +262,16 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
           name: "New Account with Balance",
           kind: "asset",
           currency_id: @account.currency_id,
-          opening_balance_transaction_attributes: {
-            amount: "-500.00",
-            transacted_at: Time.current
-          }
+          opening_balance_amount: "-500.00",
+          opening_balance_transacted_at: Time.current
         }
       }
     end
 
-    new_account = Account.last(2).first
+    new_account = Account.last
     assert_redirected_to account_url(new_account)
-    assert_equal -50000, new_account.opening_balance_transaction.amount_minor
+    assert_equal 50000, new_account.opening_balance_transaction.amount_minor, "negative opening balance is persisted as absolute value"
+    assert new_account.opening_balance_transaction.src_account.real?, "src_account should be the real account for a negative opening balance"
   end
 
   test "should validate on update" do

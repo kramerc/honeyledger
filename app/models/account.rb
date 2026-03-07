@@ -6,9 +6,10 @@ class Account < ApplicationRecord
   before_destroy -> { opening_balance_transaction.destroy! }, if: -> { opening_balance_transaction.present? && empty? }
   has_many :src_transactions, class_name: "Transaction", foreign_key: "src_account_id", dependent: :restrict_with_error
   has_many :dest_transactions, class_name: "Transaction", foreign_key: "dest_account_id", dependent: :restrict_with_error
-  before_validation :assign_opening_balance_transaction_attributes, if: -> { opening_balance_transaction.present? }
-  validate :opening_balance_transaction_is_valid, if: -> { opening_balance_transaction.present? }
-  after_save :save_or_destroy_opening_balance_transaction, if: -> { opening_balance_transaction.present? }
+  before_validation :assign_opening_balance_transaction_attributes, if: :opening_balance_callback_needed?
+  validate :opening_balance_not_allowed_for_kind, if: :opening_balance_callback_needed?
+  validate :opening_balance_transaction_is_valid, if: :opening_balance_callback_needed?
+  after_save :save_or_destroy_opening_balance_transaction, if: :opening_balance_callback_needed?
 
   has_one :simplefin_account, class_name: "Simplefin::Account", foreign_key: :ledger_account_id, dependent: :nullify
 
@@ -37,8 +38,7 @@ class Account < ApplicationRecord
     @opening_balance_transaction = Transaction.new({
       user: user,
       currency: currency,
-      opening_balance: true,
-      opening_balance_target_account: self
+      opening_balance: true
     }.merge(transaction_attributes))
   end
 
@@ -49,14 +49,20 @@ class Account < ApplicationRecord
       .first
   end
 
-  def opening_balance_transaction=(transaction)
-    @opening_balance_transaction = transaction
+  # Virtual attributes for the opening balance form fields.
+  # Reading derives the signed amount from the persisted transaction so the form pre-fills correctly.
+  attr_writer :opening_balance_amount, :opening_balance_transacted_at
+
+  def opening_balance_amount
+    return @opening_balance_amount if instance_variable_defined?(:@opening_balance_amount)
+    return nil unless opening_balance_transaction
+    t = opening_balance_transaction
+    t.src_account&.real? ? -t.amount : t.amount
   end
 
-  def opening_balance_transaction_attributes=(transaction_attributes)
-    transaction = opening_balance_transaction || build_opening_balance_transaction
-    transaction.assign_attributes(transaction_attributes)
-    @opening_balance_transaction = transaction
+  def opening_balance_transacted_at
+    return @opening_balance_transacted_at if instance_variable_defined?(:@opening_balance_transacted_at)
+    opening_balance_transaction&.transacted_at
   end
 
   def empty?
@@ -69,6 +75,15 @@ class Account < ApplicationRecord
     !virtual?
   end
 
+  # Returns the opening balance amount in minor units with the correct sign for display.
+  # Since opening balance transactions always store a positive amount_minor, the direction
+  # is re-derived from whether the real account is the source (negative) or destination (positive).
+  def opening_balance_amount_minor
+    return nil unless opening_balance_transaction
+    t = opening_balance_transaction
+    t.src_account&.real? ? -t.amount_minor.to_i : t.amount_minor
+  end
+
   # Check if a user has access to this account
   # Currently checks ownership, but can be extended for sharing
   def accessible_by?(user)
@@ -77,31 +92,76 @@ class Account < ApplicationRecord
 
   private
 
+    def opening_balance_not_allowed_for_kind
+      if expense? || revenue?
+        errors.add(:opening_balance_amount, "is not allowed for #{kind} accounts")
+      end
+    end
+
+    def opening_balance_callback_needed?
+      opening_balance_transaction.present? ||
+        instance_variable_defined?(:@opening_balance_amount) ||
+        instance_variable_defined?(:@opening_balance_transacted_at)
+    end
+
     def assign_opening_balance_transaction_attributes
-      opening_balance_transaction.user = user
-      opening_balance_transaction.currency = currency
-      opening_balance_transaction.opening_balance = true
-      opening_balance_transaction.opening_balance_target_account = self
+      t = opening_balance_transaction || build_opening_balance_transaction
+      t.user = user
+      t.currency = currency
+      t.opening_balance = true
+
+      # Set transacted_at first so it's present even when we return early for blank/zero amounts
+      t.transacted_at = @opening_balance_transacted_at if instance_variable_defined?(:@opening_balance_transacted_at)
+
+      if instance_variable_defined?(:@opening_balance_amount)
+        t.amount = @opening_balance_amount
+        amount_decimal = begin; BigDecimal(@opening_balance_amount); rescue ArgumentError, TypeError; nil; end
+        # Blank/zero: transaction will be destroyed in after_save; skip account assignment
+        return if @opening_balance_amount.blank? || (amount_decimal && amount_decimal.zero?)
+        # Unparseable (e.g. "hello"): leave raw amount so Minorable validates it; skip account assignment
+        return if amount_decimal.nil?
+        negative = amount_decimal.negative?
+        t.amount = amount_decimal.abs
+      else
+        negative = t.amount_minor.to_i.negative?
+        t.amount_minor = t.amount_minor.to_i.abs
+        return if t.amount_minor.zero?
+      end
+
+      t.cleared_at = t.transacted_at
+
+      if negative
+        t.src_account = self
+        t.dest_account = Account.opening_balance_for(user: user, kind: :expense)
+      else
+        t.src_account = Account.opening_balance_for(user: user, kind: :revenue)
+        t.dest_account = self
+      end
     end
 
     def opening_balance_transaction_is_valid
       unless opening_balance_transaction.valid?
         opening_balance_transaction.errors.each do |error|
-          if %i[ amount amount_minor ].include?(error.attribute) && %i[ blank zero ].include?(error.type)
-            # Skip these errors as the transaction will be destroyed instead
-            next
+          account_attribute = case error.attribute
+          when :amount, :amount_minor then :opening_balance_amount
+          when :transacted_at then :opening_balance_transacted_at
+          else :"opening_balance_transaction.#{error.attribute}"
           end
 
-          errors.objects.append(ActiveModel::NestedError.new(opening_balance_transaction, error, attribute: :"opening_balance_transaction.#{error.attribute}"))
+          errors.add(account_attribute, error.message)
         end
       end
     end
 
     def save_or_destroy_opening_balance_transaction
-      if opening_balance_transaction.amount_written? && opening_balance_transaction.amount.to_d.zero?
-        opening_balance_transaction.destroy!
-      elsif !opening_balance_transaction.amount_written? && opening_balance_transaction.amount_minor.to_i.zero?
-        opening_balance_transaction.destroy!
+      should_destroy = if opening_balance_transaction.amount_written?
+        opening_balance_transaction.amount.to_d.zero?
+      else
+        opening_balance_transaction.amount_minor.to_i.zero?
+      end
+
+      if should_destroy
+        opening_balance_transaction.destroy! if opening_balance_transaction.persisted?
       else
         opening_balance_transaction.save!
       end

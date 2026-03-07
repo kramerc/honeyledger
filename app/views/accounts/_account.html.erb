@@ -17,7 +17,7 @@
   <div>
     <strong>Opening Balance:</strong>
     <% if account.opening_balance_transaction %>
-      <%= transaction_amount_with_currency(account.opening_balance_transaction) %>
+      <%= amount_to_currency(account.opening_balance_amount_minor, account.currency) %>
       on
       <%= account.opening_balance_transaction.transacted_at.strftime("%Y-%m-%d %H:%M") %>
     <% else %>
