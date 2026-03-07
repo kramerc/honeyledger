@@ -15,22 +15,20 @@ class AccountsController < ApplicationController
   # GET /accounts/new
   def new
     @account = current_user.accounts.build
-    @account.build_opening_balance_transaction
 
     if @simplefin_account
       @account.name = @simplefin_account.name
       @account.currency = Currency.find_by(code: @simplefin_account.currency)
 
-      opening_balance_transaction = @simplefin_account.build_opening_balance_ledger_transaction(user: current_user)
-      @account.opening_balance_transaction = opening_balance_transaction if opening_balance_transaction.present?
+      if (opening_balance = @simplefin_account.suggested_opening_balance)
+        @account.opening_balance_amount = opening_balance[:amount]
+        @account.opening_balance_transacted_at = opening_balance[:transacted_at]
+      end
     end
   end
 
   # GET /accounts/1/edit
   def edit
-    if @account.opening_balance_transaction.blank?
-      @account.build_opening_balance_transaction
-    end
   end
 
   # POST /accounts or /accounts.json
@@ -83,7 +81,7 @@ class AccountsController < ApplicationController
 
     # Only allow a list of trusted parameters through.
     def account_params
-      params.expect(account: [ :name, :kind, :currency_id, opening_balance_transaction_attributes: [ :amount, :transacted_at ] ])
+      params.expect(account: [ :name, :kind, :currency_id, :opening_balance_amount, :opening_balance_transacted_at ])
     end
 
     def set_simplefin_account

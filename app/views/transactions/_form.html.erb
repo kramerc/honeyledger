@@ -1,8 +1,6 @@
 <%= form_with(model: transaction, data: {
   controller: "transactions--form",
   action: "transactions--form#clearError",
-  transactions__form_opening_balance_value: transaction.opening_balance?,
-  transactions__form_target_account_name_value: transaction.opening_balance_target_account&.name,
   transactions__row_target: "form"
 }, html: { autocomplete: "off" }) do |form| %>
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
@@ -19,36 +17,27 @@
     </div>
 
     <div>
-      <% if transaction.opening_balance? %>
-        <span data-transactions--form-target="srcAccount"><%= transaction.src_account.name %></span>
-      <% else %>
-        <%= form.select :src_account_id,
-          grouped_account_options_for_select(src_accounts, Account::SOURCEABLE, selected_key: transaction.src_account_id),
-          { include_blank: "From…" },
-          data: {
-            action: "transactions--form#updateEnabledAccounts transactions--form#updateTypeFromSelectedAccounts",
-            transactions__form_target: "srcAccount"
-          } %>
-      <% end %>
-
+      <%= form.select :src_account_id,
+        grouped_account_options_for_select(src_accounts, Account::SOURCEABLE, selected_key: transaction.src_account_id),
+        { include_blank: "From…" },
+        data: {
+          action: "transactions--form#updateEnabledAccounts transactions--form#updateTypeFromSelectedAccounts",
+          transactions__form_target: "srcAccount"
+        } %>
     </div>
 
     <div>
-      <% if transaction.opening_balance? %>
-        <span data-transactions--form-target="destAccount"><%= transaction.dest_account.name %></span>
-      <% else %>
-        <%= form.select :dest_account_id,
-          grouped_account_options_for_select(dest_accounts, Account::DESTINABLE, selected_key: transaction.dest_account_id),
-          { include_blank: "To…" },
-          data: {
-            action: "transactions--form#updateEnabledAccounts transactions--form#updateCurrency transactions--form#updateTypeFromSelectedAccounts",
-            transactions__form_target: "destAccount"
-          } %>
-      <% end %>
+      <%= form.select :dest_account_id,
+        grouped_account_options_for_select(dest_accounts, Account::DESTINABLE, selected_key: transaction.dest_account_id),
+        { include_blank: "To…" },
+        data: {
+          action: "transactions--form#updateEnabledAccounts transactions--form#updateCurrency transactions--form#updateTypeFromSelectedAccounts",
+          transactions__form_target: "destAccount"
+        } %>
     </div>
 
     <div class="numeric">
-      <%= form.text_field :amount, data: { action: "transactions--form#updateFieldsFromOpeningBalanceAmount", transactions__form_target: "amount" } %>
+      <%= form.text_field :amount, data: { transactions__form_target: "amount" } %>
     </div>
 
     <div data-transactions--form-target="currency">
@@ -60,11 +49,7 @@
     </div>
 
     <div class="boolean">
-      <% if transaction.opening_balance? %>
-        ✓
-      <% else %>
-        <%= form.check_box :cleared %>
-      <% end %>
+      <%= form.check_box :cleared %>
     </div>
 
     <div class="actions">

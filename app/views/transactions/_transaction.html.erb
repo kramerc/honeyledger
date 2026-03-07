@@ -8,12 +8,16 @@
       <div><%= transaction.description %></div>
       <div><%= transaction.src_account&.name %></div>
       <div><%= transaction.dest_account&.name %></div>
-      <div class="numeric"><%= amount_to_currency(transaction.amount_minor, transaction.currency) %></div>
+      <div class="numeric"><%= transaction_amount_with_currency(transaction) %></div>
       <div><%= transaction.currency.code %></div>
       <div><%= transaction.category&.name %></div>
       <div class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
       <div class="actions">
-        <a href="#" data-action="transactions--row#edit">Edit</a>
+        <% if transaction.opening_balance? && transaction.opening_balance_target_account.present? %>
+          <%= link_to "Edit Account", edit_account_path(transaction.opening_balance_target_account), data: { turbo_frame: "_top" } %>
+        <% else %>
+          <a href="#" data-action="transactions--row#edit">Edit</a>
+        <% end %>
         <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
       </div>
     </div>

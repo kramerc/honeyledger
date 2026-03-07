@@ -24,18 +24,16 @@ class Simplefin::Account < ApplicationRecord
     @ledger_currency ||= ledger_account&.currency || Currency.find_by(code: currency)
   end
 
-  # Builds an opening balance transaction that aligns with the present SimpleFIN data
-  def build_opening_balance_ledger_transaction(params = {})
+  # Returns suggested opening balance attributes that align with the present SimpleFIN data.
+  # Returns a hash with :amount (BigDecimal) and :transacted_at, or nil if no currency is available.
+  def suggested_opening_balance
     return nil if ledger_currency.nil?
 
-    ledger_transaction = Transaction.new({
-      currency: ledger_currency,
-      amount_minor: balance_minor
-    }.merge(params))
-
     # Find the oldest date and calculate the opening balance from SimpleFIN transactions
-    oldest_date = Time.current
-    transactions.all.each do |simplefin_transaction|
+    amount = balance.to_d
+    oldest_date = balance_date || Time.current
+
+    transactions.each do |simplefin_transaction|
       date = [
         simplefin_transaction.transacted_at,
         simplefin_transaction.posted,
@@ -43,11 +41,13 @@ class Simplefin::Account < ApplicationRecord
       ].compact.min
 
       oldest_date = date if date < oldest_date
-      ledger_transaction.amount_minor -= simplefin_transaction.amount_minor
+      amount -= simplefin_transaction.amount.to_d
     end
 
-    ledger_transaction.transacted_at = oldest_date.beginning_of_day
-    ledger_transaction
+    {
+      amount: amount,
+      transacted_at: oldest_date.beginning_of_day
+    }
   end
 
   def enqueue_import

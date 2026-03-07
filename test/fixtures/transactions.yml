@@ -52,7 +52,7 @@ opening_balance_expense:
   user: two
   src_account: liability_account_with_opening_balance
   dest_account: opening_balance_expense
-  amount_minor: -1000
+  amount_minor: 1000
   currency: usd
   transacted_at: <%= 1.month.ago %>
   cleared_at: <%= 1.month.ago %>
