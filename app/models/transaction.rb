@@ -25,6 +25,8 @@ class Transaction < ApplicationRecord
 
   after_create :mark_parent_as_split, if: :parent_transaction_id?
   after_destroy :unmark_parent_if_last_child, if: :parent_transaction_id?
+  after_save :transfer_account_balances
+  after_destroy :reverse_account_balances
 
   scope :opening_balances, -> { where(opening_balance: true) }
 
@@ -80,6 +82,20 @@ class Transaction < ApplicationRecord
 
     def unmark_parent_if_last_child
       parent_transaction.update(split: false) if parent_transaction.child_transactions.empty?
+    end
+
+    def transfer_account_balances
+      if saved_change_to_amount_minor?
+        difference = amount_minor - amount_minor_before_last_save
+        src_account.decrement!(:balance_minor, difference)
+        dest_account.increment!(:balance_minor, difference)
+      end
+    end
+
+    def reverse_account_balances
+      # As the amount could have changed before destruction, the persisted value with amount_minor_was is used
+      src_account.increment!(:balance_minor, amount_minor_was) if src_account.present?
+      dest_account.decrement!(:balance_minor, amount_minor_was) if dest_account.present?
     end
 
     def src_account_accessible_to_user

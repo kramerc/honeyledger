@@ -207,6 +207,65 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal original_cleared_at, transaction.cleared_at
   end
 
+  test "saving a transaction with a new amount decrements src account balance_minor by the difference" do
+    transaction = transactions(:one)
+    src = transaction.src_account
+    src.reset_balance
+    original_balance = src.balance_minor
+
+    transaction.update!(amount_minor: transaction.amount_minor + 1000)
+
+    assert_equal original_balance - 1000, src.reload.balance_minor
+  end
+
+  test "saving a transaction with a new amount increments dest account balance_minor by the difference" do
+    transaction = transactions(:one)
+    dest = transaction.dest_account
+    dest.reset_balance
+    original_balance = dest.balance_minor
+
+    transaction.update!(amount_minor: transaction.amount_minor + 1000)
+
+    assert_equal original_balance + 1000, dest.reload.balance_minor
+  end
+
+  test "saving a transaction without changing amount does not update account balances" do
+    transaction = transactions(:one)
+    src = transaction.src_account
+    dest = transaction.dest_account
+    src.reset_balance
+    dest.reset_balance
+    src_balance = src.balance_minor
+    dest_balance = dest.balance_minor
+
+    transaction.update!(description: "Updated description")
+
+    assert_equal src_balance, src.reload.balance_minor
+    assert_equal dest_balance, dest.reload.balance_minor
+  end
+
+  test "destroying a transaction increments src account balance_minor" do
+    transaction = transactions(:one)
+    src = transaction.src_account
+    src.reset_balance
+    original_balance = src.balance_minor
+
+    transaction.destroy!
+
+    assert_equal original_balance + transaction.amount_minor, src.reload.balance_minor
+  end
+
+  test "destroying a transaction decrements dest account balance_minor" do
+    transaction = transactions(:one)
+    dest = transaction.dest_account
+    dest.reset_balance
+    original_balance = dest.balance_minor
+
+    transaction.destroy!
+
+    assert_equal original_balance - transaction.amount_minor, dest.reload.balance_minor
+  end
+
   test "validates src_account is accessible to user" do
     transaction = Transaction.new(
       user: users(:one),
