@@ -25,6 +25,8 @@ class Transaction < ApplicationRecord
 
   after_create :mark_parent_as_split, if: :parent_transaction_id?
   after_destroy :unmark_parent_if_last_child, if: :parent_transaction_id?
+  after_save :transfer_account_balances
+  after_destroy :reverse_account_balances
 
   scope :opening_balances, -> { where(opening_balance: true) }
 
@@ -80,6 +82,45 @@ class Transaction < ApplicationRecord
 
     def unmark_parent_if_last_child
       parent_transaction.update(split: false) if parent_transaction.child_transactions.empty?
+    end
+
+    def transfer_account_balances
+      return unless saved_change_to_amount_minor? || saved_change_to_src_account_id? || saved_change_to_dest_account_id?
+
+      previous_amount = amount_minor_before_last_save || 0
+      previous_src_id = src_account_id_before_last_save
+      previous_dest_id = dest_account_id_before_last_save
+
+      Account.transaction do
+        # Reverse the old posting (only when accounts existed before this save)
+        if previous_src_id.present? && previous_dest_id.present?
+          previous_src = Account.find_by(id: previous_src_id)
+          previous_dest = Account.find_by(id: previous_dest_id)
+          Account.update_counters(previous_src.id, balance_minor: previous_amount) if previous_src&.real? && !previous_src.balance_minor.nil?
+          Account.update_counters(previous_dest.id, balance_minor: -previous_amount) if previous_dest&.real? && !previous_dest.balance_minor.nil?
+        end
+
+        # Apply the new posting
+        if src_account_id.present? && dest_account_id.present?
+          Account.update_counters(src_account_id, balance_minor: -amount_minor) if src_account&.real? && !src_account.balance_minor.nil?
+          Account.update_counters(dest_account_id, balance_minor: amount_minor) if dest_account&.real? && !dest_account.balance_minor.nil?
+        end
+      end
+    end
+
+    def reverse_account_balances
+      # As the amount could have changed before destruction, the persisted value with amount_minor_was is used
+      return if amount_minor_was.nil?
+
+      Account.transaction do
+        if src_account.present? && src_account.real? && !src_account.balance_minor.nil?
+          Account.update_counters(src_account_id, balance_minor: amount_minor_was)
+        end
+
+        if dest_account.present? && dest_account.real? && !dest_account.balance_minor.nil?
+          Account.update_counters(dest_account_id, balance_minor: -amount_minor_was)
+        end
+      end
     end
 
     def src_account_accessible_to_user
