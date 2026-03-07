@@ -181,6 +181,7 @@ class Account < ApplicationRecord
 
       if should_destroy
         opening_balance_transaction.destroy! if opening_balance_transaction.persisted?
+        @opening_balance_transaction = nil
       else
         opening_balance_transaction.save!
       end

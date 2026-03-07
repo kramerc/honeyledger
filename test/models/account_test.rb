@@ -312,6 +312,8 @@ class AccountTest < ActiveSupport::TestCase
     assert_difference("Transaction.count", -1) do
       @account.save!
     end
+
+    assert_nil @account.opening_balance_transaction, "memoized opening_balance_transaction should be cleared after destroy"
   end
 
   test "opening balance transaction is destroyed if amount is zero" do
