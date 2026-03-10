@@ -96,14 +96,14 @@ class Transaction < ApplicationRecord
         if previous_src_id.present? && previous_dest_id.present?
           previous_src = Account.find_by(id: previous_src_id)
           previous_dest = Account.find_by(id: previous_dest_id)
-          Account.update_counters(previous_src.id, balance_minor: previous_amount) if previous_src&.real? && !previous_src.balance_minor.nil?
-          Account.update_counters(previous_dest.id, balance_minor: -previous_amount) if previous_dest&.real? && !previous_dest.balance_minor.nil?
+          Account.update_counters(previous_src.id, balance_minor: previous_amount) if previous_src&.real?
+          Account.update_counters(previous_dest.id, balance_minor: -previous_amount) if previous_dest&.real?
         end
 
         # Apply the new posting
         if src_account_id.present? && dest_account_id.present?
-          Account.update_counters(src_account_id, balance_minor: -amount_minor) if src_account&.real? && !src_account.balance_minor.nil?
-          Account.update_counters(dest_account_id, balance_minor: amount_minor) if dest_account&.real? && !dest_account.balance_minor.nil?
+          Account.update_counters(src_account_id, balance_minor: -amount_minor) if src_account&.real?
+          Account.update_counters(dest_account_id, balance_minor: amount_minor) if dest_account&.real?
         end
       end
     end
@@ -113,11 +113,11 @@ class Transaction < ApplicationRecord
       return if amount_minor_was.nil?
 
       Account.transaction do
-        if src_account.present? && src_account.real? && !src_account.balance_minor.nil?
+        if src_account.present? && src_account.real?
           Account.update_counters(src_account_id, balance_minor: amount_minor_was)
         end
 
-        if dest_account.present? && dest_account.real? && !dest_account.balance_minor.nil?
+        if dest_account.present? && dest_account.real?
           Account.update_counters(dest_account_id, balance_minor: -amount_minor_was)
         end
       end

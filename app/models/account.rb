@@ -73,7 +73,7 @@ class Account < ApplicationRecord
 
     deposits = Transaction.where(dest_account: self).sum(:amount_minor)
     withdrawals = Transaction.where(src_account: self).sum(:amount_minor)
-    update(balance_minor: deposits - withdrawals)
+    update_column(:balance_minor, deposits - withdrawals)
   end
 
   def empty?
