@@ -85,24 +85,31 @@ class Transaction < ApplicationRecord
     end
 
     def transfer_account_balances
-      return unless saved_change_to_amount_minor? || saved_change_to_src_account_id? || saved_change_to_dest_account_id?
+      return unless saved_change_to_amount_minor? || saved_change_to_fx_amount_minor? ||
+                    saved_change_to_src_account_id? || saved_change_to_dest_account_id?
 
-      previous_amount = amount_minor_before_last_save || 0
+      previous_amount_minor = amount_minor_before_last_save || 0
+      previous_fx_amount_minor = fx_amount_minor_before_last_save
+      # For the src side, use the FX amount if the previous posting had one
+      previous_src_amount_minor = previous_fx_amount_minor.nil? ? previous_amount_minor : previous_fx_amount_minor
       previous_src_id = src_account_id_before_last_save
       previous_dest_id = dest_account_id_before_last_save
+
+      # For the src side, use fx_amount_minor when present (src account holds a different currency)
+      src_amount_minor = fx_amount_minor.nil? ? amount_minor : fx_amount_minor
 
       Account.transaction do
         # Reverse the old posting (only when accounts existed before this save)
         if previous_src_id.present? && previous_dest_id.present?
           previous_src = Account.find_by(id: previous_src_id)
           previous_dest = Account.find_by(id: previous_dest_id)
-          Account.update_counters(previous_src.id, balance_minor: previous_amount) if previous_src&.real?
-          Account.update_counters(previous_dest.id, balance_minor: -previous_amount) if previous_dest&.real?
+          Account.update_counters(previous_src.id, balance_minor: previous_src_amount_minor) if previous_src&.real?
+          Account.update_counters(previous_dest.id, balance_minor: -previous_amount_minor) if previous_dest&.real?
         end
 
         # Apply the new posting
         if src_account_id.present? && dest_account_id.present?
-          Account.update_counters(src_account_id, balance_minor: -amount_minor) if src_account&.real?
+          Account.update_counters(src_account_id, balance_minor: -src_amount_minor) if src_account&.real?
           Account.update_counters(dest_account_id, balance_minor: amount_minor) if dest_account&.real?
         end
       end
@@ -115,8 +122,11 @@ class Transaction < ApplicationRecord
       persisted_src = Account.find_by(id: src_account_id_was)
       persisted_dest = Account.find_by(id: dest_account_id_was)
 
+      # For the src side, reverse by the FX amount if the transaction had one
+      src_amount_minor_was = fx_amount_minor_was.nil? ? amount_minor_was : fx_amount_minor_was
+
       Account.transaction do
-        Account.update_counters(persisted_src.id, balance_minor: amount_minor_was) if persisted_src&.real?
+        Account.update_counters(persisted_src.id, balance_minor: src_amount_minor_was) if persisted_src&.real?
         Account.update_counters(persisted_dest.id, balance_minor: -amount_minor_was) if persisted_dest&.real?
       end
     end

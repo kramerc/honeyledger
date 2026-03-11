@@ -18,6 +18,12 @@ asset_account:
   name: Asset Account
   kind: asset
 
+eur_asset_account:
+  user: one
+  currency: eur
+  name: EUR Asset Account
+  kind: asset
+
 liability_account:
   user: one
   currency: usd

@@ -348,6 +348,103 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal new_dest_balance + amount, new_dest.reload.balance_minor
   end
 
+
+  test "creating an FX transaction decrements src account by fx_amount_minor" do
+    eur_src = accounts(:eur_asset_account)
+    eur_src.reset_balance
+    dest = accounts(:expense_account)
+    dest.reset_balance
+    src_balance = eur_src.balance_minor
+    dest_balance = dest.balance_minor
+
+    Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: eur_src,
+      dest_account: dest,
+      amount_minor: 5000,
+      fx_amount_minor: 4600,
+      fx_currency: currencies(:eur),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_equal src_balance - 4600, eur_src.reload.balance_minor
+    assert_equal dest_balance + 5000, dest.reload.balance_minor
+  end
+
+  test "creating an FX transaction increments dest account by amount_minor not fx_amount_minor" do
+    eur_src = accounts(:eur_asset_account)
+    dest = accounts(:asset_account)
+    dest.reset_balance
+    dest_balance = dest.balance_minor
+
+    Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: eur_src,
+      dest_account: dest,
+      amount_minor: 5000,
+      fx_amount_minor: 4600,
+      fx_currency: currencies(:eur),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_equal dest_balance + 5000, dest.reload.balance_minor
+  end
+
+  test "destroying an FX transaction reverses src by fx_amount_minor and dest by amount_minor" do
+    eur_src = accounts(:eur_asset_account)
+    dest = accounts(:expense_account)
+
+    transaction = Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: eur_src,
+      dest_account: dest,
+      amount_minor: 5000,
+      fx_amount_minor: 4600,
+      fx_currency: currencies(:eur),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    eur_src.reset_balance
+    dest.reset_balance
+    src_balance = eur_src.balance_minor
+    dest_balance = dest.balance_minor
+
+    transaction.destroy!
+
+    assert_equal src_balance + 4600, eur_src.reload.balance_minor
+    assert_equal dest_balance - 5000, dest.reload.balance_minor
+  end
+
+  test "updating fx_amount_minor adjusts src account by the difference" do
+    eur_src = accounts(:eur_asset_account)
+    dest = accounts(:expense_account)
+
+    transaction = Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: eur_src,
+      dest_account: dest,
+      amount_minor: 5000,
+      fx_amount_minor: 4600,
+      fx_currency: currencies(:eur),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    eur_src.reset_balance
+    src_balance = eur_src.balance_minor
+
+    transaction.update!(fx_amount_minor: 4800)
+
+    assert_equal src_balance - 200, eur_src.reload.balance_minor
+  end
+
   test "validates src_account is accessible to user" do
     transaction = Transaction.new(
       user: users(:one),
