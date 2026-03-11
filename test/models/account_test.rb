@@ -79,6 +79,28 @@ class AccountTest < ActiveSupport::TestCase
     assert_not account.reset_balance
   end
 
+  test "reset_balance uses fx_amount_minor for withdrawals from src account" do
+    account = accounts(:eur_asset_account)
+    dest = accounts(:expense_account)
+
+    Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: account,
+      dest_account: dest,
+      amount_minor: 5000,
+      fx_amount_minor: 4600,
+      fx_currency: currencies(:eur),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    account.update_column(:balance_minor, 0)
+    account.reset_balance
+
+    assert_equal(-4600, account.balance_minor)
+  end
+
   test "linkable scope returns only asset and liability accounts" do
     linkable = Account.linkable
 

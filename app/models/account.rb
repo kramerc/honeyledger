@@ -72,7 +72,7 @@ class Account < ApplicationRecord
     return false if virtual?
 
     deposits = Transaction.where(dest_account: self).sum(:amount_minor)
-    withdrawals = Transaction.where(src_account: self).sum(:amount_minor)
+    withdrawals = Transaction.where(src_account: self).sum("COALESCE(fx_amount_minor, amount_minor)")
     update_column(:balance_minor, deposits - withdrawals)
   end
 
