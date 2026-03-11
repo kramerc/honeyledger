@@ -266,6 +266,24 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal original_balance - transaction.amount_minor, dest.reload.balance_minor
   end
 
+  test "destroying a transaction with reassigned accounts in-memory reverses balances on original accounts" do
+    transaction = transactions(:one)
+    original_src = transaction.src_account
+    original_dest = transaction.dest_account
+    original_src.reset_balance
+    original_dest.reset_balance
+    original_src_balance = original_src.balance_minor
+    original_dest_balance = original_dest.balance_minor
+
+    # Reassign accounts in-memory without saving — destroy! should still reverse the originally persisted accounts
+    transaction.src_account = accounts(:liability_account)
+    transaction.dest_account = accounts(:asset_account)
+    transaction.destroy!
+
+    assert_equal original_src_balance + transaction.amount_minor, original_src.reload.balance_minor
+    assert_equal original_dest_balance - transaction.amount_minor, original_dest.reload.balance_minor
+  end
+
   test "creating a transaction decrements src account balance_minor" do
     src = accounts(:asset_account)
     src.reset_balance

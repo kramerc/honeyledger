@@ -109,17 +109,15 @@ class Transaction < ApplicationRecord
     end
 
     def reverse_account_balances
-      # As the amount could have changed before destruction, the persisted value with amount_minor_was is used
+      # Use persisted (_was) values so reassigning associations in-memory before destroy! doesn't reverse the wrong accounts
       return if amount_minor_was.nil?
 
-      Account.transaction do
-        if src_account.present? && src_account.real?
-          Account.update_counters(src_account_id, balance_minor: amount_minor_was)
-        end
+      persisted_src = Account.find_by(id: src_account_id_was)
+      persisted_dest = Account.find_by(id: dest_account_id_was)
 
-        if dest_account.present? && dest_account.real?
-          Account.update_counters(dest_account_id, balance_minor: -amount_minor_was)
-        end
+      Account.transaction do
+        Account.update_counters(persisted_src.id, balance_minor: amount_minor_was) if persisted_src&.real?
+        Account.update_counters(persisted_dest.id, balance_minor: -amount_minor_was) if persisted_dest&.real?
       end
     end
 
