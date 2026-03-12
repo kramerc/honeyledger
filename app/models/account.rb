@@ -2,6 +2,9 @@ class Account < ApplicationRecord
   belongs_to :user
   belongs_to :currency, optional: true
 
+  # Initialize the balance except for virtual accounts, as those don't have balances.
+  before_create -> { self.balance_minor = self.balance_minor.to_i }, unless: :virtual?
+
   # Transactions (source, destination, opening balance)
   before_destroy -> { opening_balance_transaction.destroy! }, if: -> { opening_balance_transaction.present? && empty? }
   has_many :src_transactions, class_name: "Transaction", foreign_key: "src_account_id", dependent: :restrict_with_error
@@ -63,6 +66,14 @@ class Account < ApplicationRecord
   def opening_balance_transacted_at
     return @opening_balance_transacted_at if instance_variable_defined?(:@opening_balance_transacted_at)
     opening_balance_transaction&.transacted_at
+  end
+
+  def reset_balance
+    return false if virtual?
+
+    deposits = Transaction.where(dest_account: self).sum(:amount_minor)
+    withdrawals = Transaction.where(src_account: self).sum("COALESCE(fx_amount_minor, amount_minor)")
+    update_column(:balance_minor, deposits - withdrawals)
   end
 
   def empty?

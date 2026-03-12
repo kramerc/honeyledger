@@ -5,6 +5,22 @@ class AccountTest < ActiveSupport::TestCase
     @account = accounts(:one)
   end
 
+  test "initializes balance_minor to 0 for new real accounts" do
+    account = Account.new(user: users(:one), currency: currencies(:usd), kind: :asset, name: "Test")
+
+    account.save!
+
+    assert_equal 0, account.balance_minor
+  end
+
+  test "doesn't initialize balance_minor to 0 for new virtual accounts" do
+    account = Account.new(user: users(:one), kind: :revenue, name: "Virtual", virtual: true)
+
+    account.save!
+
+    assert_nil account.balance_minor
+  end
+
   test "opening_balance_for finds existing opening balance account" do
     account = accounts(:opening_balance_expense)
 
@@ -43,6 +59,46 @@ class AccountTest < ActiveSupport::TestCase
         end
       end
     end
+  end
+
+  test "reset_balance recalculates balance from sum of transactions" do
+    account = accounts(:asset_account)
+    deposits = Transaction.where(dest_account: account).sum(:amount_minor)
+    withdrawals = Transaction.where(src_account: account).sum(:amount_minor)
+    expected = deposits - withdrawals
+
+    account.update!(balance_minor: 0)
+    account.reset_balance
+
+    assert_equal expected, account.balance_minor
+  end
+
+  test "reset_balance does not recalculate balances for virtual accounts" do
+    account = accounts(:opening_balance_expense)
+
+    assert_not account.reset_balance
+  end
+
+  test "reset_balance uses fx_amount_minor for withdrawals from src account" do
+    account = accounts(:eur_asset_account)
+    dest = accounts(:expense_account)
+
+    Transaction.create!(
+      user: users(:one),
+      category: categories(:one),
+      src_account: account,
+      dest_account: dest,
+      amount_minor: 5000,
+      fx_amount_minor: 4600,
+      fx_currency: currencies(:eur),
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    account.update_column(:balance_minor, 0)
+    account.reset_balance
+
+    assert_equal(-4600, account.balance_minor)
   end
 
   test "linkable scope returns only asset and liability accounts" do

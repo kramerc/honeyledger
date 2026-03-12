@@ -15,6 +15,15 @@
   </div>
 
   <div>
+    <strong>Balance:</strong>
+    <% if account.balance_minor.present? %>
+      <%= amount_to_currency(account.balance_minor, account.currency) %>
+    <% else %>
+      N/A
+    <% end %>
+  </div>
+
+  <div>
     <strong>Opening Balance:</strong>
     <% if account.opening_balance_transaction %>
       <%= amount_to_currency(account.opening_balance_amount_minor, account.currency) %>
