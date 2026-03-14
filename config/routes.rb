@@ -1,7 +1,9 @@
 Rails.application.routes.draw do
   devise_for :users
 
-  resources :accounts
+  resources :accounts do
+    resources :transactions, only: %i[ index ]
+  end
   resources :categories
   resources :currencies
   resources :transactions
@@ -14,7 +16,7 @@ Rails.application.routes.draw do
         delete :unlink
       end
     end
-    resource :connection, only: %i[new create show destroy] do
+    resource :connection, only: %i[ new create show destroy ] do
       member do
         post :refresh
       end

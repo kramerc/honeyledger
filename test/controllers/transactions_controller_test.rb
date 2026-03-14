@@ -14,6 +14,29 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "should get index scoped to account" do
+    account = accounts(:asset_account)
+    get account_transactions_url(account)
+    assert_response :success
+  end
+
+  test "account-scoped index only returns transactions for that account" do
+    account = accounts(:asset_account)
+    get account_transactions_url(account)
+    assert_response :success
+
+    # Verify the response contains a transaction that involves this account
+    assert_match @user.transactions.find_by(src_account: account)&.description ||
+                 @user.transactions.find_by(dest_account: account)&.description,
+                 response.body
+  end
+
+  test "account-scoped index returns 404 for account not belonging to user" do
+    other_user_account = accounts(:two)
+    get account_transactions_url(other_user_account)
+    assert_response :not_found
+  end
+
   test "should get new" do
     get new_transaction_url
 

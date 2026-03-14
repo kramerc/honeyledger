@@ -54,7 +54,7 @@ export default class extends Controller {
     const select = this.destAccountTarget
     const option = select.options[select.selectedIndex]
     const currency = option ? option.dataset.currency || "" : ""
-    this.currencyTarget.textContent = currency
+    this.currencyTarget.textContent = currency || "—"
   }
 
   updateTypeFromSelectedAccounts() {

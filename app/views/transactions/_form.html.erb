@@ -4,19 +4,19 @@
   transactions__row_target: "form"
 }, html: { autocomplete: "off" }) do |form| %>
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
-    <div>
+    <div data-label="Date">
       <%= form.datetime_field :transacted_at, include_seconds: false %>
     </div>
 
-    <div>
+    <div data-label="Type">
       <%= transaction_type_indicator(transaction, data: { transactions__form_target: "type" }) %>
     </div>
 
-    <div>
+    <div data-label="Description">
       <%= form.text_field :description %>
     </div>
 
-    <div>
+    <div data-label="From">
       <%= form.select :src_account_id,
         grouped_account_options_for_select(src_accounts, Account::SOURCEABLE, selected_key: transaction.src_account_id),
         { include_blank: "From…" },
@@ -26,7 +26,7 @@
         } %>
     </div>
 
-    <div>
+    <div data-label="To">
       <%= form.select :dest_account_id,
         grouped_account_options_for_select(dest_accounts, Account::DESTINABLE, selected_key: transaction.dest_account_id),
         { include_blank: "To…" },
@@ -36,19 +36,19 @@
         } %>
     </div>
 
-    <div class="numeric">
+    <div data-label="Amount" class="numeric">
       <%= form.text_field :amount, data: { transactions__form_target: "amount" } %>
     </div>
 
-    <div data-transactions--form-target="currency">
-      <%= transaction.currency&.code %>
+    <div data-label="Currency" data-transactions--form-target="currency">
+      <%= transaction.currency&.code.presence || "—" %>
     </div>
 
-    <div>
+    <div data-label="Category">
       <%= form.select :category_id, options_from_collection_for_select(categories, :id, :name), include_blank: true %>
     </div>
 
-    <div class="boolean">
+    <div data-label="Cleared" class="boolean">
       <%= form.check_box :cleared %>
     </div>
 
