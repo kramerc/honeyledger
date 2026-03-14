@@ -1,47 +1,105 @@
 /* Transactions table */
 .transactions {
-  border-left: 1px solid #ddd;
-  border-top: 1px solid #ddd;
   width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
 }
 
 /* Table header row */
 .transactions .row.header {
-  background-color: #f2f2f2;
-  font-weight: bold;
+  background-color: var(--honey-pale);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-text);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.transactions .row.header > div {
+  white-space: nowrap;
 }
 
 /* Table row */
 .transactions .row {
   display: grid;
   grid-template-columns:
-    250px                   /* Date */
-    130px                   /* Type */
-    minmax(100px, 1fr)      /* Description */
-    175px                   /* From */
-    175px                   /* To */
-    110px                   /* Amount */
-    90px                    /* Currency */
-    140px                   /* Category */
-    90px                    /* Cleared */
-    170px;                  /* Actions */
+    minmax(140px, 2fr)      /* Date */
+    minmax(90px,  1.2fr)    /* Type */
+    minmax(80px,  2fr)      /* Description */
+    minmax(90px,  1.5fr)    /* From */
+    minmax(90px,  1.5fr)    /* To */
+    minmax(75px,  1.2fr)    /* Amount */
+    minmax(60px,  0.8fr)    /* Currency */
+    minmax(80px,  1.3fr)    /* Category */
+    minmax(60px,  0.7fr)    /* Cleared */
+    minmax(120px, 1.6fr);   /* Actions */
   gap: 0;
   align-items: stretch;
 }
 
-.transactions .row:hover:not(.header) {
-  background-color: #f9f9f9;
+
+.transactions .transaction:nth-child(even) .row.show {
+  background-color: var(--honey-pale);
+}
+
+/* Medium screens: drop Description, Currency, Category, Cleared */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .transactions .row {
+    grid-template-columns:
+      minmax(140px, 2fr)      /* Date */
+      minmax(90px,  1.2fr)    /* Type */
+                              /* Description — hidden */
+      minmax(90px,  1.5fr)    /* From */
+      minmax(90px,  1.5fr)    /* To */
+      minmax(75px,  1.2fr)    /* Amount */
+                              /* Currency — hidden */
+                              /* Category — hidden */
+                              /* Cleared — hidden */
+      minmax(120px, 1.6fr);   /* Actions */
+  }
+
+  .transactions .row > div:nth-child(3),
+  .transactions .row > div:nth-child(7),
+  .transactions .row > div:nth-child(8),
+  .transactions .row > div:nth-child(9) {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .transactions .row:hover:not(.header) {
+    background-color: var(--honey-light);
+  }
 }
 
 /* Cells */
 .transactions .row > div {
-  border-right: 1px solid #ddd;
-  border-bottom: 1px solid #ddd;
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
   border-left: 0;
   border-top: 0;
-  padding: 8px;
+  padding: 7px 10px;
   display: flex;
   align-items: center;
+  color: var(--bark-medium);
+  font-size: 0.875rem;
+}
+
+.transactions .row > div:last-child {
+  border-right: 0;
+}
+
+/* Cells that must not wrap */
+.transactions .row > div:nth-child(1),  /* Date */
+.transactions .row > div:nth-child(2),  /* Type */
+.transactions .row > div:nth-child(6),  /* Amount */
+.transactions .row > div:nth-child(7),  /* Currency */
+.transactions .row > div:nth-child(9),  /* Cleared */
+.transactions .row > div:nth-child(10) /* Actions */ {
+  white-space: nowrap;
 }
 
 .transactions .numeric {
@@ -52,11 +110,31 @@
 
 .transactions .boolean {
   justify-content: center;
+  color: var(--honey-dark);
 }
 
 .transactions .actions {
-  gap: 6px;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
+
+.transactions .actions a {
+  color: var(--honey-dark);
+  text-decoration: none;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.transactions .actions a:hover {
+  color: var(--honey);
+  text-decoration: underline;
+}
+
+/* Transaction type badges */
+.tx-type { font-size: 0.8rem; font-weight: 600; }
+.tx-type--deposit    { color: #15803D; }
+.tx-type--withdrawal { color: #DC2626; }
+.tx-type--transfer   { color: var(--bark-light); }
 
 /* Forms */
 .transactions form {
@@ -69,7 +147,30 @@
   width: 100%;
   box-sizing: border-box;
   align-items: stretch;
-  padding: 4px;
+  padding: 4px 6px;
+  background-color: var(--cream);
+  color: var(--bark);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.transactions form input[type="submit"],
+.transactions form button[type="submit"] {
+  padding: 4px 12px;
+  background-color: var(--honey-dark);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.transactions form input[type="submit"]:hover,
+.transactions form button[type="submit"]:hover {
+  background-color: var(--honey);
 }
 
 .transactions form .numeric input {
@@ -80,43 +181,225 @@
 /* Error messages */
 .transactions form .error {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   right: 0;
-  width: 300px;
+  width: 280px;
+  z-index: 10;
 
-  background-color: #f8d7da;
-  color: #721c24;
-  padding: 4px 8px;
-  border: 1px solid #f5c6cb;
+  background-color: light-dark(#fff5f5, #3b0d0d);
+  color: light-dark(#7f1d1d, #fca5a5);
+  padding: 12px 16px 12px 14px;
+  border: 1px solid light-dark(#fca5a5, rgba(220, 38, 38, 0.5));
+  border-left: 4px solid #dc2626;
   border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .transactions form .error .close {
   position: absolute;
   top: 8px;
-  right: 14px;
+  right: 8px;
   background: none;
-  border: 1px solid #721c24;
-  border-radius: 8px;
-  color: #721c24;
+  border: none;
+  color: inherit;
   cursor: pointer;
-  font-size: 32px;
+  font-size: 16px;
   line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  opacity: 0.6;
 }
 
 .transactions form .error .close:hover {
-  background-color: #721c24;
-  color: #f8d7da;
+  background-color: rgba(0, 0, 0, 0.08);
+  opacity: 1;
 }
 
 .transactions form .error h4 {
-  margin: 1em 0;
+  margin: 0 24px 8px 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.transactions form .error ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.transactions form .error ul li {
+  font-size: 0.85rem;
+  margin-bottom: 2px;
 }
 
 /* Loading state */
 .transaction .row > .loading {
   grid-column: 1 / -1;
-  padding: 9px 8px;
+  padding: 9px 10px;
+  color: var(--bark-light);
+  font-style: italic;
+}
+
+/* ========== Mobile transactions (< 1024px) ========== */
+@media (max-width: 1023px) {
+  .transactions {
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Hide desktop header row */
+  .transactions .row.header {
+    display: none;
+  }
+
+  /* Stack cells as cards */
+  .transactions .row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .transactions .row.show {
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    background-color: var(--cream);
+  }
+
+  .transactions .transaction:nth-child(even) .row.show {
+    background-color: var(--cream);
+  }
+
+  .transactions .row > div {
+    border: none;
+    padding: 3px 0;
+    font-size: 0.875rem;
+  }
+
+  /* Show data-label as an inline label */
+  .transactions .row.show > div[data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--accent-text);
+    min-width: 80px;
+    display: inline;
+  }
+
+  /* Amount should still be left-aligned in card view */
+  .transactions .row.show .numeric {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* Cleared sits inline */
+  .transactions .row.show .boolean {
+    justify-content: flex-start;
+  }
+
+  /* Actions row: horizontal at bottom */
+  .transactions .row.show .actions {
+    padding-top: 6px;
+    margin-top: 4px;
+    border-top: 1px solid var(--divider);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  /* Allow cells to wrap normally */
+  .transactions .row > div:nth-child(1),
+  .transactions .row > div:nth-child(2),
+  .transactions .row > div:nth-child(6),
+  .transactions .row > div:nth-child(7),
+  .transactions .row > div:nth-child(9),
+  .transactions .row > div:nth-child(10) {
+    white-space: normal;
+  }
+
+  /* Form: single column with labels above inputs */
+  .transactions form .row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 14px;
+    margin-bottom: 10px;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+  }
+
+  .transactions form .row > div {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    margin-bottom: 12px;
+    white-space: normal;
+  }
+
+  /* Label above each input */
+  .transactions form .row > div[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--accent-text);
+    margin-bottom: 4px;
+    text-align: left;
+  }
+
+  /* Hide auto-computed type field — it's not user input */
+  .transactions form .row > div[data-label="Type"] {
+    display: none;
+  }
+
+  /* Currency: inline row */
+  .transactions form .row > div[data-label="Currency"] {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+    color: var(--bark-medium);
+  }
+
+  .transactions form .row > div[data-label="Currency"]::before {
+    content: attr(data-label) ": ";
+    margin-bottom: 0;
+  }
+
+  /* Cleared: checkbox inline with label */
+  .transactions form .row > div[data-label="Cleared"] {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .transactions form .row > div[data-label="Cleared"]::before {
+    margin-bottom: 0;
+  }
+
+  /* Inputs full width */
+  .transactions form .row input[type="text"],
+  .transactions form .row input[type="datetime-local"],
+  .transactions form .row select {
+    width: 100%;
+    font-size: 1rem;
+    padding: 8px 10px;
+  }
+
+  /* Actions span full width */
+  .transactions form .row > div.actions {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 0;
+    margin-top: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--divider);
+  }
 }
 
 /* Editing action */

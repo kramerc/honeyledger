@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <title><%= content_for(:title) || "Honeyledger" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -19,29 +19,80 @@
     <link rel="apple-touch-icon" href="/icon.png">
 
     <%# Includes all stylesheet files in app/assets/stylesheets %>
-    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag :app, "data-turbo-track": Rails.env.production? ? "reload" : nil %>
     <%= javascript_importmap_tags %>
+    <%# Apply saved theme and sidebar width before first paint to avoid a flash of default styles %>
+    <script>
+      try {
+        const theme = localStorage.getItem("theme");
+        if (theme && theme !== "auto") {
+          document.documentElement.setAttribute("data-theme", theme);
+        }
+
+        const sidebarWidth = localStorage.getItem("sidebarWidth");
+        if (sidebarWidth) {
+          document.documentElement.style.setProperty("--sidebar-width", sidebarWidth);
+        }
+      } catch (e) {
+        // localStorage is unavailable
+      }
+    </script>
   </head>
 
-  <body>
-    <nav>
-      <%= link_to "Home", root_path %> |
-      <% if user_signed_in? %>
-        <%= link_to "Accounts", accounts_path %> |
-        <%= link_to "Categories", categories_path %> |
-        <%= link_to "Transactions", transactions_path %> |
-        <%= link_to "Currencies", currencies_path %> |
-        <%= render "shared/simplefin_link" %> |
-        <%= link_to "Logout", destroy_user_session_path, data: { turbo_method: :delete } %>
-      <% else %>
-        <%= link_to "Login", new_user_session_path %> |
-        <%= link_to "Sign Up", new_user_registration_path %>
-      <% end %>
-    </nav>
+  <body data-controller="sidebar-toggle">
+    <header data-controller="theme-toggle">
+      <button class="sidebar-menu-btn" data-action="click->sidebar-toggle#toggle" aria-label="Toggle menu">☰</button>
+      <h1>🍯 Honeyledger</h1>
+      <button class="theme-toggle-btn" data-theme-toggle-target="button" data-action="click->theme-toggle#toggle" aria-label="Toggle theme">🖥️</button>
+    </header>
 
-    <p class="notice"><%= notice %></p>
-    <p class="alert"><%= alert %></p>
+    <div class="layout" data-controller="sidebar-resizer">
+      <div class="sidebar-overlay" data-sidebar-toggle-target="overlay" data-action="click->sidebar-toggle#close"></div>
+      <aside class="sidebar" data-sidebar-resizer-target="sidebar" data-sidebar-toggle-target="sidebar">
+        <nav role="navigation">
+          <ul>
+            <li><%= nav_link_to "Home", root_path %></li>
+            <% if user_signed_in? %>
+              <li><%= nav_link_to "Accounts", accounts_path %></li>
+              <li>
+                <% if current_user.simplefin_connection.present? %>
+                  <%= nav_link_to "Manage SimpleFIN", simplefin_connection_path %>
+                <% else %>
+                  <%= nav_link_to "Connect SimpleFIN", new_simplefin_connection_path %>
+                <% end %>
+              </li>
+              <li><%= nav_link_to "Categories", categories_path %></li>
+              <li><%= nav_link_to "Transactions", transactions_path %></li>
+              <li><%= nav_link_to "Currencies", currencies_path %></li>
+              <li><%= nav_link_to "Logout", destroy_user_session_path, data: { turbo_method: :delete, turbo_confirm: "Are you sure you want to log out?" } %></li>
+            <% else %>
+              <li><%= nav_link_to "Login", new_user_session_path %></li>
+              <li><%= nav_link_to "Sign Up", new_user_registration_path %></li>
+            <% end %>
+          </ul>
 
-    <%= yield %>
+          <% if user_signed_in? %>
+            <%= render 'accounts/sidebar_nav' %>
+          <% end %>
+        </nav>
+      </aside>
+      <div class="sidebar-resizer" data-action="mousedown->sidebar-resizer#startResize"></div>
+
+      <main>
+        <% if notice.present? %>
+          <div class="flash flash--notice" data-controller="flash">
+            <span><%= notice %></span>
+            <button class="flash__close" data-action="click->flash#dismiss" aria-label="Dismiss">✕</button>
+          </div>
+        <% end %>
+        <% if alert.present? %>
+          <div class="flash flash--alert" data-controller="flash">
+            <span><%= alert %></span>
+            <button class="flash__close" data-action="click->flash#dismiss" aria-label="Dismiss">✕</button>
+          </div>
+        <% end %>
+        <%= yield %>
+      </main>
+    </div>
   </body>
 </html>
