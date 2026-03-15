@@ -11,7 +11,7 @@ class TransactionsHelperTest < ActionView::TestCase
     result = transaction_type_indicator(transaction)
 
     assert_match(/↓ Withdrawal/, result)
-    assert_match(/color: red/, result)
+    assert_match(/tx-type--withdrawal/, result)
   end
 
   test "transaction_type_indicator for deposit" do
@@ -22,7 +22,7 @@ class TransactionsHelperTest < ActionView::TestCase
     result = transaction_type_indicator(transaction)
 
     assert_match(/↑ Deposit/, result)
-    assert_match(/color: green/, result)
+    assert_match(/tx-type--deposit/, result)
   end
 
   test "transaction_type_indicator for transfer" do
@@ -33,7 +33,7 @@ class TransactionsHelperTest < ActionView::TestCase
     result = transaction_type_indicator(transaction)
 
     assert_match(/⇄ Transfer/, result)
-    assert_match(/color: gray/, result)
+    assert_match(/tx-type--transfer/, result)
   end
 
   test "transaction_type_indicator supports html options" do

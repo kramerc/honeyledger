@@ -5,8 +5,13 @@ class TransactionsController < ApplicationController
 
   # GET /transactions or /transactions.json
   def index
-    @transactions = current_user.transactions.includes(:category, :src_account, :dest_account, :currency, :fx_currency).order(transacted_at: :desc, created_at: :desc)
     @new_transaction = build_new_transaction
+
+    @transactions = current_user.transactions.includes(:category, :src_account, :dest_account, :currency, :fx_currency).order(transacted_at: :desc, created_at: :desc)
+    if params[:account_id].present?
+      @account = current_user.accounts.find_by!(id: params[:account_id])
+      @transactions = @transactions.where(src_account_id: @account.id).or(@transactions.where(dest_account_id: @account.id))
+    end
   end
 
   # GET /transactions/1 or /transactions/1.json

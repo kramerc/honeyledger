@@ -1,0 +1,16 @@
+<h3>Accounts</h3>
+<% current_user.accounts.real.includes(:currency).order(:kind, :name).group_by(&:kind).each do |kind, accounts| %>
+  <% next if kind.blank? %>
+  <h4><%= kind.humanize.pluralize %></h4>
+  <ul>
+    <% accounts.each do |account| %>
+      <li class="account">
+        <%= account_nav_link_to account %>
+      </li>
+    <% end %>
+  </ul>
+<% end %>
+
+<ul>
+  <li><%= nav_link_to "+ Add Account", new_account_path %></li>
+</ul>
