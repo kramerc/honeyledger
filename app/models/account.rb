@@ -146,10 +146,14 @@ class Account < ApplicationRecord
         amount_decimal = begin; BigDecimal(@opening_balance_amount); rescue ArgumentError, TypeError; nil; end
         # Blank/zero: transaction will be destroyed in after_save; skip account assignment
         return if @opening_balance_amount.blank? || (amount_decimal && amount_decimal.zero?)
-        # Unparseable (e.g. "hello"): leave raw amount so Minorable validates it; skip account assignment
-        return if amount_decimal.nil?
-        negative = amount_decimal.negative?
-        t.amount = amount_decimal.abs
+        if amount_decimal.nil?
+          # Unparseable (e.g. "hello"): leave raw amount so Minorable validates it
+          # Determine direction from existing account roles (or default to positive if new)
+          negative = t.src_account_id == id
+        else
+          negative = amount_decimal.negative?
+          t.amount = amount_decimal.abs
+        end
       else
         # Derive direction from the existing account roles. Amount_minor is now
         # always stored as a positive value so its sign cannot be used.

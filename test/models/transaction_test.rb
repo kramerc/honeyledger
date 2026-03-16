@@ -529,6 +529,34 @@ class TransactionTest < ActiveSupport::TestCase
     assert_not transaction.has_fx?
   end
 
+  test "src_account is required for opening balance transactions" do
+    t = Transaction.new(
+      user: users(:two),
+      dest_account: accounts(:asset_account_with_opening_balance),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: 1.month.ago,
+      opening_balance: true
+    )
+
+    assert t.invalid?
+    assert_includes t.errors[:src_account], I18n.t("errors.messages.required")
+  end
+
+  test "dest_account is required for opening balance transactions" do
+    t = Transaction.new(
+      user: users(:two),
+      src_account: accounts(:opening_balance_revenue),
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: 1.month.ago,
+      opening_balance: true
+    )
+
+    assert t.invalid?
+    assert_includes t.errors[:dest_account], I18n.t("errors.messages.required")
+  end
+
   test "opening_balance_target_account returns nil for a regular transaction" do
     assert_nil transactions(:one).opening_balance_target_account
   end
