@@ -48,7 +48,7 @@ Used by `Transaction`, `Simplefin::Account`, and `Simplefin::Transaction`.
 1. **`lib/simplefin_client.rb`** (`SimplefinClient`) — HTTParty wrapper. `claim(token)` exchanges a setup token for a persistent access URL; `accounts(start_date:)` fetches raw account and transaction data.
 
 2. **`app/models/simplefin/`** — Three models:
-   - `Simplefin::Connection` — Stores bearer URL per user; `refresh` enqueues `Simplefin::RefreshJob`
+   - `Simplefin::Connection` — Stores access URL (basic-auth credentials in URL) per user; `refresh` enqueues `Simplefin::RefreshJob`
    - `Simplefin::Account` — Raw account data; optional `ledger_account_id` links to app `Account`; linking triggers `enqueue_import`; `suggested_opening_balance` computes a starting balance from historical transactions
    - `Simplefin::Transaction` — Raw transaction records linked to app `Transaction` via polymorphic `sourceable`
 
@@ -72,7 +72,7 @@ Turbo Frames for partial page updates, Turbo Streams for inline updates (e.g., `
 
 ### Authorization Pattern
 
-All controllers use `before_action :authenticate_user!`. All queries are scoped to `current_user` to prevent cross-user data access.
+Controllers that expose user-owned financial data use `before_action :authenticate_user!`, and their queries are scoped to `current_user` to prevent cross-user data access. Some controllers are intentionally public (for example, `HomeController` and `CurrenciesController`) and do not require authentication because they only serve non-user-specific or informational data.
 
 ## Testing
 
