@@ -142,7 +142,8 @@
 }
 
 /* Hide form labels on desktop — still accessible to screen readers */
-.transactions form .row > div > label {
+.transactions form .row > div > label,
+.transactions form .row > div > .field-label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -353,7 +354,8 @@
   }
 
   /* Label above each input */
-  .transactions form .row > div > label {
+  .transactions form .row > div > label,
+  .transactions form .row > div > .field-label {
     position: static;
     width: auto;
     height: auto;
@@ -382,11 +384,11 @@
     color: var(--bark-medium);
   }
 
-  .transactions form .row > div.field-currency > label {
+  .transactions form .row > div.field-currency > .field-label {
     margin-bottom: 0;
   }
 
-  .transactions form .row > div.field-currency > label::after {
+  .transactions form .row > div.field-currency > .field-label::after {
     content: ":";
   }
 
