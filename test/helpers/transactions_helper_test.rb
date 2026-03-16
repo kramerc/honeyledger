@@ -43,7 +43,8 @@ class TransactionsHelperTest < ActionView::TestCase
 
     result = transaction_type_indicator(transaction, class: "custom-class")
 
-    assert_match(/class="custom-class"/, result)
+    assert_match(/tx-type tx-type--transfer/, result)
+    assert_match(/custom-class/, result)
   end
 
   test "transaction_amount_with_currency formats amount with currency" do
