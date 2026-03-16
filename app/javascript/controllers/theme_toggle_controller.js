@@ -13,12 +13,20 @@ export default class extends Controller {
 
   toggle() {
     const next = CYCLE[this.savedTheme]
-    localStorage.setItem("theme", next)
+    try {
+      localStorage.setItem("theme", next)
+    } catch (error) {
+      // Ignore storage errors and still apply the theme
+    }
     this.applyTheme(next)
   }
 
   get savedTheme() {
-    return localStorage.getItem("theme") || "auto"
+    try {
+      return localStorage.getItem("theme") || "auto"
+    } catch (error) {
+      return "auto"
+    }
   }
 
   applyTheme(theme) {

@@ -4,9 +4,16 @@ export default class extends Controller {
   static targets = ["sidebar"]
 
   connect() {
-    const saved = localStorage.getItem("sidebarWidth")
-    if (saved) {
-      this.sidebarTarget.style.width = saved
+    let saved = null
+
+    try {
+      saved = localStorage.getItem("sidebarWidth")
+    } catch (error) {
+      // Ignore storage access issues
+    }
+
+    if (saved && !this.isMobile()) {
+      this.setSidebarWidth(saved)
     }
   }
 
@@ -38,7 +45,10 @@ export default class extends Controller {
   resize(event) {
     const width = this._startWidth + (event.clientX - this._startX)
     if (width < 100 || width > 500) return
-    this.sidebarTarget.style.width = `${width}px`
+
+    const widthValue = `${width}px`
+    this._currentWidth = widthValue
+    this.setSidebarWidth(widthValue)
   }
 
   stopResize() {
@@ -46,6 +56,33 @@ export default class extends Controller {
     document.removeEventListener("mouseup", this._onMouseUp)
     document.body.style.userSelect = ""
     document.body.style.cursor = ""
-    localStorage.setItem("sidebarWidth", this.sidebarTarget.style.width)
+
+    if (this.isMobile()) {
+      return
+    }
+
+    const widthToSave =
+      this._currentWidth || `${this.sidebarTarget.offsetWidth}px`
+
+    try {
+      localStorage.setItem("sidebarWidth", widthToSave)
+    } catch (error) {
+      // Ignore storage access issues
+    }
+  }
+
+  setSidebarWidth(width) {
+    if (this.sidebarTarget && this.sidebarTarget.style) {
+      this.sidebarTarget.style.removeProperty("width")
+    }
+    document.documentElement.style.setProperty("--sidebar-width", width)
+  }
+
+  isMobile() {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false
+    }
+
+    return window.matchMedia("(max-width: 767px)").matches
   }
 }
