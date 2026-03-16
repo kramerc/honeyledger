@@ -38,3 +38,6 @@
 
 # Ignore coverage reports.
 /coverage
+
+# Ignore local Claude Code settings.
+/.claude/settings.local.json
