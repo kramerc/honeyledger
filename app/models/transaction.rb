@@ -8,11 +8,8 @@ class Transaction < ApplicationRecord
 
   belongs_to :category, optional: true
 
-  # These are still required, but presence is validated differently to handle opening balances, whose accounts
-  # are assigned by Account#assign_opening_balance_transaction_attributes before save.
-  belongs_to :src_account, optional: true, class_name: "Account"
-  belongs_to :dest_account, optional: true, class_name: "Account"
-  validates_presence_of :src_account, :dest_account, message: :required, unless: :opening_balance?
+  belongs_to :src_account, class_name: "Account"
+  belongs_to :dest_account, class_name: "Account"
 
   belongs_to :currency
   belongs_to :fx_currency, class_name: "Currency", optional: true
