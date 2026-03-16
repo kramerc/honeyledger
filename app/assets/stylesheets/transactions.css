@@ -141,6 +141,19 @@
   position: relative;
 }
 
+/* Hide form labels on desktop — still accessible to screen readers */
+.transactions form .row > div > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .transactions form input[type="text"],
 .transactions form input[type="datetime-local"],
 .transactions form select {
@@ -340,22 +353,28 @@
   }
 
   /* Label above each input */
-  .transactions form .row > div[data-label]::before {
-    content: attr(data-label);
+  .transactions form .row > div > label {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0 0 4px;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
     font-weight: 600;
     font-size: 0.75rem;
     color: var(--accent-text);
-    margin-bottom: 4px;
     text-align: left;
   }
 
   /* Hide auto-computed type field — it's not user input */
-  .transactions form .row > div[data-label="Type"] {
+  .transactions form .row > div.field-type {
     display: none;
   }
 
   /* Currency: inline row */
-  .transactions form .row > div[data-label="Currency"] {
+  .transactions form .row > div.field-currency {
     flex-direction: row;
     align-items: center;
     gap: 4px;
@@ -363,19 +382,22 @@
     color: var(--bark-medium);
   }
 
-  .transactions form .row > div[data-label="Currency"]::before {
-    content: attr(data-label) ": ";
+  .transactions form .row > div.field-currency > label {
     margin-bottom: 0;
   }
 
+  .transactions form .row > div.field-currency > label::after {
+    content: ":";
+  }
+
   /* Cleared: checkbox inline with label */
-  .transactions form .row > div[data-label="Cleared"] {
+  .transactions form .row > div.boolean {
     flex-direction: row;
     align-items: center;
     gap: 8px;
   }
 
-  .transactions form .row > div[data-label="Cleared"]::before {
+  .transactions form .row > div.boolean > label {
     margin-bottom: 0;
   }
 

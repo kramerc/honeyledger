@@ -4,19 +4,22 @@
   transactions__row_target: "form"
 }, html: { autocomplete: "off" }) do |form| %>
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
-    <div data-label="Date">
+    <div>
+      <%= form.label :transacted_at, "Date" %>
       <%= form.datetime_field :transacted_at, include_seconds: false %>
     </div>
 
-    <div data-label="Type">
+    <div class="field-type">
       <%= transaction_type_indicator(transaction, data: { transactions__form_target: "type" }) %>
     </div>
 
-    <div data-label="Description">
+    <div>
+      <%= form.label :description %>
       <%= form.text_field :description %>
     </div>
 
-    <div data-label="From">
+    <div>
+      <%= form.label :src_account_id, "From" %>
       <%= form.select :src_account_id,
         grouped_account_options_for_select(src_accounts, Account::SOURCEABLE, selected_key: transaction.src_account_id),
         { include_blank: "From…" },
@@ -26,7 +29,8 @@
         } %>
     </div>
 
-    <div data-label="To">
+    <div>
+      <%= form.label :dest_account_id, "To" %>
       <%= form.select :dest_account_id,
         grouped_account_options_for_select(dest_accounts, Account::DESTINABLE, selected_key: transaction.dest_account_id),
         { include_blank: "To…" },
@@ -36,19 +40,23 @@
         } %>
     </div>
 
-    <div data-label="Amount" class="numeric">
+    <div class="numeric">
+      <%= form.label :amount %>
       <%= form.text_field :amount, data: { transactions__form_target: "amount" } %>
     </div>
 
-    <div data-label="Currency" data-transactions--form-target="currency">
-      <%= transaction.currency&.code.presence || "—" %>
+    <div class="field-currency">
+      <label>Currency</label>
+      <span data-transactions--form-target="currency"><%= transaction.currency&.code.presence || "—" %></span>
     </div>
 
-    <div data-label="Category">
+    <div>
+      <%= form.label :category_id, "Category" %>
       <%= form.select :category_id, options_from_collection_for_select(categories, :id, :name), include_blank: true %>
     </div>
 
-    <div data-label="Cleared" class="boolean">
+    <div class="boolean">
+      <%= form.label :cleared %>
       <%= form.check_box :cleared %>
     </div>
 
