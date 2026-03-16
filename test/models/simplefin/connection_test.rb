@@ -18,6 +18,30 @@ class Simplefin::ConnectionTest < ActiveSupport::TestCase
     assert_includes duplicate_connection.errors[:user_id], "has already been taken"
   end
 
+  test "should require setup_token on create when not in demo mode" do
+    connection = Simplefin::Connection.new(user: users(:two))
+    connection.demo = "0"
+
+    assert_not connection.valid?
+    assert_includes connection.errors[:setup_token], "can't be blank"
+  end
+
+  test "should not require setup_token on create when in demo mode" do
+    connection = Simplefin::Connection.new(user: users(:two))
+    connection.demo = "1"
+    connection.setup_token = nil
+
+    connection.valid?
+    assert_not connection.errors[:setup_token].any?
+  end
+
+  test "should not require setup_token on update" do
+    @connection.setup_token = nil
+    @connection.demo = "0"
+
+    assert @connection.valid?
+  end
+
   test "client returns a SimplefinClient instance" do
     client = @connection.client
 
