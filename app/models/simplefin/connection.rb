@@ -4,6 +4,7 @@ class Simplefin::Connection < ApplicationRecord
   has_many :transactions, through: :accounts
 
   validates :user_id, uniqueness: true
+  validates :setup_token, presence: true, on: :create, unless: :demo?
 
   attr_accessor :setup_token, :demo
 
@@ -14,7 +15,7 @@ class Simplefin::Connection < ApplicationRecord
   end
 
   def claim!
-    return claim_demo! if ActiveModel::Type::Boolean.new.cast(self.demo)
+    return claim_demo! if demo?
 
     raise "Setup token required to claim connection" if self.setup_token.blank?
 
@@ -36,4 +37,10 @@ class Simplefin::Connection < ApplicationRecord
   def refresh
     Simplefin::RefreshJob.perform_later(self.id)
   end
+
+  private
+
+    def demo?
+      ActiveModel::Type::Boolean.new.cast(self.demo)
+    end
 end
