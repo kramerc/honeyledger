@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { getItem, setItem } from "storage"
 
 const MIN_SIDEBAR_WIDTH = 100
 const MAX_SIDEBAR_WIDTH = 500
@@ -7,13 +8,7 @@ export default class extends Controller {
   static targets = ["sidebar"]
 
   connect() {
-    let saved = null
-
-    try {
-      saved = localStorage.getItem("sidebarWidth")
-    } catch (error) {
-      // Ignore storage access issues
-    }
+    const saved = getItem("sidebarWidth")
 
     if (saved && !this.isMobile()) {
       const validatedWidth = this.parseSidebarWidth(saved)
@@ -70,11 +65,7 @@ export default class extends Controller {
     const widthToSave =
       this._currentWidth || `${this.sidebarTarget.offsetWidth}px`
 
-    try {
-      localStorage.setItem("sidebarWidth", widthToSave)
-    } catch (error) {
-      // Ignore storage access issues
-    }
+    setItem("sidebarWidth", widthToSave)
   }
 
   parseSidebarWidth(value) {
