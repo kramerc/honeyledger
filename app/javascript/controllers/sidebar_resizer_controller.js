@@ -78,26 +78,10 @@ export default class extends Controller {
   }
 
   parseSidebarWidth(value) {
-    if (typeof value !== "string") {
-      return null
+    if (typeof value === "string" && /^\d+px$/.test(value)) {
+      return value
     }
-
-    const match = value.match(/^(\d+)px$/)
-    if (!match) {
-      return null
-    }
-
-    const numericWidth = parseInt(match[1], 10)
-    if (Number.isNaN(numericWidth)) {
-      return null
-    }
-
-    const clampedWidth = Math.min(
-      MAX_SIDEBAR_WIDTH,
-      Math.max(MIN_SIDEBAR_WIDTH, numericWidth),
-    )
-
-    return `${clampedWidth}px`
+    return null
   }
 
   setSidebarWidth(width) {

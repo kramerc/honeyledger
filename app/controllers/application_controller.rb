@@ -10,7 +10,7 @@ class ApplicationController < ActionController::Base
   private
 
   def load_sidebar_accounts
-    return unless user_signed_in?
+    return unless user_signed_in? && request.format.html?
 
     @accounts_by_kind = current_user.accounts.real.includes(:currency).order(:kind, :name).group_by(&:kind)
   end

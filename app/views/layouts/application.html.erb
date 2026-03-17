@@ -25,12 +25,12 @@
     <script>
       try {
         const theme = localStorage.getItem("theme");
-        if (theme && theme !== "auto") {
+        if (theme === "light" || theme === "dark") {
           document.documentElement.setAttribute("data-theme", theme);
         }
 
         const sidebarWidth = localStorage.getItem("sidebarWidth");
-        if (sidebarWidth) {
+        if (sidebarWidth && /^\d+px$/.test(sidebarWidth)) {
           document.documentElement.style.setProperty("--sidebar-width", sidebarWidth);
         }
       } catch (e) {

@@ -83,7 +83,7 @@ header h1 {
   top: var(--header-height);
 
   height: calc(100vh - var(--header-height));
-  width: var(--sidebar-width);
+  width: clamp(100px, var(--sidebar-width), 500px);
   flex-shrink: 0;
   overflow: auto;
 

@@ -8,11 +8,12 @@ export default class extends Controller {
   static targets = ["button"]
 
   connect() {
-    this.applyTheme(this.savedTheme)
+    this.currentTheme = this.savedTheme
+    this.applyTheme(this.currentTheme)
   }
 
   toggle() {
-    const next = CYCLE[this.savedTheme]
+    const next = CYCLE[this.currentTheme]
     try {
       localStorage.setItem("theme", next)
     } catch (error) {
@@ -30,6 +31,7 @@ export default class extends Controller {
   }
 
   applyTheme(theme) {
+    this.currentTheme = theme
     if (theme === "auto") {
       document.documentElement.removeAttribute("data-theme")
     } else {
