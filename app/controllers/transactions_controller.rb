@@ -8,8 +8,9 @@ class TransactionsController < ApplicationController
     @new_transaction = build_new_transaction
 
     @transactions = current_user.transactions.includes(:category, :src_account, :dest_account, :currency, :fx_currency).order(transacted_at: :desc, created_at: :desc)
-    if params[:account_id].present?
-      @account = current_user.accounts.find_by!(id: params[:account_id])
+    account_id = params.fetch(:account_id, nil)
+    if account_id.present?
+      @account = current_user.accounts.find(account_id)
       @transactions = @transactions.where(src_account_id: @account.id).or(@transactions.where(dest_account_id: @account.id))
     end
   end
