@@ -426,4 +426,123 @@ class TransactionImportJobTest < ActiveJob::TestCase
       TransactionImportJob.perform_now(simplefin_account_id: unlinked_simplefin_account.id)
     end
   end
+
+  test "uses account rule to route expense transaction" do
+    grocery_account = Account.create!(user: @user, currency: @currency, name: "Groceries", kind: :expense)
+    ImportRule.create!(user: @user, account: grocery_account, match_pattern: "WHOLEFDS", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_expense",
+      amount: "-45.00",
+      description: "WHOLEFDS MKT #10234",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal grocery_account, transaction.dest_account
+  end
+
+  test "uses account rule to route revenue transaction" do
+    salary_account = Account.create!(user: @user, currency: @currency, name: "Salary", kind: :revenue)
+    ImportRule.create!(user: @user, account: salary_account, match_pattern: "ACME CORP", match_type: :starts_with)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_revenue",
+      amount: "3000.00",
+      description: "ACME CORP PAYROLL",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal salary_account, transaction.src_account
+  end
+
+  test "expense rule does not match revenue transaction" do
+    expense_account = Account.create!(user: @user, currency: @currency, name: "Shopping", kind: :expense)
+    ImportRule.create!(user: @user, account: expense_account, match_pattern: "AMZN", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_wrong_kind",
+      amount: "100.00",
+      description: "AMZN REFUND",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_difference "Account.count", 1 do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal "revenue", transaction.src_account.kind
+    assert_not_equal expense_account, transaction.src_account
+  end
+
+  test "higher priority rule wins when multiple match" do
+    general_account = Account.create!(user: @user, currency: @currency, name: "General Shopping", kind: :expense)
+    specific_account = Account.create!(user: @user, currency: @currency, name: "Amazon", kind: :expense)
+
+    ImportRule.create!(user: @user, account: general_account, match_pattern: "AMZN", match_type: :contains, priority: 0)
+    ImportRule.create!(user: @user, account: specific_account, match_pattern: "AMZN*", match_type: :starts_with, priority: 10)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_priority",
+      amount: "-25.00",
+      description: "AMZN* Order 12345",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    TransactionImportJob.perform_now
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal specific_account, transaction.dest_account
+  end
+
+  test "falls back to exact name match when no rule matches" do
+    ImportRule.create!(user: @user, account: accounts(:expense_account), match_pattern: "NOMATCH", match_type: :exact)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_no_rule",
+      amount: "-30.00",
+      description: "Random Store",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_difference "Account.count", 1 do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal "Random Store", transaction.dest_account.name
+  end
 end

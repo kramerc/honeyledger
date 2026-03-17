@@ -1,0 +1,39 @@
+<%= form_with(model: import_rule) do |form| %>
+  <% if import_rule.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(import_rule.errors.count, "error") %> prohibited this rule from being saved:</h2>
+      <ul>
+        <% import_rule.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div>
+    <%= form.label :match_pattern, "Pattern" %>
+    <%= form.text_field :match_pattern, required: true %>
+  </div>
+
+  <div>
+    <%= form.label :match_type, "Match Type" %>
+    <%= form.select :match_type, ImportRule.match_types.keys.map { |t| [ t.humanize, t ] } %>
+  </div>
+
+  <div>
+    <%= form.label :account_id, "Account" %>
+    <%= form.select :account_id,
+      current_user.accounts.where(kind: [ :expense, :revenue ]).real.order(:kind, :name).map { |a| [ "#{a.name} (#{a.kind})", a.id ] },
+      include_blank: "Select an account..." %>
+  </div>
+
+  <div>
+    <%= form.label :priority %>
+    <%= form.number_field :priority, value: import_rule.priority || 0 %>
+    <p><small>Higher priority rules are checked first when multiple rules match.</small></p>
+  </div>
+
+  <div>
+    <%= form.submit %>
+  </div>
+<% end %>

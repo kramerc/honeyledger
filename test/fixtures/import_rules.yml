@@ -1,0 +1,13 @@
+fixture_rule_one:
+  user: one
+  account: expense_account
+  match_pattern: FIXTURE_PATTERN_ONE
+  match_type: 0
+  priority: 0
+
+fixture_rule_two:
+  user: one
+  account: expense_account
+  match_pattern: FIXTURE_PATTERN_TWO
+  match_type: 1
+  priority: 5

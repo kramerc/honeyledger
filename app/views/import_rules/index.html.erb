@@ -1,0 +1,33 @@
+<% content_for :title, "Import Rules" %>
+
+<h1>Import Rules</h1>
+
+<p>Rules control how imported transactions are matched to expense and revenue accounts.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pattern</th>
+      <th>Match Type</th>
+      <th>Account</th>
+      <th>Priority</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% @import_rules.each do |rule| %>
+      <tr>
+        <td><%= rule.match_pattern %></td>
+        <td><%= rule.match_type.humanize %></td>
+        <td><%= rule.account.name %> (<%= rule.account.kind %>)</td>
+        <td><%= rule.priority %></td>
+        <td>
+          <%= link_to "Edit", edit_import_rule_path(rule) %>
+          <%= link_to "Delete", import_rule_path(rule), data: { turbo_method: :delete, turbo_confirm: "Delete this rule?" } %>
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
+
+<%= link_to "New Rule", new_import_rule_path %>
