@@ -2,10 +2,6 @@ module AccountsHelper
   def account_nav_link_to(account)
     target = account_transactions_path(account)
 
-    is_active = request.path == target || request.path.start_with?("#{account_path(account)}/")
-    link_options = {}
-    link_options[:class] = class_names(link_options[:class], "active") if is_active
-
     balance_minor = account.balance_minor
     balance_span = if balance_minor
       balance = amount_to_currency(balance_minor, account.currency)
@@ -13,7 +9,7 @@ module AccountsHelper
       content_tag(:span, balance, class: balance_class)
     end
 
-    link_to target, link_options do
+    nav_link_to target do
       content_tag(:span, account.name, class: "account__name") + balance_span.to_s
     end
   end

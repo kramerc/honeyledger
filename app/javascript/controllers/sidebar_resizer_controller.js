@@ -1,5 +1,8 @@
 import { Controller } from "@hotwired/stimulus"
 
+const MIN_SIDEBAR_WIDTH = 100
+const MAX_SIDEBAR_WIDTH = 500
+
 export default class extends Controller {
   static targets = ["sidebar"]
 
@@ -13,7 +16,10 @@ export default class extends Controller {
     }
 
     if (saved && !this.isMobile()) {
-      this.setSidebarWidth(saved)
+      const validatedWidth = this.parseSidebarWidth(saved)
+      if (validatedWidth) {
+        this.setSidebarWidth(validatedWidth)
+      }
     }
   }
 
@@ -44,7 +50,7 @@ export default class extends Controller {
 
   resize(event) {
     const width = this._startWidth + (event.clientX - this._startX)
-    if (width < 100 || width > 500) return
+    if (width < MIN_SIDEBAR_WIDTH || width > MAX_SIDEBAR_WIDTH) return
 
     const widthValue = `${width}px`
     this._currentWidth = widthValue
@@ -71,11 +77,39 @@ export default class extends Controller {
     }
   }
 
+  parseSidebarWidth(value) {
+    if (typeof value !== "string") {
+      return null
+    }
+
+    const match = value.match(/^(\d+)px$/)
+    if (!match) {
+      return null
+    }
+
+    const numericWidth = parseInt(match[1], 10)
+    if (Number.isNaN(numericWidth)) {
+      return null
+    }
+
+    const clampedWidth = Math.min(
+      MAX_SIDEBAR_WIDTH,
+      Math.max(MIN_SIDEBAR_WIDTH, numericWidth),
+    )
+
+    return `${clampedWidth}px`
+  }
+
   setSidebarWidth(width) {
+    const validatedWidth = this.parseSidebarWidth(width)
+    if (!validatedWidth) {
+      return
+    }
+
     if (this.sidebarTarget && this.sidebarTarget.style) {
       this.sidebarTarget.style.removeProperty("width")
     }
-    document.documentElement.style.setProperty("--sidebar-width", width)
+    document.documentElement.style.setProperty("--sidebar-width", validatedWidth)
   }
 
   isMobile() {
