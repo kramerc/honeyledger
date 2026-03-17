@@ -65,6 +65,61 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "should create import_rule as json" do
+    assert_difference("ImportRule.count") do
+      post import_rules_url, params: { import_rule: {
+        match_pattern: "JSON Pattern",
+        match_type: "contains",
+        account_id: accounts(:expense_account).id,
+        priority: 0
+      } }, as: :json
+    end
+
+    assert_response :created
+  end
+
+  test "should update import_rule as json" do
+    patch import_rule_url(@import_rule), params: { import_rule: {
+      match_pattern: "JSON Updated"
+    } }, as: :json
+    assert_response :ok
+  end
+
+  test "should destroy import_rule as json" do
+    assert_difference("ImportRule.count", -1) do
+      delete import_rule_url(@import_rule), as: :json
+    end
+
+    assert_response :no_content
+  end
+
+  test "should not update with invalid params" do
+    patch import_rule_url(@import_rule), params: { import_rule: {
+      match_pattern: ""
+    } }
+    assert_response :unprocessable_entity
+  end
+
+  test "should not update with invalid params as json" do
+    patch import_rule_url(@import_rule), params: { import_rule: {
+      match_pattern: ""
+    } }, as: :json
+    assert_response :unprocessable_entity
+  end
+
+  test "should not create rule with invalid params as json" do
+    assert_no_difference("ImportRule.count") do
+      post import_rules_url, params: { import_rule: {
+        match_pattern: "Invalid",
+        match_type: "contains",
+        account_id: accounts(:asset_account).id,
+        priority: 0
+      } }, as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "should not create rule with asset account" do
     assert_no_difference("ImportRule.count") do
       post import_rules_url, params: { import_rule: {
