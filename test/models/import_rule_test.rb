@@ -35,6 +35,13 @@ class ImportRuleTest < ActiveSupport::TestCase
     assert rule.valid?
   end
 
+  test "invalid with another users account" do
+    other_account = Account.create!(user: users(:two), currency: currencies(:usd), name: "Other Expense", kind: :expense)
+    rule = ImportRule.new(user: @user, account: other_account, match_pattern: "Test")
+    assert_not rule.valid?
+    assert_includes rule.errors[:account], "must belong to you"
+  end
+
   test "enforces uniqueness of pattern and match_type per user" do
     ImportRule.create!(user: @user, account: @expense_account, match_pattern: "Duplicate", match_type: :contains)
     duplicate = ImportRule.new(user: @user, account: @expense_account, match_pattern: "Duplicate", match_type: :contains)
@@ -72,6 +79,18 @@ class ImportRuleTest < ActiveSupport::TestCase
     rule = ImportRule.create!(user: @user, account: @expense_account, match_pattern: "Inc.", match_type: :ends_with)
     assert_includes ImportRule.for_description("Amazon Inc."), rule
     assert_empty ImportRule.for_description("Inc. Amazon")
+  end
+
+  test "pattern with percent is treated literally" do
+    rule = ImportRule.create!(user: @user, account: @expense_account, match_pattern: "100%", match_type: :contains)
+    assert_includes ImportRule.for_description("Got 100% off"), rule
+    assert_empty ImportRule.for_description("Got 1000 off")
+  end
+
+  test "pattern with underscore is treated literally" do
+    rule = ImportRule.create!(user: @user, account: @expense_account, match_pattern: "item_1", match_type: :exact)
+    assert_includes ImportRule.for_description("item_1"), rule
+    assert_empty ImportRule.for_description("itemX1")
   end
 
   test "matching is case-insensitive" do
