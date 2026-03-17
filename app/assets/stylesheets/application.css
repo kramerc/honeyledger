@@ -28,6 +28,19 @@
   --bark-light:   light-dark(#78716C, #A16207);
   --divider:      light-dark(#F5E6C8, #3A2810);
   --accent-text:  light-dark(#92400E, #FCD34D);
+
+  /* Semantic colors */
+  --color-positive:     light-dark(#15803D, #4ade80);
+  --color-negative:     light-dark(#DC2626, #f87171);
+
+  --color-success:      #16a34a;
+  --bg-success:         light-dark(#f0fdf4, rgba(22, 101, 52, 0.2));
+  --text-success:       light-dark(#14532d, #86efac);
+
+  --color-error:        #dc2626;
+  --bg-error:           light-dark(#fff5f5, rgba(153, 27, 27, 0.2));
+  --text-error:         light-dark(#7f1d1d, #fca5a5);
+  --border-error:       light-dark(#fca5a5, rgba(220, 38, 38, 0.5));
 }
 
 /* User toggle — override color-scheme to force a theme */
@@ -167,8 +180,8 @@ header h1 {
   background-color: var(--honey-dark);
 }
 
-.account__balance--positive { color: #15803D; }
-.account__balance--negative { color: #DC2626; }
+.account__balance--positive { color: var(--color-positive); }
+.account__balance--negative { color: var(--color-negative); }
 
 .sidebar-resizer {
   width: 4px;
@@ -241,15 +254,15 @@ main a:hover {
 }
 
 .flash--notice {
-  background-color: light-dark(#f0fdf4, rgba(22, 101, 52, 0.2));
-  border-color: #16a34a;
-  color: light-dark(#14532d, #86efac);
+  background-color: var(--bg-success);
+  border-color: var(--color-success);
+  color: var(--text-success);
 }
 
 .flash--alert {
-  background-color: light-dark(#fff5f5, rgba(153, 27, 27, 0.2));
-  border-color: #dc2626;
-  color: light-dark(#7f1d1d, #fca5a5);
+  background-color: var(--bg-error);
+  border-color: var(--color-error);
+  color: var(--text-error);
 }
 
 .flash__close {
