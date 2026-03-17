@@ -113,11 +113,12 @@ class Account < ApplicationRecord
       old_name = name_before_last_save
       return if old_name.blank?
 
-      # Remove any rule that exactly matches the new name — it's now redundant
+      # Remove any rule on this account that exactly matches the new name — it's now redundant
       import_rules.where(match_pattern: name, match_type: :exact).destroy_all
 
-      import_rules.find_or_create_by!(match_pattern: old_name, match_type: :exact) do |rule|
-        rule.user = user
+      # Create the rule user-wide (uniqueness is on [user_id, match_pattern, match_type])
+      user.import_rules.find_or_create_by!(match_pattern: old_name, match_type: :exact) do |rule|
+        rule.account = self
       end
     rescue ActiveRecord::RecordNotUnique
       # Race condition — rule was created concurrently

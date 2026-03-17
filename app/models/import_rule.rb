@@ -12,12 +12,14 @@ class ImportRule < ApplicationRecord
   scope :for_description, ->(description) {
     downcased = description.to_s.strip.downcase
     escaped_pattern = "REPLACE(REPLACE(REPLACE(LOWER(match_pattern), '\\', '\\\\'), '%', '\\%'), '_', '\\_')"
+    types = match_types
     where(
-      "(match_type = 0 AND :desc LIKE '%' || #{escaped_pattern} || '%' ESCAPE '\\') " \
-      "OR (match_type = 1 AND :desc = LOWER(match_pattern)) " \
-      "OR (match_type = 2 AND :desc LIKE #{escaped_pattern} || '%' ESCAPE '\\') " \
-      "OR (match_type = 3 AND :desc LIKE '%' || #{escaped_pattern} ESCAPE '\\')",
-      desc: downcased
+      "(match_type = :contains AND :desc LIKE '%' || #{escaped_pattern} || '%' ESCAPE '\\') " \
+      "OR (match_type = :exact AND :desc = LOWER(match_pattern)) " \
+      "OR (match_type = :starts_with AND :desc LIKE #{escaped_pattern} || '%' ESCAPE '\\') " \
+      "OR (match_type = :ends_with AND :desc LIKE '%' || #{escaped_pattern} ESCAPE '\\')",
+      desc: downcased, contains: types[:contains], exact: types[:exact],
+      starts_with: types[:starts_with], ends_with: types[:ends_with]
     ).order(priority: :desc)
   }
 

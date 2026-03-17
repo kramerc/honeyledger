@@ -2,12 +2,12 @@ fixture_rule_one:
   user: one
   account: expense_account
   match_pattern: FIXTURE_PATTERN_ONE
-  match_type: 0
+  match_type: contains
   priority: 0
 
 fixture_rule_two:
   user: one
   account: expense_account
   match_pattern: FIXTURE_PATTERN_TWO
-  match_type: 1
+  match_type: exact
   priority: 5
