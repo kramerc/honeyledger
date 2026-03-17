@@ -3,6 +3,11 @@ import { Controller } from "@hotwired/stimulus"
 export default class extends Controller {
   static targets = [ "srcAccount", "destAccount", "type", "amount", "currency", "error" ]
   static values = { accountName: String }
+  static TYPE_CONFIG = {
+    withdrawal: { label: "↓ Withdrawal", class: "tx-type tx-type--withdrawal" },
+    deposit:    { label: "↑ Deposit",    class: "tx-type tx-type--deposit" },
+    transfer:   { label: "⇄ Transfer",  class: "tx-type tx-type--transfer" }
+  }
 
   connect() {
     this.updateEnabledAccounts(false)
@@ -54,7 +59,7 @@ export default class extends Controller {
     const select = this.destAccountTarget
     const option = select.options[select.selectedIndex]
     const currency = option ? option.dataset.currency || "" : ""
-    this.currencyTarget.textContent = currency
+    this.currencyTarget.textContent = currency || "—"
   }
 
   updateTypeFromSelectedAccounts() {
@@ -87,24 +92,11 @@ export default class extends Controller {
     }
   }
 
-  typeLabel(type) {
-    switch (type) {
-      case "withdrawal":
-        return [ "↓ Withdrawal", "red" ]
-      case "deposit":
-        return [ "↑ Deposit", "green" ]
-      case "transfer":
-        return [ "⇄ Transfer", "gray" ]
-      default:
-        return [ "", "" ]
-    }
-  }
-
   updateTypeTarget(type) {
     if (!this.hasTypeTarget) return
 
-    const [ label, color ] = this.typeLabel(type)
-    this.typeTarget.textContent = label
-    this.typeTarget.style.color = color
+    const config = this.constructor.TYPE_CONFIG[type]
+    this.typeTarget.textContent = config ? config.label : ""
+    this.typeTarget.className = config ? config.class : ""
   }
 }

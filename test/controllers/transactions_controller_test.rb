@@ -14,6 +14,43 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "should get index scoped to account" do
+    account = accounts(:asset_account)
+    get account_transactions_url(account)
+    assert_response :success
+  end
+
+  test "account-scoped index only returns transactions for that account" do
+    account = accounts(:asset_account)
+
+    # Create a transaction that does NOT involve the scoped account
+    unrelated = Transaction.create!(
+      user: @user,
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:liability_account),
+      description: "Unrelated Transfer",
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    get account_transactions_url(account)
+    assert_response :success
+
+    # Verify the response contains a transaction that involves this account
+    expected_transaction = @user.transactions.find_by(src_account: account) ||
+                           @user.transactions.find_by(dest_account: account)
+    assert_not_nil expected_transaction, "Expected user to have a transaction involving the account"
+    assert_includes response.body, expected_transaction.description
+    assert_not_includes response.body, unrelated.description
+  end
+
+  test "account-scoped index returns 404 for account not belonging to user" do
+    other_user_account = accounts(:two)
+    get account_transactions_url(other_user_account)
+    assert_response :not_found
+  end
+
   test "should get new" do
     get new_transaction_url
 

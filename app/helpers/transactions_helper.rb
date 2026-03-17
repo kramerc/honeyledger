@@ -3,11 +3,14 @@ module TransactionsHelper
     return tag.span("", **html_options) if transaction.dest_account.nil? || transaction.src_account.nil?
 
     if transaction.dest_account.expense?
-      tag.span("↓ Withdrawal", **{ style: "color: red;" }.merge(html_options))
+      options = html_options.merge(class: class_names("tx-type tx-type--withdrawal", html_options[:class]))
+      tag.span("↓ Withdrawal", **options)
     elsif transaction.src_account.revenue?
-      tag.span("↑ Deposit", **{ style: "color: green;" }.merge(html_options))
+      options = html_options.merge(class: class_names("tx-type tx-type--deposit", html_options[:class]))
+      tag.span("↑ Deposit", **options)
     else
-      tag.span("⇄ Transfer", **{ style: "color: gray;" }.merge(html_options))
+      options = html_options.merge(class: class_names("tx-type tx-type--transfer", html_options[:class]))
+      tag.span("⇄ Transfer", **options)
     end
   end
 

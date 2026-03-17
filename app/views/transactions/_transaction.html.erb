@@ -3,15 +3,15 @@
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>">
 
     <div class="row show">
-      <div><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></div>
-      <div><%= transaction_type_indicator(transaction) %></div>
-      <div><%= transaction.description %></div>
-      <div><%= transaction.src_account&.name %></div>
-      <div><%= transaction.dest_account&.name %></div>
-      <div class="numeric"><%= transaction_amount_with_currency(transaction) %></div>
-      <div><%= transaction.currency.code %></div>
-      <div><%= transaction.category&.name %></div>
-      <div class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
+      <div data-label="Date"><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></div>
+      <div data-label="Type"><%= transaction_type_indicator(transaction) %></div>
+      <div data-label="Description"><%= transaction.description %></div>
+      <div data-label="From"><%= transaction.src_account&.name %></div>
+      <div data-label="To"><%= transaction.dest_account&.name %></div>
+      <div data-label="Amount" class="numeric"><%= transaction_amount_with_currency(transaction) %></div>
+      <div data-label="Currency"><%= transaction.currency.code %></div>
+      <div data-label="Category"><%= transaction.category&.name %></div>
+      <div data-label="Cleared" class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
       <div class="actions">
         <% if transaction.opening_balance? && transaction.opening_balance_target_account.present? %>
           <%= link_to "Edit Account", edit_account_path(transaction.opening_balance_target_account), data: { turbo_frame: "_top" } %>

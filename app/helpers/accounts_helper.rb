@@ -1,4 +1,19 @@
 module AccountsHelper
+  def account_nav_link_to(account)
+    target = account_transactions_path(account)
+
+    balance_minor = account.balance_minor
+    balance_span = if balance_minor
+      balance = amount_to_currency(balance_minor, account.currency)
+      balance_class = balance_minor >= 0 ? "account__balance account__balance--positive" : "account__balance account__balance--negative"
+      content_tag(:span, balance, class: balance_class)
+    end
+
+    nav_link_to target, { active: account_path(account) } do
+      content_tag(:span, account.name, class: "account__name") + balance_span.to_s
+    end
+  end
+
   def account_options(accounts)
     accounts.map do |account|
       [ account.name, account.id, { data: { currency: account.currency.code, kind: account.kind } } ]
