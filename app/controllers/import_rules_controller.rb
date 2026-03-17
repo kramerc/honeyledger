@@ -50,11 +50,11 @@ class ImportRulesController < ApplicationController
 
   private
 
-  def set_import_rule
-    @import_rule = current_user.import_rules.find(params.expect(:id))
-  end
+    def set_import_rule
+      @import_rule = current_user.import_rules.find(params.expect(:id))
+    end
 
-  def import_rule_params
-    params.expect(import_rule: [ :match_pattern, :match_type, :account_id, :priority ])
-  end
+    def import_rule_params
+      params.expect(import_rule: [ :match_pattern, :match_type, :account_id, :priority ])
+    end
 end
