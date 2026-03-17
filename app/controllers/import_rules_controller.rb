@@ -16,7 +16,7 @@ class ImportRulesController < ApplicationController
     respond_to do |format|
       if @import_rule.save
         format.html { redirect_to import_rules_path, notice: "Rule was successfully created." }
-        format.json { render json: @import_rule, status: :created, location: @import_rule }
+        format.json { render json: @import_rule, status: :created }
       else
         format.html { render :new, status: :unprocessable_entity }
         format.json { render json: @import_rule.errors, status: :unprocessable_entity }
@@ -31,7 +31,7 @@ class ImportRulesController < ApplicationController
     respond_to do |format|
       if @import_rule.update(import_rule_params)
         format.html { redirect_to import_rules_path, notice: "Rule was successfully updated.", status: :see_other }
-        format.json { render json: @import_rule, status: :ok, location: @import_rule }
+        format.json { render json: @import_rule, status: :ok }
       else
         format.html { render :edit, status: :unprocessable_entity }
         format.json { render json: @import_rule.errors, status: :unprocessable_entity }
