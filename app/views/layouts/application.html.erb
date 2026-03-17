@@ -41,14 +41,14 @@
 
   <body data-controller="sidebar-toggle">
     <header data-controller="theme-toggle">
-      <button class="sidebar-menu-btn" data-action="click->sidebar-toggle#toggle" aria-label="Toggle menu">☰</button>
+      <button class="sidebar-menu-btn" data-action="click->sidebar-toggle#toggle" data-sidebar-toggle-target="button" aria-label="Toggle menu" aria-controls="main-sidebar" aria-expanded="false">☰</button>
       <h1>🍯 Honeyledger</h1>
       <button class="theme-toggle-btn" data-theme-toggle-target="button" data-action="click->theme-toggle#toggle" aria-label="Toggle theme">🖥️</button>
     </header>
 
     <div class="layout" data-controller="sidebar-resizer">
       <div class="sidebar-overlay" data-sidebar-toggle-target="overlay" data-action="click->sidebar-toggle#close"></div>
-      <aside class="sidebar" data-sidebar-resizer-target="sidebar" data-sidebar-toggle-target="sidebar">
+      <aside id="main-sidebar" class="sidebar" data-sidebar-resizer-target="sidebar" data-sidebar-toggle-target="sidebar">
         <nav role="navigation">
           <ul>
             <li><%= nav_link_to "Home", root_path %></li>
