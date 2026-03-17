@@ -2,6 +2,7 @@ require "test_helper"
 
 class AccountsHelperTest < ActionView::TestCase
   include ERB::Util
+  include ApplicationHelper
   include CurrenciesHelper
 
   # Provide a controllable request for helpers that call request.path

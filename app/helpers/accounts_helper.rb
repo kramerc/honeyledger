@@ -9,7 +9,7 @@ module AccountsHelper
       content_tag(:span, balance, class: balance_class)
     end
 
-    nav_link_to target do
+    nav_link_to target, { active: account_path(account) } do
       content_tag(:span, account.name, class: "account__name") + balance_span.to_s
     end
   end
