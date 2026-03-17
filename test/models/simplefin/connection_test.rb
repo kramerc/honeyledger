@@ -19,7 +19,12 @@ class Simplefin::ConnectionTest < ActiveSupport::TestCase
   end
 
   test "should require setup_token on create when not in demo mode" do
-    connection = Simplefin::Connection.new(user: users(:two))
+    user = User.create!(
+      email: "setup-token-required@example.com",
+      password: "password",
+      password_confirmation: "password"
+    )
+    connection = Simplefin::Connection.new(user: user)
     connection.demo = "0"
 
     assert_not connection.valid?
@@ -27,7 +32,12 @@ class Simplefin::ConnectionTest < ActiveSupport::TestCase
   end
 
   test "should not require setup_token on create when in demo mode" do
-    connection = Simplefin::Connection.new(user: users(:two))
+    user = User.create!(
+      email: "setup-token-not-required@example.com",
+      password: "password",
+      password_confirmation: "password"
+    )
+    connection = Simplefin::Connection.new(user: user)
     connection.demo = "1"
     connection.setup_token = nil
 
