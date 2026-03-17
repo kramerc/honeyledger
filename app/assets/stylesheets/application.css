@@ -76,8 +76,6 @@ header h1 {
   color: #fff;
 }
 
-
-
 .sidebar {
   position: sticky;
   top: var(--header-height);
