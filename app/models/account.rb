@@ -15,7 +15,6 @@ class Account < ApplicationRecord
   after_save :save_or_destroy_opening_balance_transaction, if: :opening_balance_callback_needed?
 
   has_many :import_rules, dependent: :destroy
-  after_update :create_rule_for_old_name, if: :should_create_rename_rule?
   has_one :simplefin_account, class_name: "Simplefin::Account", foreign_key: :ledger_account_id, dependent: :nullify
 
   enum :kind, %i[ asset liability equity expense revenue ]
@@ -104,25 +103,6 @@ class Account < ApplicationRecord
   end
 
   private
-
-    def should_create_rename_rule?
-      saved_change_to_name? && (expense? || revenue?) && real?
-    end
-
-    def create_rule_for_old_name
-      old_name = name_before_last_save
-      return if old_name.blank?
-
-      # Remove any rule on this account that exactly matches the new name — it's now redundant
-      import_rules.where(match_pattern: name, match_type: :exact).destroy_all
-
-      # Create the rule user-wide (uniqueness is on [user_id, match_pattern, match_type])
-      user.import_rules.find_or_create_by!(match_pattern: old_name, match_type: :exact) do |rule|
-        rule.account = self
-      end
-    rescue ActiveRecord::RecordNotUnique
-      # Race condition — rule was created concurrently
-    end
 
     def opening_balance_not_allowed_for_kind
       # Only block when the user is actively supplying an amount — existing

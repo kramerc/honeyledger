@@ -64,19 +64,6 @@ class ImportRulesTest < ApplicationSystemTestCase
     assert_no_text "FIXTURE_PATTERN_ONE"
   end
 
-  test "renaming an expense account auto-creates an import rule" do
-    expense = accounts(:expense_account)
-    old_name = expense.name
-
-    visit edit_account_path(expense)
-    fill_in "Name", with: "Groceries"
-    click_button "Update Account"
-
-    visit import_rules_path
-    assert_text old_name
-    assert_text "Exact"
-  end
-
   test "user cannot see another user's import rules" do
     visit import_rules_path
     assert_text "FIXTURE_PATTERN_ONE"
