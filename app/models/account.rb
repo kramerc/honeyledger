@@ -25,6 +25,7 @@ class Account < ApplicationRecord
 
   validates :currency, presence: true, unless: :virtual?
   validates :name, presence: true
+  validates :name, uniqueness: { scope: [ :user_id, :kind ] }
 
   scope :real, -> { where(virtual: false) }
   scope :virtual, -> { where(virtual: true) }
