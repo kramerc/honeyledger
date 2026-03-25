@@ -4,8 +4,10 @@ class ImportRule < ApplicationRecord
 
   enum :match_type, %i[ contains exact starts_with ends_with ]
 
+  normalizes :match_pattern, with: ->(value) { value.strip }
+
   validates :match_pattern, presence: true
-  validates :match_pattern, uniqueness: { scope: [ :user_id, :match_type ] }
+  validates :match_pattern, uniqueness: { scope: [ :user_id, :match_type ], case_sensitive: false }
   validate :account_must_be_expense_or_revenue
   validate :account_must_belong_to_user
 

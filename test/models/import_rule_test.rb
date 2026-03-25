@@ -48,6 +48,17 @@ class ImportRuleTest < ActiveSupport::TestCase
     assert_not duplicate.valid?
   end
 
+  test "enforces case-insensitive uniqueness" do
+    ImportRule.create!(user: @user, account: @expense_account, match_pattern: "amazon", match_type: :contains)
+    duplicate = ImportRule.new(user: @user, account: @expense_account, match_pattern: "AMAZON", match_type: :contains)
+    assert_not duplicate.valid?
+  end
+
+  test "strips whitespace from match_pattern" do
+    rule = ImportRule.create!(user: @user, account: @expense_account, match_pattern: "  coffee  ", match_type: :contains)
+    assert_equal "coffee", rule.match_pattern
+  end
+
   test "allows same pattern with different match_type" do
     ImportRule.create!(user: @user, account: @expense_account, match_pattern: "Same", match_type: :contains)
     different_type = ImportRule.new(user: @user, account: @expense_account, match_pattern: "Same", match_type: :exact)

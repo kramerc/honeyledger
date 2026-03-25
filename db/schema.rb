@@ -58,8 +58,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_17_042503) do
     t.integer "priority", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index "user_id, match_type, lower((match_pattern)::text)", name: "index_import_rules_on_user_match_type_lower_pattern", unique: true
     t.index ["account_id"], name: "index_import_rules_on_account_id"
-    t.index ["user_id", "match_pattern", "match_type"], name: "index_import_rules_on_user_id_and_match_pattern_and_match_type", unique: true
     t.index ["user_id"], name: "index_import_rules_on_user_id"
   end
 

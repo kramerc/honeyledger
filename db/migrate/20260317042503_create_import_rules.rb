@@ -10,6 +10,9 @@ class CreateImportRules < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :import_rules, [ :user_id, :match_pattern, :match_type ], unique: true
+    add_index :import_rules,
+              "user_id, match_type, LOWER(match_pattern)",
+              unique: true,
+              name: "index_import_rules_on_user_match_type_lower_pattern"
   end
 end
