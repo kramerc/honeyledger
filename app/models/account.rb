@@ -1,4 +1,6 @@
 class Account < ApplicationRecord
+  RESERVED_NAMES = [ "Opening Balance" ].freeze
+
   belongs_to :user
   belongs_to :currency, optional: true
 
@@ -24,7 +26,10 @@ class Account < ApplicationRecord
   scope :destinable, -> { where(kind: DESTINABLE).real }
 
   validates :currency, presence: true, unless: :virtual?
+  validates :kind, presence: true
   validates :name, presence: true
+  validates :name, uniqueness: { scope: [ :user_id, :kind ] }
+  validate :name_not_reserved, unless: :virtual?
 
   scope :real, -> { where(virtual: false) }
   scope :virtual, -> { where(virtual: true) }
@@ -103,6 +108,12 @@ class Account < ApplicationRecord
   end
 
   private
+
+    def name_not_reserved
+      if RESERVED_NAMES.any? { |reserved| name&.casecmp?(reserved) }
+        errors.add(:name, "is reserved")
+      end
+    end
 
     def opening_balance_not_allowed_for_kind
       # Only block when the user is actively supplying an amount — existing

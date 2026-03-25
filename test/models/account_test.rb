@@ -443,4 +443,28 @@ class AccountTest < ActiveSupport::TestCase
       accounts(:asset_account).destroy
     end
   end
+
+  test "rejects duplicate account name within same user and kind" do
+    existing = accounts(:expense_account)
+    duplicate = Account.new(user: existing.user, currency: currencies(:usd), name: existing.name, kind: existing.kind)
+    assert_not duplicate.valid?
+    assert_includes duplicate.errors[:name], "has already been taken"
+  end
+
+  test "allows same account name with different kind" do
+    existing = accounts(:expense_account)
+    different_kind = Account.new(user: existing.user, currency: currencies(:usd), name: existing.name, kind: :revenue)
+    assert different_kind.valid?
+  end
+
+  test "rejects reserved name for real accounts" do
+    account = Account.new(user: users(:one), currency: currencies(:usd), name: "Opening Balance", kind: :asset)
+    assert_not account.valid?
+    assert_includes account.errors[:name], "is reserved"
+  end
+
+  test "allows reserved name for virtual accounts" do
+    account = Account.new(user: users(:one), name: "Opening Balance", kind: :expense, virtual: true)
+    assert account.valid?
+  end
 end
