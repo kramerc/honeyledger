@@ -44,7 +44,11 @@ class TransactionImportJob < ApplicationJob
   private
 
     def find_or_create_account(user, description, kind, currency)
-      # Sanitize description for account name
+      # Check if any account rule matches this description
+      rule = user.import_rules.for_kind(kind).for_description(description).first
+      return rule.account if rule
+
+      # Fall back to exact name match / create
       account_name = description.strip.gsub(/\s+/, " ").truncate(50)
 
       user.accounts.find_or_create_by!(name: account_name, kind: kind) do |account|

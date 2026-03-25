@@ -14,6 +14,7 @@ class Account < ApplicationRecord
   validate :opening_balance_transaction_is_valid, if: :opening_balance_callback_needed?
   after_save :save_or_destroy_opening_balance_transaction, if: :opening_balance_callback_needed?
 
+  has_many :import_rules, dependent: :destroy
   has_one :simplefin_account, class_name: "Simplefin::Account", foreign_key: :ledger_account_id, dependent: :nullify
 
   enum :kind, %i[ asset liability equity expense revenue ]

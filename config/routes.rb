@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   resources :accounts do
     resources :transactions, only: %i[ index ]
   end
+  resources :import_rules, except: %i[ show ]
   resources :categories
   resources :currencies
   resources :transactions
