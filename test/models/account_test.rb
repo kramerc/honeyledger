@@ -467,4 +467,11 @@ class AccountTest < ActiveSupport::TestCase
     account = Account.new(user: users(:one), name: "Opening Balance", kind: :expense, virtual: true)
     assert account.valid?
   end
+
+  test "rejects duplicate account name with different casing" do
+    existing = accounts(:expense_account)
+    duplicate = Account.new(user: existing.user, currency: currencies(:usd), name: existing.name.upcase, kind: existing.kind)
+    assert_not duplicate.valid?
+    assert_includes duplicate.errors[:name], "has already been taken"
+  end
 end
