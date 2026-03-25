@@ -11,27 +11,27 @@
   <% end %>
 
   <div>
-    <%= form.label :match_pattern, "Pattern" %>
+    <%= form.label :match_pattern, "Pattern", style: "display: block" %>
     <%= form.text_field :match_pattern, required: true %>
-    <p><small>Matching is case-insensitive.</small></p>
+    <br><small>Matching is case-insensitive.</small>
   </div>
 
   <div>
-    <%= form.label :match_type, "Match Type" %>
+    <%= form.label :match_type, "Match Type", style: "display: block" %>
     <%= form.select :match_type, ImportRule.match_types.keys.map { |t| [ t.humanize, t ] } %>
   </div>
 
   <div>
-    <%= form.label :account_id, "Account" %>
+    <%= form.label :account_id, "Account", style: "display: block" %>
     <%= form.select :account_id,
       current_user.accounts.where(kind: [ :expense, :revenue ]).real.order(:kind, :name).map { |a| [ "#{a.name} (#{a.kind})", a.id ] },
       include_blank: "Select an account..." %>
   </div>
 
   <div>
-    <%= form.label :priority %>
+    <%= form.label :priority, style: "display: block" %>
     <%= form.number_field :priority, value: import_rule.priority || 0 %>
-    <p><small>Higher priority rules are checked first when multiple rules match.</small></p>
+    <br><small>Higher priority rules are checked first when multiple rules match.</small>
   </div>
 
   <div>
