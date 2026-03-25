@@ -104,6 +104,12 @@ class ImportRuleTest < ActiveSupport::TestCase
     assert_empty ImportRule.for_description("itemX1")
   end
 
+  test "pattern with backslash is treated literally" do
+    rule = ImportRule.create!(user: @user, account: @expense_account, match_pattern: "dir\\file", match_type: :contains)
+    assert_includes ImportRule.for_description("in dir\\file path"), rule
+    assert_empty ImportRule.for_description("in dir file path")
+  end
+
   test "matching is case-insensitive" do
     rule = ImportRule.create!(user: @user, account: @expense_account, match_pattern: "amazon", match_type: :contains)
     assert_includes ImportRule.for_description("AMAZON.COM"), rule
