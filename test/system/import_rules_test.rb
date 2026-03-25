@@ -86,7 +86,7 @@ class ImportRulesTest < ApplicationSystemTestCase
     fill_in "Email", with: user.email
     fill_in "Password", with: "password123"
     click_button "Log in"
-    assert_text "Honeyledger"
+    assert_link "Logout"
   end
 
   def create_rule(pattern:, match_type:, account:)
