@@ -79,6 +79,7 @@ Controllers that expose user-owned financial data use `before_action :authentica
 - Framework: Minitest (not RSpec). Use `test "description" do ... end` syntax.
 - Fixtures for test data; `minitest-mock` for mocking external dependencies.
 - Coverage tracked with SimpleCov, uploaded to Codecov.
+- Every item in a PR's test plan must have corresponding test coverage (unit, integration, or system test).
 
 ## CI Checks (must pass before merging)
 

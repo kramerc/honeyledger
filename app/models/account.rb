@@ -28,7 +28,7 @@ class Account < ApplicationRecord
   validates :currency, presence: true, unless: :virtual?
   validates :kind, presence: true
   validates :name, presence: true
-  validates :name, uniqueness: { scope: [ :user_id, :kind ] }
+  validates :name, uniqueness: { scope: [ :user_id, :kind ], case_sensitive: false }
   validate :name_not_reserved, unless: :virtual?
 
   scope :real, -> { where(virtual: false) }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_25_054717) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_25_063755) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -23,8 +23,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_25_054717) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.boolean "virtual", default: false, null: false
+    t.index "user_id, kind, lower((name)::text)", name: "index_accounts_on_user_id_kind_lower_name", unique: true
     t.index ["currency_id"], name: "index_accounts_on_currency_id"
-    t.index ["user_id", "kind", "name"], name: "index_accounts_on_user_id_and_kind_and_name", unique: true
     t.index ["user_id", "kind"], name: "index_accounts_on_user_id_and_kind"
     t.index ["user_id"], name: "index_accounts_on_user_id"
   end
