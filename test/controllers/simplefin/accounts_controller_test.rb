@@ -1,5 +1,4 @@
 require "test_helper"
-require "minitest/stub_any_instance"
 
 class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
   include Devise::Test::IntegrationHelpers

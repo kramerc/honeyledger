@@ -56,6 +56,16 @@ class Simplefin::ConnectionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "You already have a SimpleFIN connection.", flash[:alert]
   end
 
+  test "should not create connection with invalid params" do
+    @simplefin_connection.destroy!
+
+    assert_no_difference("Simplefin::Connection.count") do
+      post simplefin_connection_url, params: { simplefin_connection: { setup_token: "", demo: "0" } }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "should show connection" do
     get simplefin_connection_url
     assert_response :success

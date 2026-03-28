@@ -38,6 +38,23 @@ class CurrenciesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to currency_url(@currency)
   end
 
+  test "should not create currency with invalid params" do
+    assert_no_difference("Currency.count") do
+      post currencies_url, params: { currency: { name: "", kind: "fiat", symbol: "", code: "", decimal_places: nil, active: true } }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "should not update currency with invalid params" do
+    original_code = @currency.code
+
+    patch currency_url(@currency), params: { currency: { code: "" } }
+
+    assert_response :unprocessable_entity
+    assert_equal original_code, @currency.reload.code
+  end
+
   test "should destroy currency" do
     # Create a currency that's not used by any accounts or transactions
     unused_currency = Currency.create!(
