@@ -41,6 +41,22 @@ class CategoriesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to category_url(@category)
   end
 
+  test "should not create category with invalid params" do
+    Category.stub_any_instance :save, false do
+      post categories_url, params: { category: { icon: "", name: "" } }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  test "should not update category with invalid params" do
+    Category.stub_any_instance :save, false do
+      patch category_url(@category), params: { category: { icon: "", name: "" } }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "should destroy category" do
     assert_difference("Category.count", -1) do
       delete category_url(@category)
