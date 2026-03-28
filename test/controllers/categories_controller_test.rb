@@ -54,7 +54,7 @@ class CategoriesControllerTest < ActionDispatch::IntegrationTest
   test "should render edit when save fails on update" do
     original_name = @category.name
 
-    Category.stub_any_instance :save, false do
+    Category.stub_any_instance :update, false do
       patch category_url(@category), params: { category: { icon: "", name: "Changed" } }
     end
 

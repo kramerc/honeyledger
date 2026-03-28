@@ -4,16 +4,26 @@ class SimplefinClientTest < ActiveSupport::TestCase
   test "initialize with url parses credentials and sets base uri" do
     client = SimplefinClient.new(url: "https://user:pass@beta-bridge.simplefin.org/simplefin")
 
-    SimplefinClient.stub :get, {} do
-      assert_nothing_raised { client.accounts }
+    called_with = nil
+    stub_get = ->(*args) { called_with = args; {} }
+
+    SimplefinClient.stub :get, stub_get do
+      client.accounts
+      opts = called_with[1]
+      assert_equal({ username: "user", password: "pass" }, opts[:basic_auth])
     end
   end
 
   test "initialize with username and password" do
     client = SimplefinClient.new(username: "user", password: "pass")
 
-    SimplefinClient.stub :get, {} do
-      assert_nothing_raised { client.accounts }
+    called_with = nil
+    stub_get = ->(*args) { called_with = args; {} }
+
+    SimplefinClient.stub :get, stub_get do
+      client.accounts
+      opts = called_with[1]
+      assert_equal({ username: "user", password: "pass" }, opts[:basic_auth])
     end
   end
 
