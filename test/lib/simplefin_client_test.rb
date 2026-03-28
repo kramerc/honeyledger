@@ -13,7 +13,7 @@ class SimplefinClientTest < ActiveSupport::TestCase
 
   test "info calls get" do
     client = SimplefinClient.new
-    expected = { "versions" => ["1.0"] }
+    expected = { "versions" => [ "1.0" ] }
 
     SimplefinClient.stub :get, expected do
       result = client.info
