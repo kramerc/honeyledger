@@ -31,7 +31,8 @@ class SimplefinClient
       'end-date': end_date,
       pending: pending ? 1 : 0,
       account: account,
-      'balances-only': balances_only ? 1 : 0
+      'balances-only': balances_only ? 1 : 0,
+      version: 2
     }.compact)
   end
 

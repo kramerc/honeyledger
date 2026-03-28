@@ -75,6 +75,7 @@ class SimplefinClientTest < ActiveSupport::TestCase
       assert_equal 1000, opts[:query][:"start-date"]
       assert_equal 1, opts[:query][:pending]
       assert_equal 1, opts[:query][:"balances-only"]
+      assert_equal 2, opts[:query][:version]
     end
   end
 end

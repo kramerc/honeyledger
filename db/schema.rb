@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_25_063755) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_28_171036) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -68,6 +68,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_25_063755) do
     t.string "available_balance"
     t.string "balance"
     t.datetime "balance_date", precision: nil
+    t.string "conn_id"
     t.bigint "connection_id", null: false
     t.datetime "created_at", null: false
     t.string "currency"
@@ -82,8 +83,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_25_063755) do
   end
 
   create_table "simplefin_connections", force: :cascade do |t|
-    t.string "account_errors", default: [], null: false, array: true
     t.datetime "created_at", null: false
+    t.jsonb "errlist", default: [], null: false
     t.datetime "refreshed_at", precision: nil
     t.datetime "updated_at", null: false
     t.string "url"

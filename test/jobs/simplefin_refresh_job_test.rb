@@ -15,14 +15,20 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
 
     def mock_client.accounts(start_date:)
       {
-        "errors" => [],
+        "errlist" => [],
+        "connections" => [
+          {
+            "conn_id" => "conn_1",
+            "name" => "Test Bank - User",
+            "org_id" => "testbank",
+            "org_url" => "testbank.com",
+            "sfin_url" => "https://sfin.testbank.com"
+          }
+        ],
         "accounts" => [
           {
             "id" => "acc_123",
-            "org" => {
-              "domain" => "testbank.com",
-              "sfin-url" => "https://sfin.testbank.com"
-            },
+            "conn_id" => "conn_1",
             "name" => "Checking",
             "currency" => "USD",
             "balance" => "1000.00",
@@ -54,14 +60,20 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
 
     def mock_client.accounts(start_date:)
       {
-        "errors" => [],
+        "errlist" => [],
+        "connections" => [
+          {
+            "conn_id" => "conn_2",
+            "name" => "Test Bank - User",
+            "org_id" => "testbank",
+            "org_url" => "testbank.com",
+            "sfin_url" => "https://sfin.testbank.com"
+          }
+        ],
         "accounts" => [
           {
             "id" => "acc_456",
-            "org" => {
-              "domain" => "testbank.com",
-              "sfin-url" => "https://sfin.testbank.com"
-            },
+            "conn_id" => "conn_2",
             "name" => "Savings",
             "currency" => "USD",
             "balance" => "5000.00",
@@ -83,6 +95,7 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     account = Simplefin::Account.find_by(remote_id: "acc_456")
     assert_equal "Savings", account.name
     assert_equal "5000.00", account.balance
+    assert_equal "conn_2", account.conn_id
   end
 
   test "creates transactions from account data" do
@@ -90,14 +103,20 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
 
     def mock_client.accounts(start_date:)
       {
-        "errors" => [],
+        "errlist" => [],
+        "connections" => [
+          {
+            "conn_id" => "conn_3",
+            "name" => "Test Bank - User",
+            "org_id" => "testbank",
+            "org_url" => "testbank.com",
+            "sfin_url" => "https://sfin.testbank.com"
+          }
+        ],
         "accounts" => [
           {
             "id" => "acc_789",
-            "org" => {
-              "domain" => "testbank.com",
-              "sfin-url" => "https://sfin.testbank.com"
-            },
+            "conn_id" => "conn_3",
             "name" => "Credit Card",
             "currency" => "USD",
             "balance" => "-500.00",
@@ -132,32 +151,40 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     assert_equal false, transaction.pending
   end
 
-  test "clears account errors when API has no errors" do
+  test "clears errlist when API has no errors" do
     mock_client = Minitest::Mock.new
 
     def mock_client.accounts(start_date:)
-      { "accounts" => [] }
+      { "accounts" => [], "connections" => [] }
     end
 
     SimplefinClient.stub :new, mock_client do
-      @simplefin_connection.update!(account_errors: [ "Previous API Error" ])
+      @simplefin_connection.update!(errlist: [ { "code" => "con.auth", "msg" => "Previous Error" } ])
       Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       @simplefin_connection.reload
-      assert_equal [], @simplefin_connection.account_errors
+      assert_equal [], @simplefin_connection.errlist
     end
   end
 
-  test "sets account errors on connection when API returns errors" do
+  test "sets errlist on connection when API returns errors" do
     mock_client = Minitest::Mock.new
 
     def mock_client.accounts(start_date:)
-      { "errors" => [ "Account Error" ], "accounts" => [] }
+      {
+        "errlist" => [
+          { "code" => "con.auth", "msg" => "Login failed", "conn_id" => "conn_1" }
+        ],
+        "accounts" => [],
+        "connections" => []
+      }
     end
 
     SimplefinClient.stub :new, mock_client do
       Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       @simplefin_connection.reload
-      assert_equal [ "Account Error" ], @simplefin_connection.account_errors
+      assert_equal 1, @simplefin_connection.errlist.length
+      assert_equal "con.auth", @simplefin_connection.errlist.first["code"]
+      assert_equal "Login failed", @simplefin_connection.errlist.first["msg"]
     end
   end
 
@@ -166,10 +193,6 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     existing_account = Simplefin::Account.create!(
       connection: @simplefin_connection,
       remote_id: "acc_existing",
-      org: {
-        "domain" => "oldbank.com",
-        "sfin-url" => "https://sfin.oldbank.com"
-      },
       name: "Old Name",
       currency: "USD",
       balance: "100.00"
@@ -179,14 +202,20 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
 
     def mock_client.accounts(start_date:)
       {
-        "errors" => [],
+        "errlist" => [],
+        "connections" => [
+          {
+            "conn_id" => "conn_new",
+            "name" => "New Bank - User",
+            "org_id" => "newbank",
+            "org_url" => "newbank.com",
+            "sfin_url" => "https://sfin.newbank.com"
+          }
+        ],
         "accounts" => [
           {
             "id" => "acc_existing",
-            "org" => {
-              "domain" => "newbank.com",
-              "sfin-url" => "https://sfin.newbank.com"
-            },
+            "conn_id" => "conn_new",
             "name" => "New Name",
             "currency" => "USD",
             "balance" => "200.00",
@@ -206,8 +235,51 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     end
 
     existing_account.reload
-    assert_equal "newbank.com", existing_account.org["domain"]
+    assert_equal "newbank.com", existing_account.org["org_url"]
     assert_equal "New Name", existing_account.name
     assert_equal "200.00", existing_account.balance
+    assert_equal "conn_new", existing_account.conn_id
+  end
+
+  test "populates org from connections array by conn_id" do
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts(start_date:)
+      {
+        "errlist" => [],
+        "connections" => [
+          {
+            "conn_id" => "conn_abc",
+            "name" => "My Bank - Jeff",
+            "org_id" => "mybank",
+            "org_url" => "mybank.com",
+            "sfin_url" => "https://sfin.mybank.com"
+          }
+        ],
+        "accounts" => [
+          {
+            "id" => "acc_org_test",
+            "conn_id" => "conn_abc",
+            "name" => "Checking",
+            "currency" => "USD",
+            "balance" => "100.00",
+            "available-balance" => "100.00",
+            "balance-date" => Time.current.to_i,
+            "transactions" => [],
+            "extra" => {}
+          }
+        ]
+      }
+    end
+
+    SimplefinClient.stub :new, mock_client do
+      Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+    end
+
+    account = Simplefin::Account.find_by(remote_id: "acc_org_test")
+    assert_equal "conn_abc", account.conn_id
+    assert_equal "My Bank - Jeff", account.org["name"]
+    assert_equal "mybank", account.org["org_id"]
+    assert_equal "mybank.com", account.org["org_url"]
   end
 end

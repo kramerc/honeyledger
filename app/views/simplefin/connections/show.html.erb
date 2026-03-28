@@ -5,12 +5,12 @@
   at: <%= @simplefin_connection.refreshed_at ? @simplefin_connection.refreshed_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></p>
 <p><%= button_to "Enqueue Refresh", refresh_simplefin_connection_path %></p>
 
-<% if @simplefin_connection.account_errors.any? %>
-  <h2>Account Errors</h2>
+<% if @simplefin_connection.errlist.any? %>
+  <h2>Errors</h2>
   <p>SimpleFIN reported the following errors during the last refresh:</p>
   <ul>
-    <% @simplefin_connection.account_errors.each do |error| %>
-      <li><%= error %></li>
+    <% @simplefin_connection.errlist.each do |error| %>
+      <li><strong><%= error["code"] %></strong>: <%= error["msg"] %></li>
     <% end %>
   </ul>
   <p>Head to <a href="https://beta-bridge.simplefin.org/my-account">My Account on SimpleFIN</a> to resolve

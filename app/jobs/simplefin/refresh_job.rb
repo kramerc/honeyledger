@@ -12,12 +12,15 @@ class Simplefin::RefreshJob < ApplicationJob
       simplefin_client = simplefin_connection.client
       simplefin_accounts = simplefin_client.accounts(start_date: 1.month.ago.to_i)
 
+      connections_by_id = (simplefin_accounts["connections"] || []).index_by { |c| c["conn_id"] }
+
       simplefin_accounts["accounts"].each do |sf_account_data|
         sf_account = Simplefin::Account.find_or_initialize_by(
           connection: simplefin_connection,
           remote_id: sf_account_data["id"],
         )
-        sf_account.org = sf_account_data["org"]
+        sf_account.conn_id = sf_account_data["conn_id"]
+        sf_account.org = connections_by_id[sf_account_data["conn_id"]]
         sf_account.name = sf_account_data["name"]
         sf_account.currency = sf_account_data["currency"]
         sf_account.balance = sf_account_data["balance"]
@@ -42,7 +45,7 @@ class Simplefin::RefreshJob < ApplicationJob
         end
       end
 
-      simplefin_connection.account_errors = simplefin_accounts["errors"] || []
+      simplefin_connection.errlist = simplefin_accounts["errlist"] || []
       simplefin_connection.update!(refreshed_at: Time.current)
     end
   end
