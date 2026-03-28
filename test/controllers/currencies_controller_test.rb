@@ -47,9 +47,12 @@ class CurrenciesControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "should not update currency with invalid params" do
+    original_code = @currency.code
+
     patch currency_url(@currency), params: { currency: { code: "" } }
 
     assert_response :unprocessable_entity
+    assert_equal original_code, @currency.reload.code
   end
 
   test "should destroy currency" do

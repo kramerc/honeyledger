@@ -41,20 +41,25 @@ class CategoriesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to category_url(@category)
   end
 
-  test "should not create category with invalid params" do
-    Category.stub_any_instance :save, false do
-      post categories_url, params: { category: { icon: "", name: "" } }
+  test "should render new when save fails on create" do
+    assert_no_difference("Category.count") do
+      Category.stub_any_instance :save, false do
+        post categories_url, params: { category: { icon: "", name: "" } }
+      end
     end
 
     assert_response :unprocessable_entity
   end
 
-  test "should not update category with invalid params" do
+  test "should render edit when save fails on update" do
+    original_name = @category.name
+
     Category.stub_any_instance :save, false do
-      patch category_url(@category), params: { category: { icon: "", name: "" } }
+      patch category_url(@category), params: { category: { icon: "", name: "Changed" } }
     end
 
     assert_response :unprocessable_entity
+    assert_equal original_name, @category.reload.name
   end
 
   test "should destroy category" do
