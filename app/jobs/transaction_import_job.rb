@@ -33,11 +33,14 @@ class TransactionImportJob < ApplicationJob
         user = sft.account.connection.user
         src_account = sft.account.ledger_account
 
+        # Determine if expense or revenue based on amount
         amount_bd = BigDecimal(sft.amount)
         if amount_bd.negative?
+          # Money out = expense: bank -> expense
           transaction_src = src_account
           transaction_dest = find_or_create_account(user, sft.description, :expense, src_account.currency)
         else
+          # Money in = revenue: revenue -> bank
           transaction_src = find_or_create_account(user, sft.description, :revenue, src_account.currency)
           transaction_dest = src_account
         end
@@ -76,11 +79,14 @@ class TransactionImportJob < ApplicationJob
         src_account = lft.account.ledger_account
         description = lft.merchant.presence || lft.description
 
+        # Determine if expense or revenue based on amount
         amount_bd = BigDecimal(lft.amount)
         if amount_bd.negative?
+          # Money out = expense: bank -> expense
           transaction_src = src_account
           transaction_dest = find_or_create_account(user, description, :expense, src_account.currency)
         else
+          # Money in = revenue: revenue -> bank
           transaction_src = find_or_create_account(user, description, :revenue, src_account.currency)
           transaction_dest = src_account
         end
@@ -100,9 +106,11 @@ class TransactionImportJob < ApplicationJob
     end
 
     def find_or_create_account(user, description, kind, currency)
+      # Check if any account rule matches this description
       rule = user.import_rules.for_kind(kind).for_description(description).first
       return rule.account if rule
 
+      # Fall back to exact name match / create
       account_name = description.strip.gsub(/\s+/, " ").truncate(50)
 
       user.accounts.find_or_create_by!(name: account_name, kind: kind) do |account|
