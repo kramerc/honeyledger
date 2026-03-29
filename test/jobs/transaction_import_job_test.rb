@@ -5,27 +5,31 @@ class TransactionImportJobTest < ActiveJob::TestCase
     @user = users(:one)
     @currency = currencies(:usd)
 
-    # Clear any SimpleFIN transactions that would be imported from fixtures
-    Simplefin::Transaction.where(account: Simplefin::Account.where.not(ledger_account_id: nil)).destroy_all
+    # Clear any aggregator transactions that would be imported from fixtures (linked via Account.sourceable)
+    linked_sf_ids = Account.where(sourceable_type: "Simplefin::Account").where.not(sourceable_id: nil).pluck(:sourceable_id)
+    Simplefin::Transaction.where(account_id: linked_sf_ids).destroy_all
 
-    # Create a bank account linked to SimpleFIN
-    @bank_account = Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "Checking Account",
-      kind: :asset
-    )
+    linked_lf_ids = Account.where(sourceable_type: "Lunchflow::Account").where.not(sourceable_id: nil).pluck(:sourceable_id)
+    Lunchflow::Transaction.where(account_id: linked_lf_ids).destroy_all
 
     # Use existing SimpleFIN connection from fixtures
     @simplefin_connection = simplefin_connections(:one)
 
     @simplefin_account = Simplefin::Account.create!(
       connection: @simplefin_connection,
-      ledger_account: @bank_account,
       remote_id: "acc_test",
       name: "Test Checking",
       currency: "USD",
       balance: "1000.00"
+    )
+
+    # Create a bank account linked to SimpleFIN (FK is on Account side)
+    @bank_account = Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "Checking Account",
+      kind: :asset,
+      sourceable: @simplefin_account
     )
   end
 
@@ -176,7 +180,6 @@ class TransactionImportJobTest < ActiveJob::TestCase
     # Create a SimpleFIN account without a linked ledger account
     unlinked_sf_account = Simplefin::Account.create!(
       connection: @simplefin_connection,
-      ledger_account: nil, # No linked account
       remote_id: "acc_unlinked",
       name: "Unlinked Account",
       currency: "USD",
@@ -302,21 +305,21 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports only transactions for specified simplefin_account_id" do
-    # Create a second SimpleFIN account
-    second_bank_account = Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "Savings Account",
-      kind: :asset
-    )
-
+    # Create a second SimpleFIN account linked to a bank account
     second_simplefin_account = Simplefin::Account.create!(
       connection: @simplefin_connection,
-      ledger_account: second_bank_account,
       remote_id: "acc_test_2",
       name: "Test Savings",
       currency: "USD",
       balance: "5000.00"
+    )
+
+    second_bank_account = Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "Savings Account",
+      kind: :asset,
+      sourceable: second_simplefin_account
     )
 
     # Create transactions in both accounts
@@ -351,21 +354,21 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports all transactions when simplefin_account_id is not specified" do
-    # Create a second SimpleFIN account
-    second_bank_account = Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "Savings Account",
-      kind: :asset
-    )
-
+    # Create a second SimpleFIN account linked to a bank account
     second_simplefin_account = Simplefin::Account.create!(
       connection: @simplefin_connection,
-      ledger_account: second_bank_account,
       remote_id: "acc_test_3",
       name: "Test Savings",
       currency: "USD",
       balance: "5000.00"
+    )
+
+    second_bank_account = Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "Savings Account",
+      kind: :asset,
+      sourceable: second_simplefin_account
     )
 
     # Create transactions in both accounts
@@ -403,7 +406,6 @@ class TransactionImportJobTest < ActiveJob::TestCase
     # Create a second SimpleFIN account that is NOT linked to a ledger account
     unlinked_simplefin_account = Simplefin::Account.create!(
       connection: @simplefin_connection,
-      ledger_account: nil, # Not linked
       remote_id: "acc_unlinked_filter",
       name: "Unlinked Account",
       currency: "USD",
@@ -544,5 +546,153 @@ class TransactionImportJobTest < ActiveJob::TestCase
 
     transaction = Transaction.find_by(sourceable: sf_transaction)
     assert_equal "Random Store", transaction.dest_account.name
+  end
+
+  # Lunchflow import tests
+
+  test "imports lunchflow expense transaction (negative amount)" do
+    lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 901,
+      name: "Test Checking",
+      currency: "USD",
+      balance: "1000.00"
+    )
+
+    Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "LF Checking",
+      kind: :asset,
+      sourceable: lf_account
+    )
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_expense_1",
+      amount: "-50.00",
+      currency: "USD",
+      description: "Coffee Shop",
+      merchant: "Starbucks",
+      pending: false,
+      date: 2.days.ago.to_date
+    )
+
+    assert_difference "Transaction.count", 1 do
+      TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert_not_nil transaction
+    assert_equal "Starbucks", transaction.description
+    assert_equal "expense", transaction.dest_account.kind
+    assert_equal 5000, transaction.amount_minor
+    assert_not_nil transaction.cleared_at
+  end
+
+  test "imports lunchflow revenue transaction (positive amount)" do
+    lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 902,
+      name: "Test Checking",
+      currency: "USD",
+      balance: "1000.00"
+    )
+
+    Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "LF Checking 2",
+      kind: :asset,
+      sourceable: lf_account
+    )
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_revenue_1",
+      amount: "2500.00",
+      currency: "USD",
+      description: "Salary",
+      merchant: nil,
+      pending: false,
+      date: 3.days.ago.to_date
+    )
+
+    assert_difference "Transaction.count", 1 do
+      TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert_not_nil transaction
+    assert_equal "Salary", transaction.description
+    assert_equal "revenue", transaction.src_account.kind
+    assert_equal 250000, transaction.amount_minor
+  end
+
+  test "lunchflow import uses merchant over description" do
+    lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 903,
+      name: "Test Checking",
+      currency: "USD",
+      balance: "1000.00"
+    )
+
+    Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "LF Checking 3",
+      kind: :asset,
+      sourceable: lf_account
+    )
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_merchant_1",
+      amount: "-25.00",
+      currency: "USD",
+      description: "POS DEBIT 12345",
+      merchant: "Whole Foods",
+      pending: false,
+      date: 1.day.ago.to_date
+    )
+
+    TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert_equal "Whole Foods", transaction.description
+  end
+
+  test "lunchflow pending transaction has nil cleared_at" do
+    lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 904,
+      name: "Test Checking",
+      currency: "USD",
+      balance: "1000.00"
+    )
+
+    Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "LF Checking 4",
+      kind: :asset,
+      sourceable: lf_account
+    )
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_pending_1",
+      amount: "-15.00",
+      currency: "USD",
+      description: "Pending Purchase",
+      pending: true,
+      date: Date.current
+    )
+
+    TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert_nil transaction.cleared_at
   end
 end

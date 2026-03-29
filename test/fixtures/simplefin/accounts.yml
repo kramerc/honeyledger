@@ -2,7 +2,6 @@
 
 linked_one:
   connection: one
-  ledger_account: linked_asset
   remote_id: remote_id_1
   org: Test Bank
   name: Test Checking

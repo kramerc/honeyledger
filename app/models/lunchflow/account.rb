@@ -1,4 +1,4 @@
-class Simplefin::Account < ApplicationRecord
+class Lunchflow::Account < ApplicationRecord
   include Minorable
   minorable :balance, with: :ledger_currency
 
@@ -15,30 +15,23 @@ class Simplefin::Account < ApplicationRecord
     ledger_account.blank?
   end
 
-  # Maps the SimpleFIN account's currency to a ledger currency.
-  # This is not an association because SimpleFIN might provide a currency that is not registered in the app.
+  # Maps the Lunch Flow account's currency to a ledger currency.
   def ledger_currency
     @ledger_currency ||= ledger_account&.currency || Currency.find_by(code: currency)
   end
 
-  # Returns suggested opening balance attributes that align with the present SimpleFIN data.
+  # Returns suggested opening balance attributes that align with the present Lunch Flow data.
   # Returns a hash with :amount (BigDecimal) and :transacted_at, or nil if no currency is available.
   def suggested_opening_balance
     return nil if ledger_currency.nil?
 
-    # Find the oldest date and calculate the opening balance from SimpleFIN transactions
     amount = balance.to_d
-    oldest_date = balance_date || Time.current
+    oldest_date = Date.current
 
-    transactions.each do |simplefin_transaction|
-      date = [
-        simplefin_transaction.transacted_at,
-        simplefin_transaction.posted,
-        simplefin_transaction.created_at
-      ].compact.min
-
+    transactions.each do |lf_transaction|
+      date = lf_transaction.date || lf_transaction.created_at.to_date
       oldest_date = date if date < oldest_date
-      amount -= simplefin_transaction.amount.to_d
+      amount -= lf_transaction.amount.to_d
     end
 
     {

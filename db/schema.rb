@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_28_171036) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_28_200003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -20,11 +20,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_171036) do
     t.bigint "currency_id"
     t.integer "kind", null: false
     t.string "name", null: false
+    t.bigint "sourceable_id"
+    t.string "sourceable_type"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.boolean "virtual", default: false, null: false
     t.index "user_id, kind, lower((name)::text)", name: "index_accounts_on_user_id_kind_lower_name", unique: true
     t.index ["currency_id"], name: "index_accounts_on_currency_id"
+    t.index ["sourceable_type", "sourceable_id"], name: "index_accounts_on_sourceable", unique: true
     t.index ["user_id", "kind"], name: "index_accounts_on_user_id_and_kind"
     t.index ["user_id"], name: "index_accounts_on_user_id"
   end
@@ -64,6 +67,50 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_171036) do
     t.index ["user_id"], name: "index_import_rules_on_user_id"
   end
 
+  create_table "lunchflow_accounts", force: :cascade do |t|
+    t.string "balance"
+    t.bigint "connection_id", null: false
+    t.datetime "created_at", null: false
+    t.string "currency"
+    t.string "institution_logo"
+    t.string "institution_name"
+    t.string "name"
+    t.string "provider"
+    t.integer "remote_id", null: false
+    t.string "status"
+    t.datetime "updated_at", null: false
+    t.index ["connection_id", "remote_id"], name: "index_lunchflow_accounts_on_connection_id_and_remote_id", unique: true
+    t.index ["connection_id"], name: "index_lunchflow_accounts_on_connection_id"
+  end
+
+  create_table "lunchflow_connections", force: :cascade do |t|
+    t.string "api_key", null: false
+    t.datetime "created_at", null: false
+    t.string "error"
+    t.datetime "refreshed_at", precision: nil
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["refreshed_at"], name: "index_lunchflow_connections_on_refreshed_at"
+    t.index ["user_id"], name: "index_lunchflow_connections_on_user_id", unique: true
+  end
+
+  create_table "lunchflow_transactions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "amount"
+    t.datetime "created_at", null: false
+    t.string "currency"
+    t.date "date"
+    t.string "description"
+    t.string "merchant"
+    t.boolean "pending"
+    t.string "remote_id"
+    t.datetime "synced_at", precision: nil
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "remote_id"], name: "index_lunchflow_transactions_on_account_id_and_remote_id", unique: true
+    t.index ["account_id"], name: "index_lunchflow_transactions_on_account_id"
+    t.index ["synced_at"], name: "index_lunchflow_transactions_on_synced_at"
+  end
+
   create_table "simplefin_accounts", force: :cascade do |t|
     t.string "available_balance"
     t.string "balance"
@@ -73,13 +120,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_171036) do
     t.datetime "created_at", null: false
     t.string "currency"
     t.jsonb "extra"
-    t.bigint "ledger_account_id"
     t.string "name"
     t.jsonb "org"
     t.string "remote_id"
     t.datetime "updated_at", null: false
     t.index ["connection_id"], name: "index_simplefin_accounts_on_connection_id"
-    t.index ["ledger_account_id"], name: "index_simplefin_accounts_on_ledger_account_id", unique: true
   end
 
   create_table "simplefin_connections", force: :cascade do |t|
@@ -165,7 +210,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_171036) do
   add_foreign_key "categories", "users"
   add_foreign_key "import_rules", "accounts"
   add_foreign_key "import_rules", "users"
-  add_foreign_key "simplefin_accounts", "accounts", column: "ledger_account_id"
+  add_foreign_key "lunchflow_accounts", "lunchflow_connections", column: "connection_id"
+  add_foreign_key "lunchflow_connections", "users"
+  add_foreign_key "lunchflow_transactions", "lunchflow_accounts", column: "account_id"
   add_foreign_key "simplefin_accounts", "simplefin_connections", column: "connection_id"
   add_foreign_key "simplefin_connections", "users"
   add_foreign_key "simplefin_transactions", "simplefin_accounts", column: "account_id"

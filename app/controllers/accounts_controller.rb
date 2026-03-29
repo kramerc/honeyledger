@@ -2,6 +2,7 @@ class AccountsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_account, only: %i[ show edit update destroy ]
   before_action :set_simplefin_account, only: %i[ new create ], if: -> { simplefin_account_id.present? }
+  before_action :set_lunchflow_account, only: %i[ new create ], if: -> { lunchflow_account_id.present? }
 
   # GET /accounts or /accounts.json
   def index
@@ -16,11 +17,12 @@ class AccountsController < ApplicationController
   def new
     @account = current_user.accounts.build
 
-    if @simplefin_account
-      @account.name = @simplefin_account.name
-      @account.currency = Currency.find_by(code: @simplefin_account.currency)
+    source_account = @simplefin_account || @lunchflow_account
+    if source_account
+      @account.name = source_account.name
+      @account.currency = Currency.find_by(code: source_account.currency)
 
-      if (opening_balance = @simplefin_account.suggested_opening_balance)
+      if (opening_balance = source_account.suggested_opening_balance)
         @account.opening_balance_amount = opening_balance[:amount]
         @account.opening_balance_transacted_at = opening_balance[:transacted_at]
       end
@@ -34,7 +36,7 @@ class AccountsController < ApplicationController
   # POST /accounts or /accounts.json
   def create
     @account = current_user.accounts.build(account_params)
-    @account.simplefin_account = @simplefin_account
+    @account.sourceable = @simplefin_account || @lunchflow_account
 
     respond_to do |format|
       if @account.save
@@ -94,13 +96,33 @@ class AccountsController < ApplicationController
       @simplefin_account = current_user.simplefin_connection.accounts.find_by(id: simplefin_account_id)
 
       if @simplefin_account.nil?
-        redirect_to simplefin_connection_path, alert: "SimpleFIN account to import was not found."
+        redirect_to integrations_path, alert: "SimpleFIN account to import was not found."
       elsif @simplefin_account.linked?
-        redirect_to simplefin_connection_path, alert: "SimpleFIN account already linked to another account."
+        redirect_to integrations_path, alert: "SimpleFIN account already linked to another account."
       end
     end
 
     def simplefin_account_id
       params.fetch(:simplefin_account_id, nil)
+    end
+
+    def set_lunchflow_account
+      lunchflow_connection = current_user.lunchflow_connection
+      if lunchflow_connection.nil?
+        redirect_to new_lunchflow_connection_path, alert: "Cannot import Lunch Flow account without a connection."
+        return
+      end
+
+      @lunchflow_account = current_user.lunchflow_connection.accounts.find_by(id: lunchflow_account_id)
+
+      if @lunchflow_account.nil?
+        redirect_to integrations_path, alert: "Lunch Flow account to import was not found."
+      elsif @lunchflow_account.linked?
+        redirect_to integrations_path, alert: "Lunch Flow account already linked to another account."
+      end
+    end
+
+    def lunchflow_account_id
+      params.fetch(:lunchflow_account_id, nil)
     end
 end

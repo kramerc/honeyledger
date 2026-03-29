@@ -113,7 +113,7 @@ class AccountTest < ActiveSupport::TestCase
     assert_not_includes linkable, accounts(:revenue_account)
   end
 
-  test "unlinked scope returns accounts without simplefin_account association" do
+  test "unlinked scope returns accounts without sourceable association" do
     unlinked = Account.unlinked
 
     assert_includes unlinked, accounts(:asset_account)
@@ -123,6 +123,7 @@ class AccountTest < ActiveSupport::TestCase
     assert_includes unlinked, accounts(:unlinked_liability)
 
     assert_not_includes unlinked, accounts(:linked_asset)
+    assert_not_includes unlinked, accounts(:lunchflow_linked_asset)
   end
 
   test "linkable.unlinked chains scopes correctly" do

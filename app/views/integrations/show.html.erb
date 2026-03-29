@@ -1,0 +1,114 @@
+<h1>Integrations</h1>
+
+<h2>Connections</h2>
+<table>
+  <tr>
+    <th>Service</th>
+    <th>Status</th>
+    <th>Last Refreshed</th>
+    <th style="white-space: nowrap">Actions</th>
+  </tr>
+  <tr>
+    <td>SimpleFIN</td>
+    <% if @simplefin_connection %>
+      <td>Connected since <%= @simplefin_connection.created_at.strftime("%B %d, %Y") %></td>
+      <td><%= @simplefin_connection.refreshed_at ? @simplefin_connection.refreshed_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
+      <td style="display: flex; gap: 0.25em; align-items: center">
+        <%= button_to "Refresh", refresh_simplefin_connection_path %>
+        <%= button_to "Disconnect", simplefin_connection_path, method: :delete, data: { turbo_confirm: "Are you sure you want to disconnect from SimpleFIN?" } %>
+      </td>
+    <% else %>
+      <td colspan="2">Not connected</td>
+      <td><%= button_to "Connect", new_simplefin_connection_path, method: :get %></td>
+    <% end %>
+  </tr>
+  <tr>
+    <td>Lunch Flow</td>
+    <% if @lunchflow_connection %>
+      <td>Connected since <%= @lunchflow_connection.created_at.strftime("%B %d, %Y") %></td>
+      <td><%= @lunchflow_connection.refreshed_at ? @lunchflow_connection.refreshed_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
+      <td style="display: flex; gap: 0.25em; align-items: center">
+        <%= button_to "Refresh", refresh_lunchflow_connection_path %>
+        <%= button_to "Disconnect", lunchflow_connection_path, method: :delete, data: { turbo_confirm: "Are you sure you want to disconnect from Lunch Flow?" } %>
+      </td>
+    <% else %>
+      <td colspan="2">Not connected</td>
+      <td><%= button_to "Connect", new_lunchflow_connection_path, method: :get %></td>
+    <% end %>
+  </tr>
+</table>
+
+<% if @simplefin_connection %>
+  <h2>SimpleFIN Accounts</h2>
+
+  <% if @simplefin_connection.errlist.any? %>
+    <h3>Errors</h3>
+    <p>SimpleFIN reported the following errors during the last refresh:</p>
+    <ul>
+      <% @simplefin_connection.errlist.each do |error| %>
+        <li><strong><%= error["code"] %></strong>: <%= error["msg"] %></li>
+      <% end %>
+    </ul>
+    <p>Head to <a href="https://beta-bridge.simplefin.org/my-account">My Account on SimpleFIN</a> to resolve them.</p>
+  <% end %>
+
+  <% if @simplefin_accounts.any? %>
+    <table>
+      <tr>
+        <th>Organization</th>
+        <th>Account Name</th>
+        <th>Linked Account</th>
+      </tr>
+      <% @simplefin_accounts.each do |sf_account| %>
+        <tr>
+          <td><%= sf_account.org&.[]("name") %></td>
+          <td><%= sf_account.name %></td>
+          <td><%= render partial: "integrations/simplefin_link_form", locals: { sf_account: sf_account, linkable_accounts: @linkable_accounts } %></td>
+        </tr>
+      <% end %>
+    </table>
+  <% else %>
+    <p>No accounts found. Try refreshing your connection.</p>
+  <% end %>
+<% end %>
+
+<% if @lunchflow_connection %>
+  <h2>Lunch Flow Accounts</h2>
+
+  <% if @lunchflow_connection.error.present? %>
+    <h3>Error</h3>
+    <p><%= @lunchflow_connection.error %></p>
+  <% end %>
+
+  <% if @lunchflow_accounts.any? %>
+    <table>
+      <tr>
+        <th>Institution</th>
+        <th>Account Name</th>
+        <th>Status</th>
+        <th>Linked Account</th>
+      </tr>
+      <% @lunchflow_accounts.each do |lf_account| %>
+        <tr>
+          <td><%= lf_account.institution_name %></td>
+          <td><%= lf_account.name %></td>
+          <td>
+            <% case lf_account.status %>
+            <% when "ACTIVE" %>
+              <span style="color: green"><%= lf_account.status %></span>
+            <% when "ERROR" %>
+              <span style="color: red"><%= lf_account.status %> - resolve on <a href="https://lunchflow.app">Lunch Flow</a></span>
+            <% when "DISCONNECTED" %>
+              <span style="color: red"><%= lf_account.status %> - reconnect on <a href="https://lunchflow.app">Lunch Flow</a></span>
+            <% else %>
+              <%= lf_account.status %>
+            <% end %>
+          </td>
+          <td><%= render partial: "integrations/lunchflow_link_form", locals: { lf_account: lf_account, linkable_accounts: @linkable_accounts } %></td>
+        </tr>
+      <% end %>
+    </table>
+  <% else %>
+    <p>No accounts found. Try refreshing your connection.</p>
+  <% end %>
+<% end %>

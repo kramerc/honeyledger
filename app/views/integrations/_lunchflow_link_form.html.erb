@@ -1,0 +1,21 @@
+<% if lf_account.unlinked? %>
+  <%= form_with model: lf_account, url: link_lunchflow_account_path(lf_account), method: :post do |form| %>
+    <%= form.label :ledger_account_id, "Account to link", class: "sr-only" %>
+    <span>
+      <%= form.collection_select :ledger_account_id, linkable_accounts, :id, :name, prompt: "Not linked" %>
+    </span>
+    <span>
+      <%= form.submit "Link", "aria-label": "Link Lunch Flow account" %>
+    </span>
+    <span>
+      <%= link_to "Import", new_account_path(lunchflow_account_id: lf_account.id) %>
+    </span>
+  <% end %>
+<% else %>
+  <%= form_with model: lf_account, url: unlink_lunchflow_account_path(lf_account), method: :delete, data: { turbo_confirm: "Are you sure you want to unlink this account?" } do |form| %>
+    <span><%= lf_account.ledger_account.name %></span>
+    <span>
+      <%= form.submit "Unlink", "aria-label": "Unlink Lunch Flow account" %>
+    </span>
+  <% end %>
+<% end %>

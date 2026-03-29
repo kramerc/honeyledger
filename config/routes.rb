@@ -9,6 +9,9 @@ Rails.application.routes.draw do
   resources :currencies
   resources :transactions
 
+  # Unified integrations page
+  resource :integrations, only: [ :show ]
+
   # SimpleFIN integration routes
   namespace :simplefin do
     resources :accounts, only: [] do
@@ -17,7 +20,22 @@ Rails.application.routes.draw do
         delete :unlink
       end
     end
-    resource :connection, only: %i[ new create show destroy ] do
+    resource :connection, only: %i[ new create destroy ] do
+      member do
+        post :refresh
+      end
+    end
+  end
+
+  # Lunch Flow integration routes
+  namespace :lunchflow do
+    resources :accounts, only: [] do
+      member do
+        post :link
+        delete :unlink
+      end
+    end
+    resource :connection, only: %i[ new create destroy ] do
       member do
         post :refresh
       end

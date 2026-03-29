@@ -1,0 +1,21 @@
+transaction_one:
+  account: linked_one
+  remote_id: lf_txn_1
+  amount: "-75.00"
+  currency: USD
+  description: Coffee Shop Purchase
+  merchant: Starbucks
+  pending: false
+  date: 2026-01-15
+  synced_at: 2026-01-15 12:00:00
+
+transaction_two:
+  account: unlinked_one
+  remote_id: lf_txn_2
+  amount: "200.00"
+  currency: USD
+  description: Salary Deposit
+  merchant: Employer Inc
+  pending: false
+  date: 2026-01-20
+  synced_at: 2026-01-20 12:00:00
