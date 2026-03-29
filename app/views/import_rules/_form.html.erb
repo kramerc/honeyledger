@@ -24,7 +24,7 @@
   <div>
     <%= form.label :account_id, "Account", style: "display: block" %>
     <%= form.select :account_id,
-      current_user.accounts.where(kind: [ :expense, :revenue ]).real.order(:kind, :name).map { |a| [ "#{a.name} (#{a.kind})", a.id ] },
+      grouped_account_options_for_select(current_user.accounts.real.order(:kind, :name), Account.kinds.keys, selected_key: import_rule.account_id),
       include_blank: "Select an account..." %>
   </div>
 

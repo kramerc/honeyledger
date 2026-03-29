@@ -107,12 +107,25 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
+  test "should not create rule with invalid params" do
+    assert_no_difference("ImportRule.count") do
+      post import_rules_url, params: { import_rule: {
+        match_pattern: "",
+        match_type: "contains",
+        account_id: accounts(:expense_account).id,
+        priority: 0
+      } }
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "should not create rule with invalid params as json" do
     assert_no_difference("ImportRule.count") do
       post import_rules_url, params: { import_rule: {
-        match_pattern: "Invalid",
+        match_pattern: "",
         match_type: "contains",
-        account_id: accounts(:asset_account).id,
+        account_id: accounts(:expense_account).id,
         priority: 0
       } }, as: :json
     end
@@ -120,16 +133,29 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
-  test "should not create rule with asset account" do
-    assert_no_difference("ImportRule.count") do
+  test "should create rule with asset account as json" do
+    assert_difference("ImportRule.count") do
       post import_rules_url, params: { import_rule: {
-        match_pattern: "Invalid",
+        match_pattern: "Transfer",
+        match_type: "contains",
+        account_id: accounts(:asset_account).id,
+        priority: 0
+      } }, as: :json
+    end
+
+    assert_response :created
+  end
+
+  test "should create rule with asset account" do
+    assert_difference("ImportRule.count") do
+      post import_rules_url, params: { import_rule: {
+        match_pattern: "Transfer",
         match_type: "contains",
         account_id: accounts(:asset_account).id,
         priority: 0
       } }
     end
 
-    assert_response :unprocessable_entity
+    assert_redirected_to import_rules_path
   end
 end
