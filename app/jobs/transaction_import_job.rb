@@ -44,8 +44,9 @@ class TransactionImportJob < ApplicationJob
   private
 
     def find_or_create_account(user, description, kind, currency)
-      # Check if any account rule matches this description
-      rule = user.import_rules.for_kind(kind).for_description(description).first
+      # Check if any account rule matches this description across all valid account kinds
+      allowed_kinds = kind == :expense ? Account::DESTINABLE : Account::SOURCEABLE
+      rule = user.import_rules.for_kind(allowed_kinds).for_description(description).first
       return rule.account if rule
 
       # Fall back to exact name match / create

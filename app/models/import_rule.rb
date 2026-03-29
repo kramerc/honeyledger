@@ -8,7 +8,7 @@ class ImportRule < ApplicationRecord
 
   validates :match_pattern, presence: true
   validates :match_pattern, uniqueness: { scope: [ :user_id, :match_type ], case_sensitive: false }
-  validate :account_must_be_expense_or_revenue
+  validate :account_must_not_be_virtual
   validate :account_must_belong_to_user
 
   scope :for_description, ->(description) {
@@ -31,10 +31,10 @@ class ImportRule < ApplicationRecord
 
   private
 
-  def account_must_be_expense_or_revenue
+  def account_must_not_be_virtual
     return if account.nil?
-    unless account.expense? || account.revenue?
-      errors.add(:account, "must be an expense or revenue account")
+    if account.virtual?
+      errors.add(:account, "must not be a virtual account")
     end
   end
 

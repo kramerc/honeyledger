@@ -545,4 +545,79 @@ class TransactionImportJobTest < ActiveJob::TestCase
     transaction = Transaction.find_by(sourceable: sf_transaction)
     assert_equal "Random Store", transaction.dest_account.name
   end
+
+  test "uses asset account rule to route expense transaction as transfer" do
+    savings_account = Account.create!(user: @user, currency: @currency, name: "Savings", kind: :asset)
+    ImportRule.create!(user: @user, account: savings_account, match_pattern: "TRANSFER TO SAVINGS", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_asset_expense",
+      amount: "-500.00",
+      description: "TRANSFER TO SAVINGS #1234",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal @bank_account, transaction.src_account
+    assert_equal savings_account, transaction.dest_account
+  end
+
+  test "uses asset account rule to route revenue transaction as transfer" do
+    savings_account = Account.create!(user: @user, currency: @currency, name: "Savings", kind: :asset)
+    ImportRule.create!(user: @user, account: savings_account, match_pattern: "TRANSFER FROM SAVINGS", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_asset_revenue",
+      amount: "500.00",
+      description: "TRANSFER FROM SAVINGS #1234",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal savings_account, transaction.src_account
+    assert_equal @bank_account, transaction.dest_account
+  end
+
+  test "uses liability account rule to route expense transaction as transfer" do
+    credit_card = Account.create!(user: @user, currency: @currency, name: "Credit Card", kind: :liability)
+    ImportRule.create!(user: @user, account: credit_card, match_pattern: "CC PAYMENT", match_type: :starts_with)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: @simplefin_account,
+      remote_id: "txn_rule_liability_expense",
+      amount: "-200.00",
+      description: "CC PAYMENT AUTOPAY",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal @bank_account, transaction.src_account
+    assert_equal credit_card, transaction.dest_account
+  end
 end

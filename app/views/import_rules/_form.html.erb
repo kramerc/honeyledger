@@ -24,7 +24,7 @@
   <div>
     <%= form.label :account_id, "Account", style: "display: block" %>
     <%= form.select :account_id,
-      current_user.accounts.where(kind: [ :expense, :revenue ]).real.order(:kind, :name).map { |a| [ "#{a.name} (#{a.kind})", a.id ] },
+      current_user.accounts.real.order(:kind, :name).map { |a| [ "#{a.name} (#{a.kind})", a.id ] },
       include_blank: "Select an account..." %>
   </div>
 

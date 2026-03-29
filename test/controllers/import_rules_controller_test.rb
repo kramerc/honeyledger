@@ -112,7 +112,7 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
       post import_rules_url, params: { import_rule: {
         match_pattern: "Invalid",
         match_type: "contains",
-        account_id: accounts(:asset_account).id,
+        account_id: accounts(:opening_balance_revenue).id,
         priority: 0
       } }, as: :json
     end
@@ -120,16 +120,16 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
-  test "should not create rule with asset account" do
-    assert_no_difference("ImportRule.count") do
+  test "should create rule with asset account" do
+    assert_difference("ImportRule.count") do
       post import_rules_url, params: { import_rule: {
-        match_pattern: "Invalid",
+        match_pattern: "Transfer Test",
         match_type: "contains",
         account_id: accounts(:asset_account).id,
         priority: 0
       } }
     end
 
-    assert_response :unprocessable_entity
+    assert_redirected_to import_rules_path
   end
 end
