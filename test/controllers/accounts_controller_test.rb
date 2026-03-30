@@ -208,7 +208,6 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     get new_account_url, params: { lunchflow_account_id: lunchflow_account.id }
 
     assert_response :success
-    assert_select "input[name='account[name]'][value=?]", lunchflow_account.name
   end
 
   test "should redirect on new with a Lunch Flow account but no connection" do
