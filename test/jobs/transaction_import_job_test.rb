@@ -12,7 +12,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
     linked_lf_ids = Account.where(sourceable_type: "Lunchflow::Account").where.not(sourceable_id: nil).pluck(:sourceable_id)
     Lunchflow::Transaction.where(account_id: linked_lf_ids).destroy_all
 
-    # Use existing SimpleFIN connection from fixtures
+    # Set up SimpleFIN test data
     @simplefin_connection = simplefin_connections(:one)
 
     @simplefin_account = Simplefin::Account.create!(
@@ -32,6 +32,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
       sourceable: @simplefin_account
     )
   end
+
+  # SimpleFIN import tests
 
   test "imports expense transaction (negative amount)" do
     # Create a SimpleFIN transaction with negative amount (money out)
@@ -314,7 +316,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
       balance: "5000.00"
     )
 
-    second_bank_account = Account.create!(
+    Account.create!(
       user: @user,
       currency: @currency,
       name: "Savings Account",
@@ -363,7 +365,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
       balance: "5000.00"
     )
 
-    second_bank_account = Account.create!(
+    Account.create!(
       user: @user,
       currency: @currency,
       name: "Savings Account",
@@ -548,24 +550,10 @@ class TransactionImportJobTest < ActiveJob::TestCase
     assert_equal "Random Store", transaction.dest_account.name
   end
 
-  # Lunchflow import tests
+  # Lunch Flow import tests
 
   test "imports lunchflow expense transaction (negative amount)" do
-    lf_account = Lunchflow::Account.create!(
-      connection: lunchflow_connections(:one),
-      remote_id: 901,
-      name: "Test Checking",
-      currency: "USD",
-      balance: "1000.00"
-    )
-
-    Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "LF Checking",
-      kind: :asset,
-      sourceable: lf_account
-    )
+    lf_account, lf_bank_account = create_linked_lunchflow_account
 
     lf_transaction = Lunchflow::Transaction.create!(
       account: lf_account,
@@ -584,6 +572,8 @@ class TransactionImportJobTest < ActiveJob::TestCase
 
     transaction = Transaction.find_by(sourceable: lf_transaction)
     assert_not_nil transaction
+    assert_equal @user, transaction.user
+    assert_equal lf_bank_account, transaction.src_account
     assert_equal "Starbucks", transaction.description
     assert_equal "expense", transaction.dest_account.kind
     assert_equal 5000, transaction.amount_minor
@@ -591,21 +581,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "imports lunchflow revenue transaction (positive amount)" do
-    lf_account = Lunchflow::Account.create!(
-      connection: lunchflow_connections(:one),
-      remote_id: 902,
-      name: "Test Checking",
-      currency: "USD",
-      balance: "1000.00"
-    )
-
-    Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "LF Checking 2",
-      kind: :asset,
-      sourceable: lf_account
-    )
+    lf_account, lf_bank_account = create_linked_lunchflow_account
 
     lf_transaction = Lunchflow::Transaction.create!(
       account: lf_account,
@@ -624,27 +600,15 @@ class TransactionImportJobTest < ActiveJob::TestCase
 
     transaction = Transaction.find_by(sourceable: lf_transaction)
     assert_not_nil transaction
+    assert_equal @user, transaction.user
+    assert_equal lf_bank_account, transaction.dest_account
     assert_equal "Salary", transaction.description
     assert_equal "revenue", transaction.src_account.kind
     assert_equal 250000, transaction.amount_minor
   end
 
   test "lunchflow import uses merchant over description" do
-    lf_account = Lunchflow::Account.create!(
-      connection: lunchflow_connections(:one),
-      remote_id: 903,
-      name: "Test Checking",
-      currency: "USD",
-      balance: "1000.00"
-    )
-
-    Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "LF Checking 3",
-      kind: :asset,
-      sourceable: lf_account
-    )
+    lf_account, _ = create_linked_lunchflow_account
 
     lf_transaction = Lunchflow::Transaction.create!(
       account: lf_account,
@@ -664,21 +628,7 @@ class TransactionImportJobTest < ActiveJob::TestCase
   end
 
   test "lunchflow pending transaction has nil cleared_at" do
-    lf_account = Lunchflow::Account.create!(
-      connection: lunchflow_connections(:one),
-      remote_id: 904,
-      name: "Test Checking",
-      currency: "USD",
-      balance: "1000.00"
-    )
-
-    Account.create!(
-      user: @user,
-      currency: @currency,
-      name: "LF Checking 4",
-      kind: :asset,
-      sourceable: lf_account
-    )
+    lf_account, _ = create_linked_lunchflow_account
 
     lf_transaction = Lunchflow::Transaction.create!(
       account: lf_account,
@@ -695,4 +645,26 @@ class TransactionImportJobTest < ActiveJob::TestCase
     transaction = Transaction.find_by(sourceable: lf_transaction)
     assert_nil transaction.cleared_at
   end
+
+  private
+
+    def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
+      lf_account = Lunchflow::Account.create!(
+        connection: lunchflow_connections(:one),
+        remote_id: remote_id,
+        name: name,
+        currency: "USD",
+        balance: "1000.00"
+      )
+
+      lf_bank_account = Account.create!(
+        user: @user,
+        currency: @currency,
+        name: "LF #{name}",
+        kind: :asset,
+        sourceable: lf_account
+      )
+
+      [ lf_account, lf_bank_account ]
+    end
 end
