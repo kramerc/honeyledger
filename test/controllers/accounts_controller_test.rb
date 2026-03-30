@@ -45,14 +45,14 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
 
     get new_account_url, params: { simplefin_account_id: simplefin_account.id }
 
-    assert_redirected_to simplefin_connection_url
+    assert_redirected_to integrations_url
     assert_equal "SimpleFIN account already linked to another account.", flash[:alert]
   end
 
   test "should redirect on new with a SimpleFIN account not found" do
     get new_account_url, params: { simplefin_account_id: "invalid" }
 
-    assert_redirected_to simplefin_connection_url
+    assert_redirected_to integrations_url
     assert_equal "SimpleFIN account to import was not found.", flash[:alert]
   end
 
@@ -62,7 +62,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
 
     get new_account_url, params: { simplefin_account_id: simplefin_account.id }
 
-    assert_redirected_to simplefin_connection_url
+    assert_redirected_to integrations_url
     assert_equal "SimpleFIN account to import was not found.", flash[:alert]
   end
 
@@ -132,7 +132,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to account_url(Account.last)
-    assert_equal simplefin_account, Account.last.simplefin_account
+    assert_equal simplefin_account, Account.last.sourceable
   end
 
   test "should redirect on create with a SimpleFIN account but no connection" do
@@ -165,7 +165,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
       simplefin_account_id: simplefin_account.id
     }
 
-    assert_redirected_to simplefin_connection_url
+    assert_redirected_to integrations_url
     assert_equal "SimpleFIN account already linked to another account.", flash[:alert]
   end
 
@@ -179,7 +179,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
       simplefin_account_id: "invalid"
     }
 
-    assert_redirected_to simplefin_connection_url
+    assert_redirected_to integrations_url
     assert_equal "SimpleFIN account to import was not found.", flash[:alert]
   end
 
@@ -196,8 +196,55 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
       simplefin_account_id: simplefin_account.id
     }
 
-    assert_redirected_to simplefin_connection_url
+    assert_redirected_to integrations_url
     assert_equal "SimpleFIN account to import was not found.", flash[:alert]
+  end
+
+  # Lunch Flow import tests
+
+  test "should get new with an unlinked Lunch Flow account" do
+    lunchflow_account = lunchflow_accounts(:unlinked_one)
+
+    get new_account_url, params: { lunchflow_account_id: lunchflow_account.id }
+
+    assert_response :success
+  end
+
+  test "should redirect on new with a Lunch Flow account but no connection" do
+    lunchflow_account = lunchflow_accounts(:unlinked_one)
+    @user.lunchflow_connection = nil
+    @user.save!
+
+    get new_account_url, params: { lunchflow_account_id: lunchflow_account.id }
+
+    assert_redirected_to new_lunchflow_connection_url
+    assert_equal "Cannot import Lunch Flow account without a connection.", flash[:alert]
+  end
+
+  test "should redirect on new with linked Lunch Flow account" do
+    lunchflow_account = lunchflow_accounts(:linked_one)
+
+    get new_account_url, params: { lunchflow_account_id: lunchflow_account.id }
+
+    assert_redirected_to integrations_url
+    assert_equal "Lunch Flow account already linked to another account.", flash[:alert]
+  end
+
+  test "should redirect on new with a Lunch Flow account not found" do
+    get new_account_url, params: { lunchflow_account_id: "invalid" }
+
+    assert_redirected_to integrations_url
+    assert_equal "Lunch Flow account to import was not found.", flash[:alert]
+  end
+
+  test "should on new scope finding a Lunch Flow account to the current user" do
+    lunchflow_account = lunchflow_accounts(:unlinked_one)
+    lunchflow_account.update!(connection: lunchflow_connections(:two))
+
+    get new_account_url, params: { lunchflow_account_id: lunchflow_account.id }
+
+    assert_redirected_to integrations_url
+    assert_equal "Lunch Flow account to import was not found.", flash[:alert]
   end
 
   test "should validate on create" do

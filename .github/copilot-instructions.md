@@ -1,7 +1,7 @@
 # Copilot Instructions for Honeyledger
 
 ## Project Overview
-Honeyledger is a personal finance management application built with Ruby on Rails 8.1.2. It integrates with the SimpleFin API to automatically sync financial transactions from banks and other financial institutions.
+Honeyledger is a personal finance management application built with Ruby on Rails 8.1.2. It integrates with multiple bank data aggregator APIs — SimpleFIN and Lunch Flow — to automatically sync financial transactions from banks and other financial institutions, and supports double-entry bookkeeping.
 
 ## Core Technologies
 - **Framework**: Ruby on Rails 8.1.2
@@ -75,18 +75,34 @@ Honeyledger is a personal finance management application built with Ruby on Rail
 - Use strong parameters in controllers
 - Follow OWASP guidelines for web security
 
-## SimpleFin API Integration
+## Aggregator Integrations
 
-### Models
-- `SimplefinConnection`: Stores user's SimpleFin API connection details
-- `SimplefinAccount`: Represents a financial account from SimpleFin
-- `SimplefinTransaction`: Represents transactions imported from SimpleFin
+Both SimpleFIN and Lunch Flow follow the same namespaced pattern: `Connection` → `Account` → `Transaction`, with a refresh job to sync from the API and a shared `TransactionImportJob` to create ledger transactions. Aggregator accounts link to ledger accounts via the polymorphic `Account#sourceable`. Linking triggers `TransactionImportJob`. A unified `/integrations` page managed by `IntegrationsController` shows both connections and all aggregator accounts.
+
+### SimpleFIN Integration
+
+- **`lib/simplefin_client.rb`** (`SimplefinClient`) — HTTParty wrapper. `claim(token)` exchanges a setup token for a persistent access URL; `accounts(start_date:)` fetches raw account and transaction data.
+- **`app/models/simplefin/`** — Three models:
+  - `Simplefin::Connection` — Stores access URL (basic-auth credentials in URL) per user; `refresh` enqueues `Simplefin::RefreshJob`
+  - `Simplefin::Account` — Raw account data; `has_one :ledger_account, as: :sourceable`; `suggested_opening_balance` computes a starting balance from historical transactions
+  - `Simplefin::Transaction` — Raw transaction records linked to app `Transaction` via polymorphic `sourceable`
+- **`Simplefin::RefreshJob`** — Upserts `Simplefin::Account` and `Simplefin::Transaction` records from the API
+
+### Lunch Flow Integration
+
+- **`lib/lunchflow_client.rb`** (`LunchflowClient`) — HTTParty wrapper with `x-api-key` header auth. `accounts` lists accounts; `balance(account_id)` and `transactions(account_id)` fetch per-account data. Raises `UnauthorizedError` on 401/403, `Error` on other failures.
+- **`app/models/lunchflow/`** — Three models mirroring SimpleFIN:
+  - `Lunchflow::Connection` — Stores API key per user; `refresh` enqueues `Lunchflow::RefreshJob`; `error` column stores API error messages
+  - `Lunchflow::Account` — Raw account data with `institution_name`, `provider`, `status` (ACTIVE/ERROR/DISCONNECTED); `has_one :ledger_account, as: :sourceable`
+  - `Lunchflow::Transaction` — Raw transaction records with `merchant` field; linked to app `Transaction` via polymorphic `sourceable`
+- **`Lunchflow::RefreshJob`** — Fetches accounts, balances, and transactions per-account. Rescues `LunchflowClient::Error` and stores message on connection.
 
 ### Integration Patterns
-- Use HTTParty for API requests to SimpleFin
+- Use HTTParty for API requests to aggregators
 - Handle API errors gracefully with proper error messages
 - Respect API rate limits
-- Store minimal sensitive data; use tokens appropriately
+- Store minimal sensitive data; use tokens/keys appropriately
+- `TransactionImportJob` handles both aggregators: negative amount = expense (auto-creates expense account), positive = revenue; only runs the matching importer when a specific account ID is given
 
 ## Authentication & Authorization
 
@@ -126,8 +142,9 @@ Honeyledger is a personal finance management application built with Ruby on Rail
 Always run before committing:
 1. `bin/rubocop` - Code style
 2. `bin/rails test` - All tests
-3. `bin/brakeman` - Security scan
-4. `bundle audit` - Dependency vulnerabilities
+3. `bin/brakeman --no-pager` - Security scan
+4. `bin/bundler-audit` - Dependency vulnerabilities
+5. `bin/importmap audit` - JavaScript dependency vulnerabilities
 
 ### Deployment
 - Application is deployed using Kamal
@@ -137,20 +154,34 @@ Always run before committing:
 
 ## Models & Domain
 
+### Domain Model (Double-Entry Bookkeeping)
+
+Every `Transaction` has `src_account` and `dest_account` (both FK to `accounts`). Amounts are stored as integers in `amount_minor` (smallest currency unit). Account `balance_minor` is kept in sync via `after_save`/`after_destroy` callbacks using `update_counters` for atomic updates.
+
+**`Account`** — `kind` enum: `asset`, `liability`, `equity`, `expense`, `revenue`. Accounts can be `real` (with currency and balance) or `virtual` (bookkeeping counterparts for opening balances).
+
+**`Account`** also has a polymorphic `sourceable` linking it to an aggregator account (`Simplefin::Account` or `Lunchflow::Account`). A unique index enforces one source per ledger account. The `unlinked` scope finds accounts with no aggregator link.
+
+**`Transaction`** — Supports FX (`fx_amount_minor` + `fx_currency_id`), split transactions (`parent_transaction_id`, `split` flag), opening balances (`opening_balance` flag), and source tracking via polymorphic `sourceable` → `Simplefin::Transaction` or `Lunchflow::Transaction`.
+
 ### Core Models
 - **User**: Application users (Devise)
-- **Account**: User's financial accounts (manual or synced)
-- **Transaction**: Financial transactions
+- **Account**: User's financial accounts (manual or synced); links to an aggregator via polymorphic `sourceable`
+- **Transaction**: Financial transactions with double-entry bookkeeping
 - **Category**: Transaction categories
 - **Currency**: Supported currencies
-- **SimplefinConnection**: SimpleFin API connections
-- **SimplefinAccount**: Synced SimpleFin accounts
-- **SimplefinTransaction**: Synced SimpleFin transactions
+- **Simplefin::Connection**: SimpleFIN API connections
+- **Simplefin::Account**: Synced SimpleFIN accounts
+- **Simplefin::Transaction**: Synced SimpleFIN transactions
+- **Lunchflow::Connection**: Lunch Flow API connections
+- **Lunchflow::Account**: Synced Lunch Flow accounts
+- **Lunchflow::Transaction**: Synced Lunch Flow transactions
 
 ### Associations
-- Users have many accounts, transactions, and connections
+- Users have many accounts, transactions, and connections (SimpleFIN and Lunch Flow)
 - Accounts have many transactions
 - Transactions belong to accounts and categories
+- A ledger account links to at most one aggregator account via polymorphic `sourceable`
 
 ## Pull Request Guidelines
 

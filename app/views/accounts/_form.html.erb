@@ -1,6 +1,7 @@
 <%= form_with(model: account) do |form| %>
   <% if account.new_record? %>
     <%= hidden_field_tag :simplefin_account_id, params[:simplefin_account_id] %>
+    <%= hidden_field_tag :lunchflow_account_id, params[:lunchflow_account_id] %>
   <% end %>
 
   <% if account.errors.any? %>

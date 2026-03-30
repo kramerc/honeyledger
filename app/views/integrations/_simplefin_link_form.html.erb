@@ -2,7 +2,7 @@
   <%= form_with model: sf_account, url: link_simplefin_account_path(sf_account), method: :post do |form| %>
     <%= form.label :ledger_account_id, "Account to link", class: "sr-only" %>
     <span>
-      <%= form.collection_select :ledger_account_id, current_user.accounts.linkable.unlinked.order(:name), :id, :name, prompt: "Not linked" %>
+      <%= form.collection_select :ledger_account_id, linkable_accounts, :id, :name, prompt: "Not linked" %>
     </span>
     <span>
       <%= form.submit "Link", "aria-label": "Link SimpleFIN account" %>

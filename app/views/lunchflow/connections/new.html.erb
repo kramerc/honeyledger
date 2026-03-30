@@ -1,0 +1,27 @@
+<h1>Connect to Lunch Flow</h1>
+<p>
+  Get your API key from <a href="https://lunchflow.app">Lunch Flow</a> under your account settings, then paste it here:
+</p>
+
+<%= form_with model: @lunchflow_connection, url: lunchflow_connection_path, method: :post, local: true do |form| %>
+  <% if @lunchflow_connection.errors.any? %>
+    <div style="color: red">
+      <h2><%= pluralize(@lunchflow_connection.errors.count, "error") %> prohibited this Lunch Flow connection from being saved:</h2>
+
+      <ul>
+        <% @lunchflow_connection.errors.each do |error| %>
+          <li><%= error.full_message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div class="field">
+    <%= form.label :api_key %><br>
+    <%= form.password_field :api_key, autocomplete: "off" %>
+  </div>
+
+  <div class="actions">
+    <%= form.submit "Connect to Lunch Flow" %>
+  </div>
+<% end %>

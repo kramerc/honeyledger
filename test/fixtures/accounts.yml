@@ -47,6 +47,14 @@ linked_asset:
   currency: usd
   name: Linked Asset
   kind: asset
+  sourceable: linked_one (Simplefin::Account)
+
+lunchflow_linked_asset:
+  user: one
+  currency: usd
+  name: Lunchflow Linked Asset
+  kind: asset
+  sourceable: linked_one (Lunchflow::Account)
 
 unlinked_liability:
   user: one

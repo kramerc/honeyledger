@@ -17,7 +17,8 @@ class Account < ApplicationRecord
   after_save :save_or_destroy_opening_balance_transaction, if: :opening_balance_callback_needed?
 
   has_many :import_rules, dependent: :destroy
-  has_one :simplefin_account, class_name: "Simplefin::Account", foreign_key: :ledger_account_id, dependent: :nullify
+  belongs_to :sourceable, polymorphic: true, optional: true
+  after_save_commit :enqueue_source_import, if: :should_enqueue_source_import?
 
   enum :kind, %i[ asset liability equity expense revenue ]
   SOURCEABLE = %i[ asset liability equity revenue ].freeze
@@ -34,7 +35,7 @@ class Account < ApplicationRecord
   scope :real, -> { where(virtual: false) }
   scope :virtual, -> { where(virtual: true) }
   scope :linkable, -> { where(kind: %i[ asset liability ]) }
-  scope :unlinked, -> { left_joins(:simplefin_account).where(simplefin_accounts: { id: nil }) }
+  scope :unlinked, -> { where(sourceable_id: nil, sourceable_type: nil) }
 
   def self.opening_balance_for(user:, kind:)
     attributes = { user: user, kind: kind, name: "Opening Balance", virtual: true }
@@ -108,6 +109,21 @@ class Account < ApplicationRecord
   end
 
   private
+
+    def should_enqueue_source_import?
+      return false unless sourceable_id?
+      previously_new_record? || saved_change_to_sourceable_id? || saved_change_to_sourceable_type?
+    end
+
+    def enqueue_source_import
+      return unless sourceable.present?
+      case sourceable
+      when Simplefin::Account
+        TransactionImportJob.perform_later(simplefin_account_id: sourceable_id)
+      when Lunchflow::Account
+        TransactionImportJob.perform_later(lunchflow_account_id: sourceable_id)
+      end
+    end
 
     def name_not_reserved
       if RESERVED_NAMES.any? { |reserved| name&.casecmp?(reserved) }
