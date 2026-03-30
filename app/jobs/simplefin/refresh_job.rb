@@ -15,38 +15,46 @@ class Simplefin::RefreshJob < ApplicationJob
       connections_by_id = (simplefin_accounts["connections"] || []).index_by { |c| c["conn_id"] }
 
       simplefin_accounts["accounts"].each do |sf_account_data|
-        sf_account = Simplefin::Account.find_or_initialize_by(
-          connection: simplefin_connection,
-          remote_id: sf_account_data["id"],
-        )
-        sf_account.conn_id = sf_account_data["conn_id"]
-        sf_account.org = connections_by_id[sf_account_data["conn_id"]]
-        sf_account.name = sf_account_data["name"]
-        sf_account.currency = sf_account_data["currency"]
-        sf_account.balance = sf_account_data["balance"]
-        sf_account.available_balance = sf_account_data["available-balance"]
-        sf_account.balance_date = sf_account_data["balance-date"] ? Time.at(sf_account_data["balance-date"]) : nil
-        sf_account.extra = sf_account_data["extra"]
-        sf_account.save!
-
-        sf_account_data["transactions"].each do |sf_transaction_data|
-          sf_transaction = Simplefin::Transaction.find_or_initialize_by(
-            account: sf_account,
-            remote_id: sf_transaction_data["id"]
-          )
-          sf_transaction.posted = sf_transaction_data["posted"]&.positive? ? Time.at(sf_transaction_data["posted"]) : nil
-          sf_transaction.amount = sf_transaction_data["amount"]
-          sf_transaction.description = sf_transaction_data["description"]
-          sf_transaction.transacted_at = sf_transaction_data["transacted-at"] ? Time.at(sf_transaction_data["transacted-at"]) : nil
-          sf_transaction.pending = sf_transaction_data["pending"]
-          sf_transaction.extra = sf_transaction_data["extra"]
-          sf_transaction.synced_at = Time.current
-          sf_transaction.save!
-        end
+        refresh_account(simplefin_connection, connections_by_id, sf_account_data)
+      rescue => e
+        Rails.logger.error("SimpleFIN refresh failed for account #{sf_account_data["id"]}: #{e.message}")
       end
 
       simplefin_connection.errlist = simplefin_accounts["errlist"] || []
       simplefin_connection.update!(refreshed_at: Time.current)
     end
   end
+
+  private
+
+    def refresh_account(simplefin_connection, connections_by_id, sf_account_data)
+      sf_account = Simplefin::Account.find_or_initialize_by(
+        connection: simplefin_connection,
+        remote_id: sf_account_data["id"],
+      )
+      sf_account.conn_id = sf_account_data["conn_id"]
+      sf_account.org = connections_by_id[sf_account_data["conn_id"]]
+      sf_account.name = sf_account_data["name"]
+      sf_account.currency = sf_account_data["currency"]
+      sf_account.balance = sf_account_data["balance"]
+      sf_account.available_balance = sf_account_data["available-balance"]
+      sf_account.balance_date = sf_account_data["balance-date"] ? Time.at(sf_account_data["balance-date"]) : nil
+      sf_account.extra = sf_account_data["extra"]
+      sf_account.save!
+
+      sf_account_data["transactions"].each do |sf_transaction_data|
+        sf_transaction = Simplefin::Transaction.find_or_initialize_by(
+          account: sf_account,
+          remote_id: sf_transaction_data["id"]
+        )
+        sf_transaction.posted = sf_transaction_data["posted"]&.positive? ? Time.at(sf_transaction_data["posted"]) : nil
+        sf_transaction.amount = sf_transaction_data["amount"]
+        sf_transaction.description = sf_transaction_data["description"]
+        sf_transaction.transacted_at = sf_transaction_data["transacted-at"] ? Time.at(sf_transaction_data["transacted-at"]) : nil
+        sf_transaction.pending = sf_transaction_data["pending"]
+        sf_transaction.extra = sf_transaction_data["extra"]
+        sf_transaction.synced_at = Time.current
+        sf_transaction.save!
+      end
+    end
 end

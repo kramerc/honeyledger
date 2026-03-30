@@ -7,6 +7,8 @@ class Lunchflow::Account < ApplicationRecord
   belongs_to :connection
   has_many :transactions, dependent: :destroy
 
+  validates :remote_id, uniqueness: { scope: :connection_id }
+
   def linked?
     ledger_account.present?
   end

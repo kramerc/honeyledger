@@ -152,4 +152,36 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     assert_equal "Active subscription required.", @lunchflow_connection.error
     assert_not_nil @lunchflow_connection.refreshed_at
   end
+
+  test "continues to next account when one account fails" do
+    mock_client = Object.new
+
+    def mock_client.accounts
+      [
+        { "id" => 401, "name" => "Failing Account", "institution_name" => "Bank A", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" },
+        { "id" => 402, "name" => "Working Account", "institution_name" => "Bank B", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" }
+      ]
+    end
+
+    def mock_client.balance(account_id)
+      raise LunchflowClient::Error, "Balance fetch failed" if account_id == 401
+      { "amount" => 500.0, "currency" => "USD" }
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+
+    # The working account was saved despite the first one failing
+    assert Lunchflow::Account.exists?(remote_id: 402)
+
+    # Connection still updated successfully
+    @lunchflow_connection.reload
+    assert_nil @lunchflow_connection.error
+    assert_not_nil @lunchflow_connection.refreshed_at
+  end
 end

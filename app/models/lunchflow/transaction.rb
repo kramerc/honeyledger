@@ -4,4 +4,6 @@ class Lunchflow::Transaction < ApplicationRecord
 
   belongs_to :account
   has_one :ledger_transaction, class_name: "Transaction", as: :sourceable, dependent: :nullify
+
+  validates :remote_id, uniqueness: { scope: :account_id }, allow_nil: true
 end

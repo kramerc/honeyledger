@@ -282,4 +282,44 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     assert_equal "mybank", account.org["org_id"]
     assert_equal "mybank.com", account.org["org_url"]
   end
+
+  test "continues to next account when one account raises an error" do
+    mock_client = Minitest::Mock.new
+
+    save_count = 0
+
+    def mock_client.accounts(start_date:)
+      {
+        "connections" => [],
+        "errlist" => [],
+        "accounts" => [
+          {
+            "id" => "acc_failing",
+            "name" => "Failing Account",
+            "currency" => "USD",
+            "balance" => "invalid",
+            "transactions" => nil # This will cause a NoMethodError when iterating
+          },
+          {
+            "id" => "acc_working",
+            "name" => "Working Account",
+            "currency" => "USD",
+            "balance" => "500.00",
+            "transactions" => []
+          }
+        ]
+      }
+    end
+
+    SimplefinClient.stub :new, mock_client do
+      Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+    end
+
+    # The working account was saved despite the first one failing
+    assert Simplefin::Account.exists?(remote_id: "acc_working")
+
+    # Connection still updated
+    @simplefin_connection.reload
+    assert_not_nil @simplefin_connection.refreshed_at
+  end
 end
