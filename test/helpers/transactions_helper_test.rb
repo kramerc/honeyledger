@@ -25,6 +25,29 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_match(/tx-type--deposit/, result)
   end
 
+  test "transaction_type_indicator for refund" do
+    transaction = transactions(:one)
+    transaction.src_account = accounts(:expense_account)
+    transaction.dest_account = accounts(:asset_account)
+
+    result = transaction_type_indicator(transaction)
+
+    assert_match(/↑ Refund/, result)
+    assert_match(/tx-type--refund/, result)
+  end
+
+  test "transaction_type_indicator for clawback" do
+    transaction = transactions(:one)
+    transaction.src_account = accounts(:asset_account)
+    transaction.dest_account = accounts(:revenue_account)
+
+    result = transaction_type_indicator(transaction)
+
+    assert_match(/↓ Clawback/, result)
+    assert_match(/tx-type--clawback/, result)
+  end
+
+
   test "transaction_type_indicator for transfer" do
     transaction = transactions(:one)
     transaction.src_account = accounts(:asset_account)

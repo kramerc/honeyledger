@@ -5,7 +5,9 @@ export default class extends Controller {
   static values = { accountName: String }
   static TYPE_CONFIG = {
     withdrawal: { label: "↓ Withdrawal", class: "tx-type tx-type--withdrawal" },
+    refund:     { label: "↑ Refund",     class: "tx-type tx-type--refund" },
     deposit:    { label: "↑ Deposit",    class: "tx-type tx-type--deposit" },
+    clawback:   { label: "↓ Clawback",   class: "tx-type tx-type--clawback" },
     transfer:   { label: "⇄ Transfer",  class: "tx-type tx-type--transfer" }
   }
 
@@ -35,9 +37,11 @@ export default class extends Controller {
       - Cannot transact from a revenue account to an expense account
       - Cannot transact from an expense account to a revenue account
     */
+    const isIncomeExpense = (kind) => kind === "expense" || kind === "revenue"
+
     for (const option of srcOptions) {
       const sameId = option.value !== "" && option.value === destId
-      const incompatibleKind = destKind === "expense" && option.dataset.kind === "revenue"
+      const incompatibleKind = isIncomeExpense(destKind) && isIncomeExpense(option.dataset.kind)
       option.disabled = sameId || incompatibleKind
       if (resetInvalidFields && option.disabled && option.selected) {
         this.srcAccountTarget.selectedIndex = 0
@@ -45,7 +49,7 @@ export default class extends Controller {
     }
     for (const option of destOptions) {
       const sameId = option.value !== "" && option.value === srcId
-      const incompatibleKind = srcKind === "revenue" && option.dataset.kind === "expense"
+      const incompatibleKind = isIncomeExpense(srcKind) && isIncomeExpense(option.dataset.kind)
       option.disabled = sameId || incompatibleKind
       if (resetInvalidFields && option.disabled && option.selected) {
         this.destAccountTarget.selectedIndex = 0
@@ -68,11 +72,17 @@ export default class extends Controller {
     const { kind: srcKind } = this.selectedAccount(this.srcAccountTarget)
     const { kind: destKind } = this.selectedAccount(this.destAccountTarget)
 
+    const isBalanceSheet = (kind) => !!kind && kind !== "expense" && kind !== "revenue"
+
     let type = undefined
-    if (destKind === "expense") {
+    if (isBalanceSheet(srcKind) && destKind === "expense") {
       type = "withdrawal"
-    } else if (srcKind === "revenue") {
+    } else if (srcKind === "expense" && isBalanceSheet(destKind)) {
+      type = "refund"
+    } else if (srcKind === "revenue" && isBalanceSheet(destKind)) {
       type = "deposit"
+    } else if (isBalanceSheet(srcKind) && destKind === "revenue") {
+      type = "clawback"
     } else if (srcKind && destKind) {
       type = "transfer"
     }

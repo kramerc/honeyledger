@@ -2,16 +2,23 @@ module TransactionsHelper
   def transaction_type_indicator(transaction, **html_options)
     return tag.span("", **html_options) if transaction.dest_account.nil? || transaction.src_account.nil?
 
-    if transaction.dest_account.expense?
-      options = html_options.merge(class: class_names("tx-type tx-type--withdrawal", html_options[:class]))
-      tag.span("↓ Withdrawal", **options)
-    elsif transaction.src_account.revenue?
-      options = html_options.merge(class: class_names("tx-type tx-type--deposit", html_options[:class]))
-      tag.span("↑ Deposit", **options)
+    src_kind = transaction.src_account.kind
+    dest_kind = transaction.dest_account.kind
+    balance_sheet = %w[asset liability equity]
+
+    if balance_sheet.include?(src_kind) && dest_kind == "expense"
+      label, css = "↓ Withdrawal", "tx-type tx-type--withdrawal"
+    elsif src_kind == "expense" && balance_sheet.include?(dest_kind)
+      label, css = "↑ Refund", "tx-type tx-type--refund"
+    elsif src_kind == "revenue" && balance_sheet.include?(dest_kind)
+      label, css = "↑ Deposit", "tx-type tx-type--deposit"
+    elsif balance_sheet.include?(src_kind) && dest_kind == "revenue"
+      label, css = "↓ Clawback", "tx-type tx-type--clawback"
     else
-      options = html_options.merge(class: class_names("tx-type tx-type--transfer", html_options[:class]))
-      tag.span("⇄ Transfer", **options)
+      label, css = "⇄ Transfer", "tx-type tx-type--transfer"
     end
+
+    tag.span(label, **html_options.merge(class: class_names(css, html_options[:class])))
   end
 
   def transaction_amount_with_currency(transaction)

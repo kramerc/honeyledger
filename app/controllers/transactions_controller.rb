@@ -103,8 +103,7 @@ class TransactionsController < ApplicationController
     end
 
     def set_form_collections
-      @src_accounts = current_user.accounts.sourceable.includes(:currency).order(:name)
-      @dest_accounts = current_user.accounts.destinable.includes(:currency).order(:name)
+      @accounts = current_user.accounts.real.includes(:currency).order(:name)
       @categories = current_user.categories.order(:name)
     end
 end

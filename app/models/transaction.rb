@@ -34,8 +34,7 @@ class Transaction < ApplicationRecord
   validate :dest_account_accessible_to_user
 
   validate :accounts_cannot_be_same, unless: -> { src_account_id.nil? || dest_account_id.nil? }
-  validate :not_expense_to_revenue, if: -> { src_account&.expense? && dest_account&.revenue? }
-  validate :not_revenue_to_expense, if: -> { src_account&.revenue? && dest_account&.expense? }
+  validate :income_expense_must_pair_with_balance_sheet
 
   def cleared
     return @cleared if defined?(@cleared)
@@ -150,15 +149,17 @@ class Transaction < ApplicationRecord
       end
     end
 
-    def not_revenue_to_expense
-      if src_account.revenue? && dest_account.expense?
-        errors.add(:src_account, "cannot be a revenue account to an expense dest account")
-      end
-    end
+    def income_expense_must_pair_with_balance_sheet
+      return if src_account.nil? || dest_account.nil?
 
-    def not_expense_to_revenue
-      if src_account.expense? && dest_account.revenue?
-        errors.add(:src_account, "cannot be an expense account to a revenue dest account")
+      balance_sheet = ->(a) { a.asset? || a.liability? || a.equity? }
+
+      if (src_account.expense? || src_account.revenue?) && !balance_sheet.call(dest_account)
+        errors.add(:dest_account, "must be an asset, liability, or equity account")
+      end
+
+      if (dest_account.expense? || dest_account.revenue?) && !balance_sheet.call(src_account)
+        errors.add(:src_account, "must be an asset, liability, or equity account")
       end
     end
 end

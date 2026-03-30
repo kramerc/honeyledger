@@ -21,10 +21,6 @@ class Account < ApplicationRecord
   after_save_commit :enqueue_source_import, if: :should_enqueue_source_import?
 
   enum :kind, %i[ asset liability equity expense revenue ]
-  SOURCEABLE = %i[ asset liability equity revenue ].freeze
-  DESTINABLE = %i[ asset liability equity expense ].freeze
-  scope :sourceable, -> { where(kind: SOURCEABLE).real }
-  scope :destinable, -> { where(kind: DESTINABLE).real }
 
   validates :currency, presence: true, unless: :virtual?
   validates :kind, presence: true
