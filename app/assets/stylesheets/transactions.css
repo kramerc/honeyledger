@@ -129,7 +129,9 @@
 /* Transaction type badges */
 .tx-type { font-size: 0.8rem; font-weight: 600; }
 .tx-type--deposit    { color: var(--color-positive); }
+.tx-type--refund     { color: var(--color-positive); }
 .tx-type--withdrawal { color: var(--color-negative); }
+.tx-type--clawback   { color: var(--color-negative); }
 .tx-type--transfer   { color: var(--bark-light); }
 
 /* Forms */

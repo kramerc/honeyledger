@@ -254,9 +254,9 @@ class AccountTest < ActiveSupport::TestCase
     assert_not @account.real?
   end
 
-  test "does not include opening balance accounts in sourceable/destinable scopes" do
-    assert_not Account.sourceable.include?(accounts(:opening_balance_revenue))
-    assert_not Account.destinable.include?(accounts(:opening_balance_expense))
+  test "real scope excludes virtual accounts" do
+    assert_not Account.real.include?(accounts(:opening_balance_revenue))
+    assert_not Account.real.include?(accounts(:opening_balance_expense))
   end
 
   test "account is valid if opening_balance_amount is blank" do

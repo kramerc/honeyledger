@@ -487,7 +487,7 @@ class TransactionTest < ActiveSupport::TestCase
     assert_includes transaction.errors[:src_account], "cannot be the same as dest account"
   end
 
-  test "validates not revenue to expense" do
+  test "validates revenue to expense is invalid" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:revenue_account),
@@ -498,10 +498,11 @@ class TransactionTest < ActiveSupport::TestCase
     )
 
     assert_not transaction.valid?
-    assert_includes transaction.errors[:src_account], "cannot be a revenue account to an expense dest account"
+    assert_includes transaction.errors[:dest_account], "must be an asset, liability, or equity account"
+    assert_includes transaction.errors[:src_account], "must be an asset, liability, or equity account"
   end
 
-  test "validates not expense to revenue" do
+  test "validates expense to revenue is invalid" do
     transaction = Transaction.new(
       user: users(:one),
       src_account: accounts(:expense_account),
@@ -512,7 +513,37 @@ class TransactionTest < ActiveSupport::TestCase
     )
 
     assert_not transaction.valid?
-    assert_includes transaction.errors[:src_account], "cannot be an expense account to a revenue dest account"
+    assert_includes transaction.errors[:dest_account], "must be an asset, liability, or equity account"
+  end
+
+  test "validates expense to expense is invalid" do
+    second_expense = Account.create!(user: users(:one), currency: currencies(:usd), name: "Other Expense", kind: :expense)
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:expense_account),
+      dest_account: second_expense,
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:dest_account], "must be an asset, liability, or equity account"
+  end
+
+  test "validates revenue to revenue is invalid" do
+    second_revenue = Account.create!(user: users(:one), currency: currencies(:usd), name: "Other Revenue", kind: :revenue)
+    transaction = Transaction.new(
+      user: users(:one),
+      src_account: accounts(:revenue_account),
+      dest_account: second_revenue,
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      transacted_at: Time.current
+    )
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:dest_account], "must be an asset, liability, or equity account"
   end
 
   test "has_fx? returns true when fx_amount_minor and fx_currency are present" do

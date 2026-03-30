@@ -21,7 +21,7 @@
     <div>
       <%= form.label :src_account_id, "From" %>
       <%= form.select :src_account_id,
-        grouped_account_options_for_select(src_accounts, Account::SOURCEABLE, selected_key: transaction.src_account_id),
+        grouped_account_options_for_select(accounts, Account.kinds.keys, selected_key: transaction.src_account_id),
         { include_blank: "From…" },
         data: {
           action: "transactions--form#updateEnabledAccounts transactions--form#updateTypeFromSelectedAccounts",
@@ -32,7 +32,7 @@
     <div>
       <%= form.label :dest_account_id, "To" %>
       <%= form.select :dest_account_id,
-        grouped_account_options_for_select(dest_accounts, Account::DESTINABLE, selected_key: transaction.dest_account_id),
+        grouped_account_options_for_select(accounts, Account.kinds.keys, selected_key: transaction.dest_account_id),
         { include_blank: "To…" },
         data: {
           action: "transactions--form#updateEnabledAccounts transactions--form#updateCurrency transactions--form#updateTypeFromSelectedAccounts",
