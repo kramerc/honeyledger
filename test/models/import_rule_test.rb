@@ -19,10 +19,28 @@ class ImportRuleTest < ActiveSupport::TestCase
     assert_includes rule.errors[:match_pattern], "can't be blank"
   end
 
-  test "invalid with asset account" do
+  test "valid with asset account" do
     rule = ImportRule.new(user: @user, account: @asset_account, match_pattern: "Test")
+    assert rule.valid?
+  end
+
+  test "valid with liability account" do
+    liability_account = Account.create!(user: @user, currency: currencies(:usd), name: "Credit Card", kind: :liability)
+    rule = ImportRule.new(user: @user, account: liability_account, match_pattern: "Test")
+    assert rule.valid?
+  end
+
+  test "valid with equity account" do
+    equity_account = Account.create!(user: @user, currency: currencies(:usd), name: "Equity", kind: :equity)
+    rule = ImportRule.new(user: @user, account: equity_account, match_pattern: "Test")
+    assert rule.valid?
+  end
+
+  test "invalid with virtual account" do
+    virtual_account = Account.opening_balance_for(user: @user, kind: :revenue)
+    rule = ImportRule.new(user: @user, account: virtual_account, match_pattern: "Test")
     assert_not rule.valid?
-    assert_includes rule.errors[:account], "must be an expense or revenue account"
+    assert_includes rule.errors[:account], "must not be a virtual account"
   end
 
   test "valid with expense account" do

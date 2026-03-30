@@ -8,30 +8,30 @@ class ImportRulesTest < ApplicationSystemTestCase
   end
 
   test "create import rule with contains match type" do
-    create_rule(pattern: "grocery", match_type: "Contains", account: "Expense Account (expense)")
+    create_rule(pattern: "grocery", match_type: "Contains", account: "Expense Account")
 
     assert_text "grocery"
     assert_text "Contains"
-    assert_text "Expense Account (expense)"
+    assert_text "Expense Account"
   end
 
   test "create import rule with exact match type" do
-    create_rule(pattern: "AMAZON PRIME", match_type: "Exact", account: "Expense Account (expense)")
+    create_rule(pattern: "AMAZON PRIME", match_type: "Exact", account: "Expense Account")
 
     assert_text "AMAZON PRIME"
     assert_text "Exact"
   end
 
   test "create import rule with starts_with match type" do
-    create_rule(pattern: "PAYPAL", match_type: "Starts with", account: "Revenue Account (revenue)")
+    create_rule(pattern: "PAYPAL", match_type: "Starts with", account: "Revenue Account")
 
     assert_text "PAYPAL"
     assert_text "Starts with"
-    assert_text "Revenue Account (revenue)"
+    assert_text "Revenue Account"
   end
 
   test "create import rule with ends_with match type" do
-    create_rule(pattern: "SUBSCRIPTION", match_type: "Ends with", account: "Expense Account (expense)")
+    create_rule(pattern: "SUBSCRIPTION", match_type: "Ends with", account: "Expense Account")
 
     assert_text "SUBSCRIPTION"
     assert_text "Ends with"

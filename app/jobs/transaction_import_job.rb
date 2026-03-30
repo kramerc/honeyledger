@@ -105,15 +105,14 @@ class TransactionImportJob < ApplicationJob
       end
     end
 
-    def find_or_create_account(user, description, kind, currency)
-      # Check if any account rule matches this description
-      rule = user.import_rules.for_kind(kind).for_description(description).first
+    def find_or_create_account(user, description, fallback_kind, currency)
+      rule = user.import_rules.for_description(description).first
       return rule.account if rule
 
       # Fall back to exact name match / create
       account_name = description.strip.gsub(/\s+/, " ").truncate(50)
 
-      user.accounts.find_or_create_by!(name: account_name, kind: kind) do |account|
+      user.accounts.find_or_create_by!(name: account_name, kind: fallback_kind) do |account|
         account.currency = currency
       end
     end

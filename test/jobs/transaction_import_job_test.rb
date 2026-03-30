@@ -429,15 +429,15 @@ class TransactionImportJobTest < ActiveJob::TestCase
     assert_equal salary_account, transaction.src_account
   end
 
-  test "expense rule does not match revenue transaction" do
-    sf_account, _ = create_linked_simplefin_account
+  test "expense rule matches revenue transaction for refunds" do
+    sf_account, bank_account = create_linked_simplefin_account
 
     expense_account = Account.create!(user: @user, currency: @currency, name: "Shopping", kind: :expense)
     ImportRule.create!(user: @user, account: expense_account, match_pattern: "AMZN", match_type: :contains)
 
     sf_transaction = Simplefin::Transaction.create!(
       account: sf_account,
-      remote_id: "txn_rule_wrong_kind",
+      remote_id: "txn_rule_refund",
       amount: "100.00",
       description: "AMZN REFUND",
       posted: 1.day.ago,
@@ -446,14 +446,95 @@ class TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      assert_difference "Account.count", 1 do
+      assert_no_difference "Account.count" do
         TransactionImportJob.perform_now
       end
     end
 
     transaction = Transaction.find_by(sourceable: sf_transaction)
-    assert_equal "revenue", transaction.src_account.kind
-    assert_not_equal expense_account, transaction.src_account
+    assert_equal expense_account, transaction.src_account
+    assert_equal bank_account, transaction.dest_account
+  end
+
+  test "rule with asset account creates transfer for negative transaction" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    savings_account = Account.create!(user: @user, currency: @currency, name: "Savings", kind: :asset)
+    ImportRule.create!(user: @user, account: savings_account, match_pattern: "TRANSFER TO SAVINGS", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_rule_transfer_out",
+      amount: "-500.00",
+      description: "TRANSFER TO SAVINGS",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal bank_account, transaction.src_account
+    assert_equal savings_account, transaction.dest_account
+  end
+
+  test "rule with liability account creates transfer for positive transaction" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    credit_card = Account.create!(user: @user, currency: @currency, name: "Credit Card", kind: :liability)
+    ImportRule.create!(user: @user, account: credit_card, match_pattern: "CC PAYMENT", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_rule_transfer_in",
+      amount: "200.00",
+      description: "CC PAYMENT RECEIVED",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal credit_card, transaction.src_account
+    assert_equal bank_account, transaction.dest_account
+  end
+
+  test "rule with revenue account creates clawback for negative transaction" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    salary_account = Account.create!(user: @user, currency: @currency, name: "Salary", kind: :revenue)
+    ImportRule.create!(user: @user, account: salary_account, match_pattern: "EMPLOYER", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_rule_clawback",
+      amount: "-150.00",
+      description: "EMPLOYER CLAWBACK",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        TransactionImportJob.perform_now
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal bank_account, transaction.src_account
+    assert_equal salary_account, transaction.dest_account
   end
 
   test "higher priority rule wins when multiple match" do
