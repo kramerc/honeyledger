@@ -41,6 +41,8 @@ class Account < ApplicationRecord
     user.accounts.find_or_create_by!(name: account_name, kind: kind) do |account|
       account.currency = currency
     end
+  rescue ActiveRecord::RecordNotUnique
+    user.accounts.find_by(name: account_name, kind: kind) || raise
   end
 
   def self.opening_balance_for(user:, kind:)
