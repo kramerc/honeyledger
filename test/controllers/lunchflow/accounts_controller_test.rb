@@ -20,10 +20,10 @@ class Lunchflow::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal @lunchflow_account, unlinked_account.sourceable
   end
 
-  test "should enqueue TransactionImportJob when account is linked" do
+  test "should enqueue ImportTransactionsJob when account is linked" do
     unlinked_account = accounts(:unlinked_liability)
 
-    assert_enqueued_with(job: TransactionImportJob, args: [ { lunchflow_account_id: @lunchflow_account.id } ]) do
+    assert_enqueued_with(job: Lunchflow::ImportTransactionsJob, args: [ { lunchflow_account_id: @lunchflow_account.id } ]) do
       post link_lunchflow_account_url(@lunchflow_account), params: { lunchflow_account: { ledger_account_id: unlinked_account.id } }
     end
   end

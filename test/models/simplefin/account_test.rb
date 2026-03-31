@@ -84,7 +84,7 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
   test "after_update callback on Account enqueues import when sourceable changes" do
     account = accounts(:one)
 
-    assert_enqueued_with(job: TransactionImportJob, args: [ { simplefin_account_id: @unlinked_simplefin_account.id } ]) do
+    assert_enqueued_with(job: Simplefin::ImportTransactionsJob, args: [ { simplefin_account_id: @unlinked_simplefin_account.id } ]) do
       account.update!(sourceable: @unlinked_simplefin_account)
     end
   end
@@ -92,7 +92,7 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
   test "after_update callback on Account does not enqueue import when sourceable does not change" do
     linked_account = accounts(:linked_asset)
 
-    assert_no_enqueued_jobs(only: TransactionImportJob) do
+    assert_no_enqueued_jobs(only: Simplefin::ImportTransactionsJob) do
       linked_account.update!(name: "Updated Name")
     end
   end

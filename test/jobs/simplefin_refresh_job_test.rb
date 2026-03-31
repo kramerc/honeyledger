@@ -283,6 +283,64 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     assert_equal "mybank.com", account.org["org_url"]
   end
 
+  test "enqueues import jobs for linked accounts after refresh" do
+    # linked_one fixture (remote_id: remote_id_1) is linked to linked_asset via Account.sourceable
+    linked_sf_account = simplefin_accounts(:linked_one)
+
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts(start_date:)
+      {
+        "errlist" => [],
+        "connections" => [],
+        "accounts" => [
+          {
+            "id" => "remote_id_1",
+            "name" => "Test Checking",
+            "currency" => "USD",
+            "balance" => "1000.00",
+            "transactions" => []
+          }
+        ]
+      }
+    end
+
+    SimplefinClient.stub :new, mock_client do
+      assert_enqueued_with(job: Simplefin::ImportTransactionsJob, args: [ { simplefin_account_id: linked_sf_account.id } ]) do
+        Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+      end
+    end
+  end
+
+  test "does not enqueue import jobs for unlinked accounts after refresh" do
+    # Unlink all accounts first
+    Account.where(sourceable_type: "Simplefin::Account").update_all(sourceable_id: nil, sourceable_type: nil)
+
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts(start_date:)
+      {
+        "errlist" => [],
+        "connections" => [],
+        "accounts" => [
+          {
+            "id" => "remote_id_2",
+            "name" => "Test Savings",
+            "currency" => "USD",
+            "balance" => "5000.00",
+            "transactions" => []
+          }
+        ]
+      }
+    end
+
+    SimplefinClient.stub :new, mock_client do
+      assert_no_enqueued_jobs(only: Simplefin::ImportTransactionsJob) do
+        Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+      end
+    end
+  end
+
   test "continues to next account when one account raises an error" do
     mock_client = Minitest::Mock.new
 

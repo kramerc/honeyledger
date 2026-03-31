@@ -153,6 +153,58 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     assert_not_nil @lunchflow_connection.refreshed_at
   end
 
+  test "enqueues import jobs for linked accounts after refresh" do
+    linked_lf_account = lunchflow_accounts(:linked_one)
+
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts
+      [
+        { "id" => 101, "name" => "Test Bank Checking", "institution_name" => "Test Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" }
+      ]
+    end
+
+    def mock_client.balance(account_id)
+      { "amount" => 2500.0, "currency" => "USD" }
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      assert_enqueued_with(job: Lunchflow::ImportTransactionsJob, args: [ { lunchflow_account_id: linked_lf_account.id } ]) do
+        Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+      end
+    end
+  end
+
+  test "does not enqueue import jobs for unlinked accounts after refresh" do
+    Account.where(sourceable_type: "Lunchflow::Account").update_all(sourceable_id: nil, sourceable_type: nil)
+
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts
+      [
+        { "id" => 102, "name" => "Test Bank Savings", "institution_name" => "Test Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" }
+      ]
+    end
+
+    def mock_client.balance(account_id)
+      { "amount" => 10000.0, "currency" => "USD" }
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      assert_no_enqueued_jobs(only: Lunchflow::ImportTransactionsJob) do
+        Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+      end
+    end
+  end
+
   test "continues to next account when one account fails" do
     mock_client = Object.new
 
