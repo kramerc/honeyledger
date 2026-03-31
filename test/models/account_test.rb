@@ -61,6 +61,36 @@ class AccountTest < ActiveSupport::TestCase
     end
   end
 
+  test "find_or_create_for_import handles RecordNotUnique" do
+    user = users(:one)
+    currency = currencies(:usd)
+
+    accounts_proxy = user.accounts
+    accounts_proxy.stub :find_or_create_by!, ->(_) { raise ActiveRecord::RecordNotUnique } do
+      accounts_proxy.stub :find_by, @account do
+        user.stub :accounts, accounts_proxy do
+          assert_equal @account, Account.find_or_create_for_import(user: user, description: "Test", kind: :expense, currency: currency)
+        end
+      end
+    end
+  end
+
+  test "find_or_create_for_import raises RecordNotUnique when both find and create fail" do
+    user = users(:one)
+    currency = currencies(:usd)
+
+    accounts_proxy = user.accounts
+    accounts_proxy.stub :find_or_create_by!, ->(_) { raise ActiveRecord::RecordNotUnique } do
+      accounts_proxy.stub :find_by, nil do
+        user.stub :accounts, accounts_proxy do
+          assert_raises(ActiveRecord::RecordNotUnique) do
+            Account.find_or_create_for_import(user: user, description: "Test", kind: :expense, currency: currency)
+          end
+        end
+      end
+    end
+  end
+
   test "reset_balance recalculates balance from sum of transactions" do
     account = accounts(:asset_account)
     deposits = Transaction.where(dest_account: account).sum(:amount_minor)

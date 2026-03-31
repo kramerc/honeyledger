@@ -37,12 +37,12 @@ class Account < ApplicationRecord
     rule = user.import_rules.for_description(description).first
     return rule.account if rule
 
-    account_name = description.strip.gsub(/\s+/, " ").truncate(50)
-    user.accounts.find_or_create_by!(name: account_name, kind: kind) do |account|
+    attributes = { name: description.strip.gsub(/\s+/, " ").truncate(50), kind: kind }
+    user.accounts.find_or_create_by!(attributes) do |account|
       account.currency = currency
     end
   rescue ActiveRecord::RecordNotUnique
-    user.accounts.find_by(name: account_name, kind: kind) || raise
+    user.accounts.find_by(attributes) || raise
   end
 
   def self.opening_balance_for(user:, kind:)
