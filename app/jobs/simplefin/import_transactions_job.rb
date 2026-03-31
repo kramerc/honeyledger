@@ -1,4 +1,4 @@
-class Simplefin::TransactionImportJob < ApplicationJob
+class Simplefin::ImportTransactionsJob < ApplicationJob
   queue_as :default
 
   def perform(simplefin_account_id:)

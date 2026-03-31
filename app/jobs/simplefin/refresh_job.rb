@@ -57,6 +57,6 @@ class Simplefin::RefreshJob < ApplicationJob
         sf_transaction.save!
       end
 
-      Simplefin::TransactionImportJob.perform_later(simplefin_account_id: sf_account.id) if sf_account.linked?
+      Simplefin::ImportTransactionsJob.perform_later(simplefin_account_id: sf_account.id) if sf_account.linked?
     end
 end

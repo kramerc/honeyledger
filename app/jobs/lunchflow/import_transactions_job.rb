@@ -1,4 +1,4 @@
-class Lunchflow::TransactionImportJob < ApplicationJob
+class Lunchflow::ImportTransactionsJob < ApplicationJob
   queue_as :default
 
   def perform(lunchflow_account_id:)

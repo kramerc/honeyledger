@@ -1,6 +1,6 @@
 require "test_helper"
 
-class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
+class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
   setup do
     @user = users(:one)
     @currency = currencies(:usd)
@@ -25,7 +25,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_difference "Account.count", 1 do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -58,7 +58,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_difference "Account.count", 1 do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -105,7 +105,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 2 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -129,7 +129,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
 
     transaction = Transaction.find_by(sourceable: sf_transaction)
     original_synced_at = transaction.synced_at
@@ -143,7 +143,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_no_difference "Transaction.count" do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -172,7 +172,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_no_difference "Transaction.count" do
-      Simplefin::TransactionImportJob.perform_now(simplefin_account_id: unlinked_sf_account.id)
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: unlinked_sf_account.id)
     end
   end
 
@@ -190,7 +190,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
     end
 
     transaction = Transaction.find_by(sourceable: sf_transaction)
@@ -214,7 +214,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_difference "Account.count", 1 do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -240,7 +240,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_difference "Account.count", 1 do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -263,7 +263,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
 
     sf_transaction_new = Simplefin::Transaction.create!(
       account: sf_account,
@@ -276,7 +276,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
     end
 
     assert_not_nil Transaction.find_by(sourceable: sf_transaction_new)
@@ -300,7 +300,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -326,7 +326,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -352,7 +352,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -379,7 +379,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -406,7 +406,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -433,7 +433,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_no_difference "Account.count" do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 
@@ -461,7 +461,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
 
     transaction = Transaction.find_by(sourceable: sf_transaction)
     assert_equal specific_account, transaction.dest_account
@@ -484,7 +484,7 @@ class Simplefin::TransactionImportJobTest < ActiveJob::TestCase
 
     assert_difference "Transaction.count", 1 do
       assert_difference "Account.count", 1 do
-        Simplefin::TransactionImportJob.perform_now(simplefin_account_id: sf_account.id)
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
 

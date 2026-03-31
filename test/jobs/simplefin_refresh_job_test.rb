@@ -306,7 +306,7 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     end
 
     SimplefinClient.stub :new, mock_client do
-      assert_enqueued_with(job: Simplefin::TransactionImportJob, args: [ { simplefin_account_id: linked_sf_account.id } ]) do
+      assert_enqueued_with(job: Simplefin::ImportTransactionsJob, args: [ { simplefin_account_id: linked_sf_account.id } ]) do
         Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       end
     end
@@ -335,7 +335,7 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     end
 
     SimplefinClient.stub :new, mock_client do
-      assert_no_enqueued_jobs(only: Simplefin::TransactionImportJob) do
+      assert_no_enqueued_jobs(only: Simplefin::ImportTransactionsJob) do
         Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
       end
     end

@@ -125,9 +125,9 @@ class Account < ApplicationRecord
       return unless sourceable.present?
       case sourceable
       when Simplefin::Account
-        Simplefin::TransactionImportJob.perform_later(simplefin_account_id: sourceable_id)
+        Simplefin::ImportTransactionsJob.perform_later(simplefin_account_id: sourceable_id)
       when Lunchflow::Account
-        Lunchflow::TransactionImportJob.perform_later(lunchflow_account_id: sourceable_id)
+        Lunchflow::ImportTransactionsJob.perform_later(lunchflow_account_id: sourceable_id)
       end
     end
 

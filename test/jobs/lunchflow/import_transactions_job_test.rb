@@ -1,6 +1,6 @@
 require "test_helper"
 
-class Lunchflow::TransactionImportJobTest < ActiveJob::TestCase
+class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
   setup do
     @user = users(:one)
     @currency = currencies(:usd)
@@ -25,7 +25,7 @@ class Lunchflow::TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      Lunchflow::TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
     transaction = Transaction.find_by(sourceable: lf_transaction)
@@ -53,7 +53,7 @@ class Lunchflow::TransactionImportJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      Lunchflow::TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
     transaction = Transaction.find_by(sourceable: lf_transaction)
@@ -79,7 +79,7 @@ class Lunchflow::TransactionImportJobTest < ActiveJob::TestCase
       date: 1.day.ago.to_date
     )
 
-    Lunchflow::TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
 
     transaction = Transaction.find_by(sourceable: lf_transaction)
     assert_equal "Whole Foods", transaction.description
@@ -98,7 +98,7 @@ class Lunchflow::TransactionImportJobTest < ActiveJob::TestCase
       date: Date.current
     )
 
-    Lunchflow::TransactionImportJob.perform_now(lunchflow_account_id: lf_account.id)
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
 
     transaction = Transaction.find_by(sourceable: lf_transaction)
     assert_nil transaction.cleared_at

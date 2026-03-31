@@ -173,7 +173,7 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     end
 
     LunchflowClient.stub :new, mock_client do
-      assert_enqueued_with(job: Lunchflow::TransactionImportJob, args: [ { lunchflow_account_id: linked_lf_account.id } ]) do
+      assert_enqueued_with(job: Lunchflow::ImportTransactionsJob, args: [ { lunchflow_account_id: linked_lf_account.id } ]) do
         Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
       end
     end
@@ -199,7 +199,7 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     end
 
     LunchflowClient.stub :new, mock_client do
-      assert_no_enqueued_jobs(only: Lunchflow::TransactionImportJob) do
+      assert_no_enqueued_jobs(only: Lunchflow::ImportTransactionsJob) do
         Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
       end
     end

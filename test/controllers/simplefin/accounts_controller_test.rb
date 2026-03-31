@@ -20,11 +20,11 @@ class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal sf_account, unlinked_account.sourceable
   end
 
-  test "should enqueue TransactionImportJob when account is linked" do
+  test "should enqueue ImportTransactionsJob when account is linked" do
     sf_account = simplefin_accounts(:unlinked_one)
     unlinked_account = accounts(:unlinked_liability)
 
-    assert_enqueued_with(job: Simplefin::TransactionImportJob, args: [ { simplefin_account_id: sf_account.id } ]) do
+    assert_enqueued_with(job: Simplefin::ImportTransactionsJob, args: [ { simplefin_account_id: sf_account.id } ]) do
       post link_simplefin_account_url(sf_account), params: { simplefin_account: { ledger_account_id: unlinked_account.id } }
     end
   end
