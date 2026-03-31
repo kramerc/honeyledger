@@ -33,6 +33,16 @@ class Account < ApplicationRecord
   scope :linkable, -> { where(kind: %i[ asset liability ]) }
   scope :unlinked, -> { where(sourceable_id: nil, sourceable_type: nil) }
 
+  def self.find_or_create_for_import(user:, description:, kind:, currency:)
+    rule = user.import_rules.for_description(description).first
+    return rule.account if rule
+
+    account_name = description.strip.gsub(/\s+/, " ").truncate(50)
+    user.accounts.find_or_create_by!(name: account_name, kind: kind) do |account|
+      account.currency = currency
+    end
+  end
+
   def self.opening_balance_for(user:, kind:)
     attributes = { user: user, kind: kind, name: "Opening Balance", virtual: true }
     Account.find_or_create_by!(attributes)
@@ -115,9 +125,9 @@ class Account < ApplicationRecord
       return unless sourceable.present?
       case sourceable
       when Simplefin::Account
-        TransactionImportJob.perform_later(simplefin_account_id: sourceable_id)
+        Simplefin::TransactionImportJob.perform_later(simplefin_account_id: sourceable_id)
       when Lunchflow::Account
-        TransactionImportJob.perform_later(lunchflow_account_id: sourceable_id)
+        Lunchflow::TransactionImportJob.perform_later(lunchflow_account_id: sourceable_id)
       end
     end
 

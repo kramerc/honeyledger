@@ -66,5 +66,7 @@ class Lunchflow::RefreshJob < ApplicationJob
         lf_transaction.synced_at = Time.current
         lf_transaction.save!
       end
+
+      Lunchflow::TransactionImportJob.perform_later(lunchflow_account_id: lf_account.id) if lf_account.linked?
     end
 end
