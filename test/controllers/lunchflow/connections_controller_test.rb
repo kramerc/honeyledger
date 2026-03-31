@@ -70,6 +70,20 @@ class Lunchflow::ConnectionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Lunch Flow refresh enqueued.", flash[:notice]
   end
 
+  test "should return 404 when refreshing without connection" do
+    @lunchflow_connection.destroy!
+
+    post refresh_lunchflow_connection_url
+    assert_response :not_found
+  end
+
+  test "should return 404 when destroying without connection" do
+    @lunchflow_connection.destroy!
+
+    delete lunchflow_connection_url
+    assert_response :not_found
+  end
+
   test "should destroy connection" do
     assert_difference("Lunchflow::Connection.count", -1) do
       delete lunchflow_connection_url

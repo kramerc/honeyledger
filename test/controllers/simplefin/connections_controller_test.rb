@@ -72,6 +72,20 @@ class Simplefin::ConnectionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "SimpleFIN refresh enqueued.", flash[:notice]
   end
 
+  test "should return 404 when refreshing without connection" do
+    @simplefin_connection.destroy!
+
+    post refresh_simplefin_connection_url
+    assert_response :not_found
+  end
+
+  test "should return 404 when destroying without connection" do
+    @simplefin_connection.destroy!
+
+    delete simplefin_connection_url
+    assert_response :not_found
+  end
+
   test "should destroy connection" do
     assert_difference("Simplefin::Connection.count", -1) do
       delete simplefin_connection_url

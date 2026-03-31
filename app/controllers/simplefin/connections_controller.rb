@@ -55,7 +55,7 @@ class Simplefin::ConnectionsController < ApplicationController
     end
 
     def set_simplefin_connection
-      @simplefin_connection = current_user.simplefin_connection
+      @simplefin_connection = Simplefin::Connection.find_by!(user: current_user)
     end
 
     def simplefin_connection_params
