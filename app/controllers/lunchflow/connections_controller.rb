@@ -48,7 +48,7 @@ class Lunchflow::ConnectionsController < ApplicationController
     end
 
     def set_lunchflow_connection
-      @lunchflow_connection = current_user.lunchflow_connection
+      @lunchflow_connection = Lunchflow::Connection.find_by!(user: current_user)
     end
 
     def lunchflow_connection_params
