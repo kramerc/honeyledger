@@ -37,7 +37,7 @@ class Account < ApplicationRecord
     rule = user.import_rules.for_description(description).first
     return rule.account if rule
 
-    attributes = { name: description.strip.gsub(/\s+/, " ").truncate(50), kind: kind }
+    attributes = { name: description.strip.gsub(/\s+/, " "), kind: kind }
     user.accounts.find_or_create_by!(attributes) do |account|
       account.currency = currency
     end
