@@ -1,5 +1,5 @@
 class Transaction::Merge
-  BALANCE_SHEET_KINDS = %w[asset liability equity].freeze
+  BALANCE_SHEET_KINDS = %w[ asset liability equity ].freeze
 
   attr_reader :merged_transaction, :errors
 
