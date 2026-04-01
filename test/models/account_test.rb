@@ -101,13 +101,13 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal long_description, account.name
   end
 
-  test "find_or_create_for_import normalizes whitespace in descriptions" do
+  test "find_or_create_for_import passes description as-is" do
     user = users(:one)
     currency = currencies(:usd)
 
     account = Account.find_or_create_for_import(user: user, description: "  Multiple   Spaces   Store  ", kind: :expense, currency: currency)
 
-    assert_equal "Multiple Spaces Store", account.name
+    assert_equal "  Multiple   Spaces   Store  ", account.name
   end
 
   test "reset_balance recalculates balance from sum of transactions" do

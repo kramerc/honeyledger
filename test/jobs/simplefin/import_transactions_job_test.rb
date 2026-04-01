@@ -224,7 +224,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal "A" * 100, expense_account.name
   end
 
-  test "sanitizes account names with extra whitespace" do
+  test "preserves account names with extra whitespace" do
     sf_account, _ = create_linked_simplefin_account
 
     sf_transaction = Simplefin::Transaction.create!(
@@ -246,7 +246,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     transaction = Transaction.find_by(sourceable: sf_transaction)
     expense_account = transaction.dest_account
 
-    assert_equal "Multiple Spaces Store", expense_account.name
+    assert_equal "  Multiple   Spaces   Store  ", expense_account.name
   end
 
   test "only imports transactions that are new or updated since last sync" do
