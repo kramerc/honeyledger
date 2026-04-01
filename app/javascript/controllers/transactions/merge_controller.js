@@ -1,12 +1,12 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["checkbox", "mergeBar", "mergeButton", "mergeMessage", "confirmation"]
+  static targets = [ "checkbox", "mergeBar", "mergeButton", "mergeMessage", "confirmation" ]
   static values = {
     mergeUrl: String
   }
 
-  static BALANCE_SHEET_KINDS = ["asset", "liability", "equity"]
+  static BALANCE_SHEET_KINDS = [ "asset", "liability", "equity" ]
 
   connect() {
     this.selectedIds = []
@@ -73,7 +73,7 @@ export default class extends Controller {
 
   validatePair(a, b) {
     const bs = this.constructor.BALANCE_SHEET_KINDS
-    const ie = ["expense", "revenue"]
+    const ie = [ "expense", "revenue" ]
 
     if (a.amountMinor !== b.amountMinor) {
       return { valid: false, reason: "Amounts must match" }
