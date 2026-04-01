@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = [ "form" ]
+  static targets = [ "form", "mergedDetails" ]
 
   edit(event) {
     event.preventDefault()
@@ -16,5 +16,11 @@ export default class extends Controller {
 
   closeEdit() {
     this.element.classList.remove("editing")
+  }
+
+  toggleMergedDetails(event) {
+    event.preventDefault()
+    if (!this.hasMergedDetailsTarget) return
+    this.mergedDetailsTarget.classList.toggle("merged-details--visible")
   }
 }

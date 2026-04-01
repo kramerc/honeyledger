@@ -1,0 +1,11 @@
+<% @removed_ids.each do |id| %>
+  <%= turbo_stream.remove "transaction_#{id}" %>
+<% end %>
+
+<% if @last_transaction %>
+  <%= turbo_stream.before dom_id(@last_transaction), @merged_transaction %>
+<% else %>
+  <%= turbo_stream.prepend :transactions do %>
+    <%= render @merged_transaction %>
+  <% end %>
+<% end %>

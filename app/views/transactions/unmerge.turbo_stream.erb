@@ -1,0 +1,13 @@
+<%= turbo_stream.remove "transaction_#{@removed_id}" %>
+
+<% if @after_transaction %>
+  <% @restored_transactions.reverse_each do |transaction| %>
+    <%= turbo_stream.after dom_id(@after_transaction), transaction %>
+  <% end %>
+<% else %>
+  <% @restored_transactions.reverse_each do |transaction| %>
+    <%= turbo_stream.prepend :transactions do %>
+      <%= render transaction %>
+    <% end %>
+  <% end %>
+<% end %>

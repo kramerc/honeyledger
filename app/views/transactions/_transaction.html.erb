@@ -1,10 +1,35 @@
 <!-- Show -->
 <%= turbo_frame_tag transaction do %>
-  <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>">
+  <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
+       data-merge-amount-minor="<%= transaction.amount_minor %>"
+       data-merge-src-account-id="<%= transaction.src_account_id %>"
+       data-merge-dest-account-id="<%= transaction.dest_account_id %>"
+       data-merge-src-kind="<%= transaction.src_account&.kind %>"
+       data-merge-dest-kind="<%= transaction.dest_account&.kind %>"
+       data-merge-src-account-name="<%= transaction.src_account&.name %>"
+       data-merge-dest-account-name="<%= transaction.dest_account&.name %>"
+       data-merge-description="<%= transaction.description %>"
+       data-merge-transacted-at="<%= transaction.transacted_at&.strftime("%Y-%m-%dT%H:%M") %>"
+       data-merge-currency-code="<%= transaction.currency.code %>"
+       data-merge-currency-decimal-places="<%= transaction.currency.decimal_places %>">
 
     <div class="row show">
+      <div class="select">
+        <% unless transaction.opening_balance? %>
+          <input type="checkbox"
+                 class="merge-checkbox"
+                 data-transactions--merge-target="checkbox"
+                 data-action="change->transactions--merge#toggle"
+                 data-transaction-id="<%= transaction.id %>">
+        <% end %>
+      </div>
       <div data-label="Date"><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></div>
-      <div data-label="Type"><%= transaction_type_indicator(transaction) %></div>
+      <div data-label="Type">
+        <%= transaction_type_indicator(transaction) %>
+        <% if transaction.merged_sources.any? %>
+          <a href="#" class="merged-badge" data-action="transactions--row#toggleMergedDetails">Merged</a>
+        <% end %>
+      </div>
       <div data-label="Description"><%= transaction.description %></div>
       <div data-label="From"><%= transaction.src_account&.name %></div>
       <div data-label="To"><%= transaction.dest_account&.name %></div>
@@ -19,7 +44,23 @@
           <a href="#" data-action="transactions--row#edit">Edit</a>
         <% end %>
         <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
+        <% if transaction.merged_sources.any? %>
+          <%= link_to "Unmerge", unmerge_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
+        <% end %>
       </div>
+
+      <% if transaction.merged_sources.any? %>
+        <div class="merged-details" data-transactions--row-target="mergedDetails">
+          <div class="merged-details__content">
+            <strong>Merged from:</strong>
+            <ul>
+              <% transaction.merged_sources.each do |source| %>
+                <li><%= source.src_account&.name %> → <%= source.dest_account&.name %><% if source.description.present? %> — "<%= source.description %>"<% end %></li>
+              <% end %>
+            </ul>
+          </div>
+        </div>
+      <% end %>
     </div>
 
     <!-- Edit -->

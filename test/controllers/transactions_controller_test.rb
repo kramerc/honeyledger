@@ -225,4 +225,131 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
   end
+
+  test "index excludes merged transactions" do
+    currency = currencies(:usd)
+    bank_a = accounts(:asset_account)
+    bank_b = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Merge Test Expense", kind: :expense, currency: currency)
+    revenue = Account.create!(user: @user, name: "Merge Test Revenue", kind: :revenue, currency: currency)
+
+    withdrawal = Transaction.create!(user: @user, src_account: bank_a, dest_account: expense,
+                                     amount_minor: 300, currency: currency, description: "Hidden after merge",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: revenue, dest_account: bank_b,
+                                  amount_minor: 300, currency: currency, description: "Hidden after merge",
+                                  transacted_at: Time.current)
+
+    merger = Transaction::Merge.new(withdrawal, deposit, user: @user)
+    merger.call
+
+    get transactions_url
+    assert_response :success
+
+    # Merged originals should not appear (they have amount 0 and are hidden)
+    # The new transfer should appear
+    assert_includes response.body, merger.merged_transaction.description
+  end
+
+  test "merge with turbo_stream creates transfer and removes originals" do
+    currency = currencies(:usd)
+    bank_a = accounts(:asset_account)
+    bank_b = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Merge Expense", kind: :expense, currency: currency)
+    revenue = Account.create!(user: @user, name: "Merge Revenue", kind: :revenue, currency: currency)
+
+    withdrawal = Transaction.create!(user: @user, src_account: bank_a, dest_account: expense,
+                                     amount_minor: 1000, currency: currency, description: "Test merge",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: revenue, dest_account: bank_b,
+                                  amount_minor: 1000, currency: currency, description: "Test merge",
+                                  transacted_at: Time.current)
+
+    assert_difference("Transaction.count", 1) do  # +1 new, 0 destroyed (soft-delete)
+      post merge_transactions_url, params: {
+        transaction_ids: [ withdrawal.id, deposit.id ],
+        description: "Merged transfer"
+      }, as: :turbo_stream
+    end
+
+    assert_response :success
+
+    withdrawal.reload
+    deposit.reload
+    assert_not_nil withdrawal.merged_into_id
+    assert_not_nil deposit.merged_into_id
+    assert_equal withdrawal.merged_into_id, deposit.merged_into_id
+  end
+
+  test "merge with invalid pair returns error" do
+    # Both transactions have balance-sheet src — no valid merge possible
+    t1 = Transaction.create!(user: @user, src_account: accounts(:asset_account),
+                             dest_account: accounts(:expense_account), amount_minor: 100,
+                             currency: currencies(:usd), transacted_at: Time.current,
+                             description: "A")
+    t2 = Transaction.create!(user: @user, src_account: accounts(:linked_asset),
+                             dest_account: accounts(:expense_account), amount_minor: 200,
+                             currency: currencies(:usd), transacted_at: Time.current,
+                             description: "B")
+
+    post merge_transactions_url, params: {
+      transaction_ids: [ t1.id, t2.id ]
+    }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
+
+  test "merge rejects other user's transactions" do
+    other_user_tx = transactions(:opening_balance_revenue)
+    post merge_transactions_url, params: {
+      transaction_ids: [ other_user_tx.id, @transaction.id ]
+    }, as: :turbo_stream
+
+    assert_response :not_found
+  end
+
+  test "unmerge restores original transactions via turbo_stream" do
+    currency = currencies(:usd)
+    bank_a = accounts(:asset_account)
+    bank_b = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Unmerge Expense", kind: :expense, currency: currency)
+    revenue = Account.create!(user: @user, name: "Unmerge Revenue", kind: :revenue, currency: currency)
+
+    withdrawal = Transaction.create!(user: @user, src_account: bank_a, dest_account: expense,
+                                     amount_minor: 500, currency: currency, description: "Unmerge test",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: revenue, dest_account: bank_b,
+                                  amount_minor: 500, currency: currency, description: "Unmerge test",
+                                  transacted_at: Time.current)
+
+    merger = Transaction::Merge.new(withdrawal, deposit, user: @user)
+    merger.call
+    merged = merger.merged_transaction
+
+    assert_difference("Transaction.count", -1) do
+      post unmerge_transaction_url(merged), as: :turbo_stream
+    end
+
+    assert_response :success
+
+    withdrawal.reload
+    deposit.reload
+    assert_nil withdrawal.merged_into_id
+    assert_nil deposit.merged_into_id
+    assert_equal 500, withdrawal.amount_minor
+    assert_equal 500, deposit.amount_minor
+  end
+
+  test "unmerge on non-merged transaction returns error" do
+    post unmerge_transaction_url(@transaction), as: :turbo_stream
+    assert_response :unprocessable_entity
+  end
+
+  test "merge with wrong number of transaction IDs returns error" do
+    post merge_transactions_url, params: {
+      transaction_ids: [ @transaction.id ]
+    }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
 end

@@ -7,7 +7,7 @@ class TransactionsController < ApplicationController
   def index
     @new_transaction = build_new_transaction
 
-    @transactions = current_user.transactions.includes(:category, :src_account, :dest_account, :currency, :fx_currency).order(transacted_at: :desc, created_at: :desc)
+    @transactions = current_user.transactions.unmerged.includes(:category, :src_account, :dest_account, :currency, :fx_currency, merged_sources: [ :src_account, :dest_account ]).order(transacted_at: :desc, created_at: :desc)
     account_id = params.fetch(:account_id, nil)
     if account_id.present?
       @account = current_user.accounts.find(account_id)
@@ -31,8 +31,7 @@ class TransactionsController < ApplicationController
     respond_to do |format|
       if @transaction.save
         format.turbo_stream do
-          # Find the most recent transaction before this one (by transacted_at, then created_at) to determine where to insert in the list
-          @last_transaction = current_user.transactions.where("transacted_at <= ? AND created_at < ?", @transaction.transacted_at, @transaction.created_at).order(transacted_at: :desc, created_at: :desc).first
+          @last_transaction = find_preceding_transaction(@transaction)
           @new_transaction = build_new_transaction
         end
         format.html { redirect_to @transaction, notice: "Transaction was successfully created." }
@@ -59,6 +58,68 @@ class TransactionsController < ApplicationController
         format.turbo_stream { render :edit, status: :unprocessable_entity }
         format.html { render :edit, status: :unprocessable_entity }
         format.json { render json: @transaction.errors, status: :unprocessable_entity }
+      end
+    end
+  end
+
+  # POST /transactions/:id/unmerge
+  def unmerge
+    @transaction = current_user.transactions.find(params.expect(:id))
+
+    unmerger = Transaction::Unmerge.new(@transaction, user: current_user)
+
+    respond_to do |format|
+      if unmerger.call
+        @restored_transactions = unmerger.restored_transactions
+          .sort_by { |t| [ t.transacted_at, t.created_at ] }.reverse
+        # Find the nearest transaction that's newer (appears above in the list) to insert after.
+        # This element is already in the DOM, unlike older ones which may be off-screen or absent.
+        newest = @restored_transactions.first
+        @after_transaction = current_user.transactions.unmerged
+          .where.not(id: @restored_transactions.map(&:id))
+          .where("transacted_at > :at OR (transacted_at = :at AND created_at > :cat)",
+                 at: newest.transacted_at, cat: newest.created_at)
+          .order(transacted_at: :asc, created_at: :asc).first
+        @removed_id = @transaction.id
+        format.turbo_stream
+      else
+        @merge_errors = unmerger.errors
+        format.turbo_stream { render :merge_error, status: :unprocessable_entity }
+      end
+    end
+  end
+
+  # POST /transactions/merge
+  def merge
+    transaction_ids = Array(params.require(:transaction_ids)).uniq
+    unless transaction_ids.size == 2
+      @merge_errors = [ "You must select exactly two transactions to merge." ]
+      respond_to do |format|
+        format.turbo_stream { render :merge_error, status: :unprocessable_entity }
+      end
+      return
+    end
+
+    transaction_a = current_user.transactions.find(transaction_ids[0])
+    transaction_b = current_user.transactions.find(transaction_ids[1])
+
+    merger = Transaction::Merge.new(
+      transaction_a, transaction_b,
+      user: current_user,
+      description: params[:description],
+      transacted_at: params[:transacted_at],
+      category_id: params[:category_id]
+    )
+
+    respond_to do |format|
+      if merger.call
+        @merged_transaction = merger.merged_transaction
+        @last_transaction = find_preceding_transaction(@merged_transaction)
+        @removed_ids = [ transaction_a.id, transaction_b.id ]
+        format.turbo_stream
+      else
+        @merge_errors = merger.errors
+        format.turbo_stream { render :merge_error, status: :unprocessable_entity }
       end
     end
   end
@@ -100,6 +161,12 @@ class TransactionsController < ApplicationController
         :notes,
         :cleared
       ])
+    end
+
+    def find_preceding_transaction(transaction)
+      current_user.transactions.unmerged
+        .where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
+        .order(transacted_at: :desc, created_at: :desc).first
     end
 
     def set_form_collections

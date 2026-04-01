@@ -4,6 +4,7 @@
   transactions__row_target: "form"
 }, html: { autocomplete: "off" }) do |form| %>
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
+    <div class="select"></div>
     <div>
       <%= form.label :transacted_at, "Date" %>
       <%= form.datetime_field :transacted_at, include_seconds: false %>

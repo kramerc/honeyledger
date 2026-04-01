@@ -13,7 +13,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
       .where(account_id: simplefin_account_id)
       .includes(account: { connection: :user })
       .left_joins(:ledger_transaction)
-      .where("transactions.id IS NULL OR simplefin_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01')")
+      .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND simplefin_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
     transactions.find_each do |sft|
       user = sft.account.connection.user
