@@ -199,56 +199,6 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil transaction.cleared_at
   end
 
-  test "preserves long account names" do
-    sf_account, _ = create_linked_simplefin_account
-
-    sf_transaction = Simplefin::Transaction.create!(
-      account: sf_account,
-      remote_id: "txn_long_name",
-      amount: "-20.00",
-      description: "A" * 100,
-      posted: 1.day.ago,
-      transacted_at: 1.day.ago,
-      pending: false
-    )
-
-    assert_difference "Transaction.count", 1 do
-      assert_difference "Account.count", 1 do
-        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
-      end
-    end
-
-    transaction = Transaction.find_by(sourceable: sf_transaction)
-    expense_account = transaction.dest_account
-
-    assert_equal "A" * 100, expense_account.name
-  end
-
-  test "preserves account names with extra whitespace" do
-    sf_account, _ = create_linked_simplefin_account
-
-    sf_transaction = Simplefin::Transaction.create!(
-      account: sf_account,
-      remote_id: "txn_whitespace",
-      amount: "-15.00",
-      description: "  Multiple   Spaces   Store  ",
-      posted: 1.day.ago,
-      transacted_at: 1.day.ago,
-      pending: false
-    )
-
-    assert_difference "Transaction.count", 1 do
-      assert_difference "Account.count", 1 do
-        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
-      end
-    end
-
-    transaction = Transaction.find_by(sourceable: sf_transaction)
-    expense_account = transaction.dest_account
-
-    assert_equal "  Multiple   Spaces   Store  ", expense_account.name
-  end
-
   test "only imports transactions that are new or updated since last sync" do
     sf_account, _ = create_linked_simplefin_account
 

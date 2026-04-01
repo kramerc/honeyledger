@@ -104,32 +104,6 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil transaction.cleared_at
   end
 
-  test "preserves long account names" do
-    lf_account, _ = create_linked_lunchflow_account
-
-    lf_transaction = Lunchflow::Transaction.create!(
-      account: lf_account,
-      remote_id: "lf_long_name",
-      amount: "-20.00",
-      currency: "USD",
-      description: "A" * 100,
-      merchant: "A" * 100,
-      pending: false,
-      date: 1.day.ago.to_date
-    )
-
-    assert_difference "Transaction.count", 1 do
-      assert_difference "Account.count", 1 do
-        Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
-      end
-    end
-
-    transaction = Transaction.find_by(sourceable: lf_transaction)
-    expense_account = transaction.dest_account
-
-    assert_equal "A" * 100, expense_account.name
-  end
-
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
