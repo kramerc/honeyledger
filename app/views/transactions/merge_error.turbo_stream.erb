@@ -1,11 +1,11 @@
 <%= turbo_stream.prepend :transactions do %>
-  <div class="merge-error" id="merge_error">
+  <div class="merge-error" id="merge_error" data-controller="error">
     <strong>Could not merge transactions:</strong>
     <ul>
       <% @merge_errors.each do |error| %>
         <li><%= error %></li>
       <% end %>
     </ul>
-    <button onclick="this.closest('.merge-error').remove()">Dismiss</button>
+    <button type="button" data-action="error#close">Dismiss</button>
   </div>
 <% end %>

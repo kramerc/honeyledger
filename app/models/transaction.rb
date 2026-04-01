@@ -18,7 +18,7 @@ class Transaction < ApplicationRecord
   has_many :child_transactions, class_name: "Transaction", foreign_key: "parent_transaction_id", dependent: :destroy
 
   belongs_to :merged_into, class_name: "Transaction", optional: true
-  has_many :merged_sources, class_name: "Transaction", foreign_key: "merged_into_id", dependent: :nullify
+  has_many :merged_sources, class_name: "Transaction", foreign_key: "merged_into_id", dependent: :restrict_with_error
 
   before_validation :assign_currency_from_dest_account, unless: :opening_balance?
   before_validation :assign_cleared_at_from_cleared, unless: :opening_balance?

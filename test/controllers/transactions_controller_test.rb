@@ -344,4 +344,12 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     post unmerge_transaction_url(@transaction), as: :turbo_stream
     assert_response :unprocessable_entity
   end
+
+  test "merge with wrong number of transaction IDs returns error" do
+    post merge_transactions_url, params: {
+      transaction_ids: [ @transaction.id ]
+    }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
 end

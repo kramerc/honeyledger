@@ -1,7 +1,7 @@
 class TransactionsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_transaction, only: %i[ show edit update destroy ]
-  before_action :set_form_collections, only: %i[ index new create edit update show merge ]
+  before_action :set_form_collections, only: %i[ index new create edit update show ]
 
   # GET /transactions or /transactions.json
   def index
@@ -91,7 +91,15 @@ class TransactionsController < ApplicationController
 
   # POST /transactions/merge
   def merge
-    transaction_ids = params.require(:transaction_ids)
+    transaction_ids = Array(params.require(:transaction_ids)).uniq
+    unless transaction_ids.size == 2
+      @merge_errors = [ "You must select exactly two transactions to merge." ]
+      respond_to do |format|
+        format.turbo_stream { render :merge_error, status: :unprocessable_entity }
+      end
+      return
+    end
+
     transaction_a = current_user.transactions.find(transaction_ids[0])
     transaction_b = current_user.transactions.find(transaction_ids[1])
 

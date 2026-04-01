@@ -24,7 +24,8 @@ class Transaction::Unmerge
 
       @restored_transactions = originals
 
-      # Destroy the merged transfer (fires reverse_account_balances)
+      # Reload to clear cached merged_sources so restrict_with_error allows destroy
+      @transaction.reload
       @transaction.destroy!
     end
 

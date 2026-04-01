@@ -178,6 +178,37 @@ class Transaction::MergeTest < ActiveSupport::TestCase
     assert_includes merger.errors, "Foreign exchange transactions cannot be merged"
   end
 
+  test "rejects transactions that are already transfers" do
+    # Both sides balance-sheet = already a transfer
+    transfer = Transaction.create!(
+      user: @user, src_account: @bank_a, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "Transfer",
+      transacted_at: 1.day.ago
+    )
+
+    merger = Transaction::Merge.new(transfer, @deposit, user: @user)
+    assert_not merger.call
+    assert_includes merger.errors, "Transactions that are already transfers cannot be merged"
+  end
+
+  test "rejects transactions that are the result of a merge" do
+    # Merge first, then try to merge the result again
+    merger = Transaction::Merge.new(@withdrawal, @deposit, user: @user)
+    merger.call
+    merged = merger.merged_transaction
+
+    other_expense = Account.create!(user: @user, name: "Other Expense", kind: :expense, currency: @currency)
+    other_withdrawal = Transaction.create!(
+      user: @user, src_account: @bank_a, dest_account: other_expense,
+      amount_minor: merged.amount_minor, currency: @currency, description: "Other",
+      transacted_at: 1.day.ago
+    )
+
+    merger2 = Transaction::Merge.new(merged, other_withdrawal, user: @user)
+    assert_not merger2.call
+    assert_includes merger2.errors, "Transactions that are the result of a merge cannot be merged again"
+  end
+
   test "rejects already merged transactions" do
     # Create a dummy merged target
     target = Transaction.create!(user: @user, src_account: @bank_a, dest_account: @bank_b,

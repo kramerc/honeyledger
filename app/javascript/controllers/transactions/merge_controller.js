@@ -80,6 +80,11 @@ export default class extends Controller {
     const aDestBs = bs.includes(a.destKind)
     const bDestBs = bs.includes(b.destKind)
 
+    // Reject transactions that are already transfers (both sides balance-sheet)
+    if ((aSrcBs && aDestBs) || (bSrcBs && bDestBs)) {
+      return { valid: false, reason: "Cannot merge transactions that are already transfers" }
+    }
+
     if (aSrcBs && bDestBs) {
       return { valid: true, srcName: a.srcAccountName, destName: b.destAccountName }
     } else if (bSrcBs && aDestBs) {

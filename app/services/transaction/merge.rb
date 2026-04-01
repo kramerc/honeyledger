@@ -35,7 +35,7 @@ class Transaction::Merge
       # Zero out originals to reverse their balance effects, then mark as merged.
       # Setting amount_minor to 0 triggers transfer_account_balances which reverses the old posting.
       [ @transaction_a, @transaction_b ].each do |t|
-        t.update!(amount_minor: 0, fx_amount_minor: nil, merged_into: @merged_transaction)
+        t.update!(amount_minor: 0, fx_amount_minor: nil, fx_currency_id: nil, merged_into: @merged_transaction)
       end
     end
 
@@ -75,6 +75,17 @@ class Transaction::Merge
 
       if @transaction_a.merged_into_id? || @transaction_b.merged_into_id?
         @errors << "Already merged transactions cannot be merged again"
+      end
+
+      if @transaction_a.merged_sources.any? || @transaction_b.merged_sources.any?
+        @errors << "Transactions that are the result of a merge cannot be merged again"
+      end
+
+      [ @transaction_a, @transaction_b ].each do |t|
+        if balance_sheet?(t.src_account) && balance_sheet?(t.dest_account)
+          @errors << "Transactions that are already transfers cannot be merged"
+          break
+        end
       end
 
       return if @errors.any?
