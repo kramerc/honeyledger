@@ -7,7 +7,14 @@ Rails.application.routes.draw do
   resources :import_rules, except: %i[ show ]
   resources :categories
   resources :currencies
-  resources :transactions
+  resources :transactions do
+    member do
+      post :unmerge
+    end
+    collection do
+      post :merge
+    end
+  end
 
   # Unified integrations page
   resource :integrations, only: [ :show ]

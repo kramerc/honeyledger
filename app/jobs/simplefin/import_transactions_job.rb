@@ -29,6 +29,8 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
       end
 
       transaction = Transaction.find_or_initialize_by(sourceable: sft)
+      next if transaction.persisted? && transaction.merged_into_id.present?
+
       transaction.user = user
       transaction.src_account = transaction_src
       transaction.dest_account = transaction_dest

@@ -26,16 +26,17 @@
 .transactions .row {
   display: grid;
   grid-template-columns:
-    minmax(140px, 2fr)      /* Date */
-    minmax(90px,  1.2fr)    /* Type */
-    minmax(80px,  2fr)      /* Description */
-    minmax(90px,  1.5fr)    /* From */
-    minmax(90px,  1.5fr)    /* To */
-    minmax(75px,  1.2fr)    /* Amount */
-    minmax(60px,  0.8fr)    /* Currency */
-    minmax(80px,  1.3fr)    /* Category */
-    minmax(60px,  0.7fr)    /* Cleared */
-    minmax(120px, 1.6fr);   /* Actions */
+    32px                      /* Select */
+    minmax(140px, 2fr)        /* Date */
+    minmax(90px,  1.2fr)      /* Type */
+    minmax(80px,  2fr)        /* Description */
+    minmax(90px,  1.5fr)      /* From */
+    minmax(90px,  1.5fr)      /* To */
+    minmax(75px,  1.2fr)      /* Amount */
+    minmax(60px,  0.8fr)      /* Currency */
+    minmax(80px,  1.3fr)      /* Category */
+    minmax(60px,  0.7fr)      /* Cleared */
+    minmax(120px, 1.6fr);     /* Actions */
   gap: 0;
   align-items: stretch;
 }
@@ -45,22 +46,23 @@
 @media (min-width: 1024px) and (max-width: 1279px) {
   .transactions .row {
     grid-template-columns:
-      minmax(140px, 2fr)      /* Date */
-      minmax(90px,  1.2fr)    /* Type */
-                              /* Description — hidden */
-      minmax(90px,  1.5fr)    /* From */
-      minmax(90px,  1.5fr)    /* To */
-      minmax(75px,  1.2fr)    /* Amount */
-                              /* Currency — hidden */
-                              /* Category — hidden */
-                              /* Cleared — hidden */
-      minmax(120px, 1.6fr);   /* Actions */
+      32px                      /* Select */
+      minmax(140px, 2fr)        /* Date */
+      minmax(90px,  1.2fr)      /* Type */
+                                /* Description — hidden */
+      minmax(90px,  1.5fr)      /* From */
+      minmax(90px,  1.5fr)      /* To */
+      minmax(75px,  1.2fr)      /* Amount */
+                                /* Currency — hidden */
+                                /* Category — hidden */
+                                /* Cleared — hidden */
+      minmax(120px, 1.6fr);     /* Actions */
   }
 
-  .transactions .row > div:nth-child(3),
-  .transactions .row > div:nth-child(7),
+  .transactions .row > div:nth-child(4),
   .transactions .row > div:nth-child(8),
-  .transactions .row > div:nth-child(9) {
+  .transactions .row > div:nth-child(9),
+  .transactions .row > div:nth-child(10) {
     display: none;
   }
 }
@@ -84,18 +86,24 @@
   font-size: 0.875rem;
 }
 
-.transactions .row > div:last-child {
+.transactions .row > div:last-child,
+.transactions .row > .actions {
   border-right: 0;
 }
 
 /* Cells that must not wrap */
-.transactions .row > div:nth-child(1),  /* Date */
-.transactions .row > div:nth-child(2),  /* Type */
-.transactions .row > div:nth-child(6),  /* Amount */
-.transactions .row > div:nth-child(7),  /* Currency */
-.transactions .row > div:nth-child(9),  /* Cleared */
-.transactions .row > div:nth-child(10) /* Actions */ {
+.transactions .row > div:nth-child(1),  /* Select */
+.transactions .row > div:nth-child(2),  /* Date */
+.transactions .row > div:nth-child(7),  /* Amount */
+.transactions .row > div:nth-child(8),  /* Currency */
+.transactions .row > div:nth-child(10), /* Cleared */
+.transactions .row > div:nth-child(11)  /* Actions */ {
   white-space: nowrap;
+}
+
+/* Type column: allow wrapping for Merged badge */
+.transactions .row > div:nth-child(3) {
+  flex-wrap: wrap;
 }
 
 .transactions .numeric {
@@ -317,13 +325,24 @@
   }
 
   /* Allow cells to wrap normally */
-  .transactions .row > div:nth-child(1),
   .transactions .row > div:nth-child(2),
-  .transactions .row > div:nth-child(6),
+  .transactions .row > div:nth-child(3),
   .transactions .row > div:nth-child(7),
-  .transactions .row > div:nth-child(9),
-  .transactions .row > div:nth-child(10) {
+  .transactions .row > div:nth-child(8),
+  .transactions .row > div:nth-child(10),
+  .transactions .row > div:nth-child(11) {
     white-space: normal;
+  }
+
+  /* Select column: inline at top of card */
+  .transactions .row.show > .select {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+  }
+
+  .transactions .row.show {
+    position: relative;
   }
 
   /* Form: single column with labels above inputs */
@@ -431,4 +450,221 @@
 
 .transaction.editing .edit {
   display: block; /* Show edit portion when editing */
+}
+
+/* Merged badge */
+.merged-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--honey-dark);
+  text-decoration: none;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--honey-dark);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.merged-badge:hover {
+  background-color: var(--honey-light);
+  color: var(--honey-deeper);
+}
+
+/* Merged details */
+.transactions .row > .merged-details {
+  grid-column: 1 / -1;
+  display: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--bark-medium);
+}
+
+.transactions .row > .merged-details.merged-details--visible {
+  display: block;
+  padding: 8px 14px;
+  background-color: var(--honey-pale);
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+}
+
+.merged-details__content strong {
+  color: var(--accent-text);
+  font-size: 0.75rem;
+}
+
+.merged-details__content ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.merged-details__content li {
+  margin-bottom: 2px;
+}
+
+/* Select column */
+.transactions .row > .select {
+  justify-content: center;
+  padding: 7px 4px;
+}
+
+/* Merge checkbox */
+.merge-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--honey-dark);
+  flex-shrink: 0;
+}
+
+/* Merge action bar */
+.merge-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 24px;
+  background-color: var(--honey-pale);
+  border-top: 2px solid var(--honey);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 100;
+}
+
+.merge-bar[hidden] {
+  display: none;
+}
+
+.merge-bar__message {
+  font-size: 0.875rem;
+  color: var(--bark-medium);
+  font-weight: 500;
+}
+
+.merge-bar__btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.merge-bar__btn--primary {
+  background-color: var(--honey-dark);
+  color: #fff;
+}
+
+.merge-bar__btn--primary:hover:not(:disabled) {
+  background-color: var(--honey);
+}
+
+.merge-bar__btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.merge-bar__btn--secondary {
+  background-color: transparent;
+  color: var(--bark-medium);
+  border: 1px solid var(--divider);
+}
+
+.merge-bar__btn--secondary:hover {
+  background-color: var(--honey-light);
+}
+
+/* Merge confirmation panel */
+.merge-confirmation {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 101;
+  background-color: var(--cream);
+  border-top: 2px solid var(--honey);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.merge-confirmation[hidden] {
+  display: none;
+}
+
+.merge-confirmation__content {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+.merge-confirmation__content h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--bark);
+}
+
+.merge-confirmation__preview {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+  color: var(--bark-medium);
+  font-weight: 500;
+}
+
+.merge-confirmation__field {
+  margin-bottom: 12px;
+}
+
+.merge-confirmation__field label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.merge-confirmation__field input,
+.merge-confirmation__field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  background-color: var(--cream);
+  color: var(--bark);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.merge-confirmation__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Merge error */
+.merge-error {
+  padding: 12px 16px;
+  margin: 8px;
+  background-color: var(--bg-error);
+  color: var(--text-error);
+  border: 1px solid var(--border-error);
+  border-left: 4px solid var(--color-error);
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.merge-error ul {
+  margin: 4px 0 8px;
+  padding-left: 16px;
+}
+
+.merge-error button {
+  padding: 4px 12px;
+  border: 1px solid var(--border-error);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-error);
+  cursor: pointer;
+  font-size: 0.8rem;
 }

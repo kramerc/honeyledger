@@ -1,0 +1,53 @@
+<%# Merge action bar — shown when 2 transactions are selected %>
+<div class="merge-bar" data-transactions--merge-target="mergeBar" hidden>
+  <span class="merge-bar__message" data-transactions--merge-target="mergeMessage"></span>
+  <button type="button" class="merge-bar__btn merge-bar__btn--primary"
+          data-transactions--merge-target="mergeButton"
+          data-action="transactions--merge#showConfirmation"
+          disabled>
+    Merge into Transfer
+  </button>
+  <button type="button" class="merge-bar__btn merge-bar__btn--secondary"
+          data-action="transactions--merge#cancel">
+    Cancel
+  </button>
+</div>
+
+<%# Merge confirmation panel %>
+<div class="merge-confirmation" data-transactions--merge-target="confirmation" hidden>
+  <div class="merge-confirmation__content">
+    <h3>Merge into Transfer</h3>
+    <p class="merge-confirmation__preview"></p>
+
+    <%= form_with url: merge_transactions_path, method: :post, data: { action: "turbo:submit-end->transactions--merge#cancel" } do |f| %>
+      <input type="hidden" name="transaction_ids[]" value="" data-slot="a">
+      <input type="hidden" name="transaction_ids[]" value="" data-slot="b">
+
+      <div class="merge-confirmation__field">
+        <label for="merge_description">Description</label>
+        <input type="text" id="merge_description" name="description" value="">
+      </div>
+
+      <div class="merge-confirmation__field">
+        <label for="merge_transacted_at">Date</label>
+        <input type="datetime-local" id="merge_transacted_at" name="transacted_at" value="">
+      </div>
+
+      <div class="merge-confirmation__field">
+        <label for="merge_category_id">Category</label>
+        <select id="merge_category_id" name="category_id">
+          <option value="">None</option>
+          <% categories.each do |category| %>
+            <option value="<%= category.id %>"><%= category.name %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <div class="merge-confirmation__actions">
+        <button type="submit" class="merge-bar__btn merge-bar__btn--primary">Confirm Merge</button>
+        <button type="button" class="merge-bar__btn merge-bar__btn--secondary"
+                data-action="transactions--merge#cancel">Cancel</button>
+      </div>
+    <% end %>
+  </div>
+</div>

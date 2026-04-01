@@ -2,29 +2,34 @@
 
 <h1 class="sr-only">Transactions</h1>
 
-<div class="transactions">
-  <div class="row header">
-    <div>Date</div>
-    <div>Type</div>
-    <div>Description</div>
-    <div>From</div>
-    <div>To</div>
-    <div>Amount</div>
-    <div>Currency</div>
-    <div>Category</div>
-    <div>Cleared</div>
-    <div>Actions</div>
+<div data-controller="transactions--merge" data-transactions--merge-merge-url-value="<%= merge_transactions_path %>">
+  <div class="transactions">
+    <div class="row header">
+      <div></div>
+      <div>Date</div>
+      <div>Type</div>
+      <div>Description</div>
+      <div>From</div>
+      <div>To</div>
+      <div>Amount</div>
+      <div>Currency</div>
+      <div>Category</div>
+      <div>Cleared</div>
+      <div>Actions</div>
+    </div>
+
+    <%= turbo_frame_tag :new_transaction do %>
+      <%= render partial: 'form', locals: {
+        transaction: @new_transaction,
+        accounts: @accounts,
+        categories: @categories
+      } %>
+    <% end %>
+
+    <%= turbo_frame_tag :transactions do %>
+      <%= render @transactions %>
+    <% end %>
   </div>
 
-  <%= turbo_frame_tag :new_transaction do %>
-    <%= render partial: 'form', locals: {
-      transaction: @new_transaction,
-      accounts: @accounts,
-      categories: @categories
-    } %>
-  <% end %>
-
-  <%= turbo_frame_tag :transactions do %>
-    <%= render @transactions %>
-  <% end %>
+  <%= render "merge_bar", categories: @categories %>
 </div>

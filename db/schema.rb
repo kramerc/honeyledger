@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_28_200003) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_31_230603) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -164,6 +164,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_200003) do
     t.bigint "dest_account_id", null: false
     t.integer "fx_amount_minor"
     t.bigint "fx_currency_id"
+    t.bigint "merged_into_id"
     t.text "notes", default: "", null: false
     t.boolean "opening_balance", default: false, null: false
     t.bigint "parent_transaction_id"
@@ -180,6 +181,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_200003) do
     t.index ["currency_id"], name: "index_transactions_on_currency_id"
     t.index ["dest_account_id"], name: "index_transactions_on_dest_account_id"
     t.index ["fx_currency_id"], name: "index_transactions_on_fx_currency_id"
+    t.index ["merged_into_id"], name: "index_transactions_on_merged_into_id"
     t.index ["parent_transaction_id"], name: "index_transactions_on_parent_transaction_id"
     t.index ["sourceable_type", "sourceable_id"], name: "index_transactions_on_sourceable"
     t.index ["src_account_id"], name: "index_transactions_on_src_account_id"
@@ -221,6 +223,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_28_200003) do
   add_foreign_key "transactions", "categories"
   add_foreign_key "transactions", "currencies"
   add_foreign_key "transactions", "currencies", column: "fx_currency_id"
+  add_foreign_key "transactions", "transactions", column: "merged_into_id"
   add_foreign_key "transactions", "transactions", column: "parent_transaction_id"
   add_foreign_key "transactions", "users"
 end

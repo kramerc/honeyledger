@@ -17,6 +17,9 @@ class Transaction < ApplicationRecord
   belongs_to :parent_transaction, class_name: "Transaction", optional: true
   has_many :child_transactions, class_name: "Transaction", foreign_key: "parent_transaction_id", dependent: :destroy
 
+  belongs_to :merged_into, class_name: "Transaction", optional: true
+  has_many :merged_sources, class_name: "Transaction", foreign_key: "merged_into_id", dependent: :nullify
+
   before_validation :assign_currency_from_dest_account, unless: :opening_balance?
   before_validation :assign_cleared_at_from_cleared, unless: :opening_balance?
 
@@ -26,6 +29,7 @@ class Transaction < ApplicationRecord
   after_destroy :reverse_account_balances
 
   scope :opening_balances, -> { where(opening_balance: true) }
+  scope :unmerged, -> { where(merged_into_id: nil) }
 
   validates :amount_minor, numericality: { allow_blank: true, unless: :amount_written? } # Blank is translated to 0
   validates :transacted_at, presence: true
