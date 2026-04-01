@@ -58,6 +58,8 @@ export default class extends Controller {
     return {
       id,
       amountMinor: row.dataset.mergeAmountMinor,
+      srcAccountId: row.dataset.mergeSrcAccountId,
+      destAccountId: row.dataset.mergeDestAccountId,
       srcKind: row.dataset.mergeSrcKind,
       destKind: row.dataset.mergeDestKind,
       srcAccountName: row.dataset.mergeSrcAccountName,
@@ -97,8 +99,14 @@ export default class extends Controller {
 
     // One must be BS→IE (withdrawal), the other IE→BS (deposit)
     if (aSrcBs && bDestBs) {
+      if (a.srcAccountId === b.destAccountId) {
+        return { valid: false, reason: "Source and destination accounts cannot be the same" }
+      }
       return { valid: true, srcName: a.srcAccountName, destName: b.destAccountName }
     } else if (bSrcBs && aDestBs) {
+      if (b.srcAccountId === a.destAccountId) {
+        return { valid: false, reason: "Source and destination accounts cannot be the same" }
+      }
       return { valid: true, srcName: b.srcAccountName, destName: a.destAccountName }
     } else {
       return { valid: false, reason: "One transaction must be a withdrawal and the other a deposit" }

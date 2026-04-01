@@ -2,6 +2,8 @@
 <%= turbo_frame_tag transaction do %>
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
        data-merge-amount-minor="<%= transaction.amount_minor %>"
+       data-merge-src-account-id="<%= transaction.src_account_id %>"
+       data-merge-dest-account-id="<%= transaction.dest_account_id %>"
        data-merge-src-kind="<%= transaction.src_account&.kind %>"
        data-merge-dest-kind="<%= transaction.dest_account&.kind %>"
        data-merge-src-account-name="<%= transaction.src_account&.name %>"
