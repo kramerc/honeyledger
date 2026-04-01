@@ -17,16 +17,27 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
 
     transactions.find_each do |lft|
       user = lft.account.connection.user
-      src_account = lft.account.ledger_account
+      ledger_account = lft.account.ledger_account
       description = lft.merchant.presence || lft.description
 
       amount_bd = BigDecimal(lft.amount)
-      if amount_bd.negative?
-        transaction_src = src_account
-        transaction_dest = Account.find_or_create_for_import(user: user, description: description, kind: :expense, currency: src_account.currency)
+      rule = user.import_rules.for_description(description).first
+      rule_account = rule&.account
+      bs_rule_account = rule_account if rule_account && Transaction::Merge::BALANCE_SHEET_KINDS.include?(rule_account.kind)
+
+      kind = amount_bd.negative? ? :expense : :revenue
+      counterpart = if rule_account && !bs_rule_account
+        rule_account
       else
-        transaction_src = Account.find_or_create_for_import(user: user, description: description, kind: :revenue, currency: src_account.currency)
-        transaction_dest = src_account
+        Account.find_or_create_for_import(user: user, description: description, kind: kind, currency: ledger_account.currency, skip_rules: bs_rule_account.present?)
+      end
+
+      if amount_bd.negative?
+        transaction_src = ledger_account
+        transaction_dest = counterpart
+      else
+        transaction_src = counterpart
+        transaction_dest = ledger_account
       end
 
       transaction = Transaction.find_or_initialize_by(sourceable: lft)
@@ -35,11 +46,13 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       transaction.dest_account = transaction_dest
       transaction.description = description
       transaction.amount_minor = lft.amount_minor.abs
-      transaction.currency = src_account.currency
+      transaction.currency = ledger_account.currency
       transaction.transacted_at = lft.date || Time.current
       transaction.cleared_at = lft.pending ? nil : lft.date
       transaction.synced_at = Time.current
       transaction.save!
+
+      Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
     end
   end
 end

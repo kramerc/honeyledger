@@ -33,9 +33,11 @@ class Account < ApplicationRecord
   scope :linkable, -> { where(kind: %i[ asset liability ]) }
   scope :unlinked, -> { where(sourceable_id: nil, sourceable_type: nil) }
 
-  def self.find_or_create_for_import(user:, description:, kind:, currency:)
-    rule = user.import_rules.for_description(description).first
-    return rule.account if rule
+  def self.find_or_create_for_import(user:, description:, kind:, currency:, skip_rules: false)
+    unless skip_rules
+      rule = user.import_rules.for_description(description).first
+      return rule.account if rule
+    end
 
     attributes = { name: description, kind: kind }
     user.accounts.find_or_create_by!(attributes) do |account|

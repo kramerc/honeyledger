@@ -104,6 +104,49 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil transaction.cleared_at
   end
 
+  test "auto-merges when import rule matches balance sheet account and duplicate exists" do
+    lf_account_a, bank_a = create_linked_lunchflow_account(remote_id: 801, name: "Bank A")
+    lf_account_b, bank_b = create_linked_lunchflow_account(remote_id: 802, name: "Bank B")
+
+    # Import from bank_b first (no rule) — creates revenue → bank_b
+    Lunchflow::Transaction.create!(
+      account: lf_account_b,
+      remote_id: "lf_dup",
+      amount: "500.00",
+      currency: "USD",
+      description: "TRANSFER FROM A",
+      date: 2.days.ago,
+      pending: false
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account_b.id)
+
+    # Create import rule mapping "TRANSFER TO B" to bank_b (asset)
+    ImportRule.create!(user: @user, account: bank_b, match_pattern: "TRANSFER TO B", match_type: :contains)
+
+    # Import from bank_a (BS rule) — creates expense first, then auto-merge finds the
+    # revenue→bank_b duplicate and merges both into a bank_a→bank_b transfer
+    Lunchflow::Transaction.create!(
+      account: lf_account_a,
+      remote_id: "lf_transfer",
+      amount: "-500.00",
+      currency: "USD",
+      description: "TRANSFER TO B",
+      date: 2.days.ago,
+      pending: false
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account_a.id)
+
+    # Both originals should be zeroed and merged via Transaction::Merge
+    unmerged = @user.transactions.unmerged.where(amount_minor: 50000)
+    assert_equal 1, unmerged.count
+
+    merged = unmerged.first
+    assert_equal bank_a, merged.src_account
+    assert_equal bank_b, merged.dest_account
+    assert_equal 50000, merged.amount_minor
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
