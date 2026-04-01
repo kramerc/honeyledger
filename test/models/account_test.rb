@@ -91,6 +91,25 @@ class AccountTest < ActiveSupport::TestCase
     end
   end
 
+  test "find_or_create_for_import preserves long descriptions" do
+    user = users(:one)
+    currency = currencies(:usd)
+    long_description = "A" * 100
+
+    account = Account.find_or_create_for_import(user: user, description: long_description, kind: :expense, currency: currency)
+
+    assert_equal long_description, account.name
+  end
+
+  test "find_or_create_for_import normalizes whitespace in descriptions" do
+    user = users(:one)
+    currency = currencies(:usd)
+
+    account = Account.find_or_create_for_import(user: user, description: "  Multiple   Spaces   Store  ", kind: :expense, currency: currency)
+
+    assert_equal "Multiple Spaces Store", account.name
+  end
+
   test "reset_balance recalculates balance from sum of transactions" do
     account = accounts(:asset_account)
     deposits = Transaction.where(dest_account: account).sum(:amount_minor)

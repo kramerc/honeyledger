@@ -199,7 +199,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil transaction.cleared_at
   end
 
-  test "sanitizes long account names" do
+  test "preserves long account names" do
     sf_account, _ = create_linked_simplefin_account
 
     sf_transaction = Simplefin::Transaction.create!(
@@ -221,8 +221,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     transaction = Transaction.find_by(sourceable: sf_transaction)
     expense_account = transaction.dest_account
 
-    assert expense_account.name.length <= 50
-    assert_equal "A" * 47 + "...", expense_account.name
+    assert_equal "A" * 100, expense_account.name
   end
 
   test "sanitizes account names with extra whitespace" do
