@@ -40,10 +40,9 @@
         <% else %>
           <a href="#" data-action="transactions--row#edit">Edit</a>
         <% end %>
+        <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
         <% if transaction.merged_sources.any? %>
           <%= link_to "Unmerge", unmerge_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
-        <% else %>
-          <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
         <% end %>
       </div>
 
