@@ -53,7 +53,7 @@
             <strong>Merged from:</strong>
             <ul>
               <% transaction.merged_sources.each do |source| %>
-                <li><%= source.src_account&.name %> → <%= source.dest_account&.name %> — "<%= source.description %>"</li>
+                <li><%= source.src_account&.name %> → <%= source.dest_account&.name %><% if source.description.present? %> — "<%= source.description %>"<% end %></li>
               <% end %>
             </ul>
           </div>
