@@ -64,12 +64,14 @@ export default class extends Controller {
       destAccountName: row.dataset.mergeDestAccountName,
       description: row.dataset.mergeDescription,
       transactedAt: row.dataset.mergeTransactedAt,
-      currencyCode: row.dataset.mergeCurrencyCode
+      currencyCode: row.dataset.mergeCurrencyCode,
+      currencyDecimalPlaces: parseInt(row.dataset.mergeCurrencyDecimalPlaces, 10) || 2
     }
   }
 
   validatePair(a, b) {
     const bs = this.constructor.BALANCE_SHEET_KINDS
+    const ie = ["expense", "revenue"]
 
     if (a.amountMinor !== b.amountMinor) {
       return { valid: false, reason: "Amounts must match" }
@@ -85,12 +87,21 @@ export default class extends Controller {
       return { valid: false, reason: "Cannot merge transactions that are already transfers" }
     }
 
+    // Each must have exactly one balance-sheet side paired with income/expense
+    const aValid = (aSrcBs && ie.includes(a.destKind)) || (aDestBs && ie.includes(a.srcKind))
+    const bValid = (bSrcBs && ie.includes(b.destKind)) || (bDestBs && ie.includes(b.srcKind))
+
+    if (!aValid || !bValid) {
+      return { valid: false, reason: "Each transaction must be between a bank account and an income/expense account" }
+    }
+
+    // One must be BS→IE (withdrawal), the other IE→BS (deposit)
     if (aSrcBs && bDestBs) {
       return { valid: true, srcName: a.srcAccountName, destName: b.destAccountName }
     } else if (bSrcBs && aDestBs) {
       return { valid: true, srcName: b.srcAccountName, destName: a.destAccountName }
     } else {
-      return { valid: false, reason: "One transaction must have a bank account as the source and the other as the destination" }
+      return { valid: false, reason: "One transaction must be a withdrawal and the other a deposit" }
     }
   }
 
@@ -137,7 +148,7 @@ export default class extends Controller {
     dateInput.value = (dateA && dateB) ? (dateA < dateB ? dateA : dateB) : (dateA || dateB || "")
 
     const preview = this.confirmationTarget.querySelector(".merge-confirmation__preview")
-    preview.textContent = `${validation.srcName} \u2192 ${validation.destName} \u00b7 ${dataA.currencyCode} ${this.formatAmount(dataA.amountMinor, dataA.currencyCode)}`
+    preview.textContent = `${validation.srcName} \u2192 ${validation.destName} \u00b7 ${dataA.currencyCode} ${this.formatAmount(dataA.amountMinor, dataA.currencyDecimalPlaces)}`
 
     this.confirmationTarget.hidden = false
     this.mergeBarTarget.hidden = true
@@ -155,9 +166,9 @@ export default class extends Controller {
     this.hideConfirmation()
   }
 
-  formatAmount(minorStr) {
+  formatAmount(minorStr, decimalPlaces) {
     const minor = parseInt(minorStr, 10)
-    // Simple cents-to-dollars formatting (assumes 2 decimal places)
-    return (minor / 100).toFixed(2)
+    const divisor = Math.pow(10, decimalPlaces)
+    return (minor / divisor).toFixed(decimalPlaces)
   }
 }
