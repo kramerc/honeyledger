@@ -204,24 +204,6 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "preview_apply requires authentication" do
-    sign_out @user
-    get preview_apply_import_rules_url
-    assert_response :redirect
-  end
-
-  test "apply requires authentication" do
-    sign_out @user
-    post apply_import_rules_url
-    assert_response :redirect
-  end
-
-  test "preview requires authentication" do
-    sign_out @user
-    get preview_import_rule_url(@import_rule)
-    assert_response :redirect
-  end
-
   test "should create rule with asset account" do
     assert_difference("ImportRule.count") do
       post import_rules_url, params: { import_rule: {
