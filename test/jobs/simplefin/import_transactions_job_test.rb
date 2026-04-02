@@ -327,7 +327,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      assert_no_difference "Account.count" do
+      assert_difference "Account.count", 1 do # Default expense account created before rule applied
         Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
@@ -354,7 +354,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     )
 
     assert_difference "Transaction.count", 1 do
-      assert_no_difference "Account.count" do
+      assert_difference "Account.count", 1 do # Default revenue account created before rule applied
         Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
       end
     end
@@ -414,6 +414,50 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
 
     transaction = Transaction.find_by(sourceable: sf_transaction)
     assert_equal specific_account, transaction.dest_account
+  end
+
+  test "auto-merges when import rule matches balance sheet account and duplicate exists" do
+    sf_account_a, bank_a = create_linked_simplefin_account(remote_id: "acc_a", name: "Bank A")
+    sf_account_b, bank_b = create_linked_simplefin_account(remote_id: "acc_b", name: "Bank B")
+
+    # Import from bank_b first (no rule) — creates revenue → bank_b
+    Simplefin::Transaction.create!(
+      account: sf_account_b,
+      remote_id: "txn_dup",
+      amount: "500.00",
+      description: "TRANSFER FROM A",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_b.id)
+
+    # Create import rule mapping "TRANSFER TO B" to bank_b (asset)
+    ImportRule.create!(user: @user, account: bank_b, match_pattern: "TRANSFER TO B", match_type: :contains)
+
+    # Import from bank_a (BS rule) — creates expense first, then auto-merge finds the
+    # revenue→bank_b duplicate and merges both into a bank_a→bank_b transfer
+    Simplefin::Transaction.create!(
+      account: sf_account_a,
+      remote_id: "txn_transfer",
+      amount: "-500.00",
+      description: "TRANSFER TO B",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_a.id)
+
+    # Both originals should be zeroed and merged via Transaction::Merge
+    unmerged = @user.transactions.unmerged.where(amount_minor: 50000)
+    assert_equal 1, unmerged.count
+
+    merged = unmerged.first
+    assert_equal bank_a, merged.src_account
+    assert_equal bank_b, merged.dest_account
+    assert_equal 50000, merged.amount_minor
+    assert_nil merged.sourceable # Merge result has no sourceable
   end
 
   test "falls back to exact name match when no rule matches" do

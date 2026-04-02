@@ -1,6 +1,4 @@
 class Transaction::Merge
-  BALANCE_SHEET_KINDS = %w[ asset liability equity ].freeze
-
   attr_reader :merged_transaction, :errors
 
   def initialize(transaction_a, transaction_b, user:, description: nil, transacted_at: nil, category_id: nil)
@@ -82,7 +80,7 @@ class Transaction::Merge
       end
 
       [ @transaction_a, @transaction_b ].each do |t|
-        if balance_sheet?(t.src_account) && balance_sheet?(t.dest_account)
+        if t.src_account.balance_sheet? && t.dest_account.balance_sheet?
           @errors << "Transactions that are already transfers cannot be merged"
           break
         end
@@ -102,10 +100,10 @@ class Transaction::Merge
     # src_side: the transaction whose src_account is a balance-sheet account (the "from" bank)
     # dest_side: the transaction whose dest_account is a balance-sheet account (the "to" bank)
     def determine_sides
-      a_src_bs = balance_sheet?(@transaction_a.src_account)
-      b_src_bs = balance_sheet?(@transaction_b.src_account)
-      a_dest_bs = balance_sheet?(@transaction_a.dest_account)
-      b_dest_bs = balance_sheet?(@transaction_b.dest_account)
+      a_src_bs = @transaction_a.src_account.balance_sheet?
+      b_src_bs = @transaction_b.src_account.balance_sheet?
+      a_dest_bs = @transaction_a.dest_account.balance_sheet?
+      b_dest_bs = @transaction_b.dest_account.balance_sheet?
 
       if a_src_bs && b_dest_bs
         [ @transaction_a, @transaction_b ]
@@ -119,9 +117,5 @@ class Transaction::Merge
     def determine_accounts
       src_side, dest_side = determine_sides
       [ src_side.src_account, dest_side.dest_account ]
-    end
-
-    def balance_sheet?(account)
-      BALANCE_SHEET_KINDS.include?(account.kind)
     end
 end

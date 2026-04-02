@@ -156,13 +156,11 @@ class Transaction < ApplicationRecord
     def income_expense_must_pair_with_balance_sheet
       return if src_account.nil? || dest_account.nil?
 
-      balance_sheet = ->(a) { a.asset? || a.liability? || a.equity? }
-
-      if (src_account.expense? || src_account.revenue?) && !balance_sheet.call(dest_account)
+      if (src_account.expense? || src_account.revenue?) && !dest_account.balance_sheet?
         errors.add(:dest_account, "must be an asset, liability, or equity account")
       end
 
-      if (dest_account.expense? || dest_account.revenue?) && !balance_sheet.call(src_account)
+      if (dest_account.expense? || dest_account.revenue?) && !src_account.balance_sheet?
         errors.add(:src_account, "must be an asset, liability, or equity account")
       end
     end

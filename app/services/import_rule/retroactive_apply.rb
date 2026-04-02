@@ -1,5 +1,5 @@
 class ImportRule::RetroactiveApply
-  Change = Struct.new(:transaction, :old_account, :new_account, :direction, keyword_init: true)
+  Change = Struct.new(:transaction, :old_account, :new_account, :direction, :merge_candidate, keyword_init: true)
 
   attr_reader :changes, :errors
 
@@ -21,7 +21,9 @@ class ImportRule::RetroactiveApply
     applied = 0
     ActiveRecord::Base.transaction do
       @changes.each do |change|
-        if change.direction == :expense
+        if change.new_account.balance_sheet?
+          Transaction::AutoMerge.call(change.transaction, rule_account: change.new_account)
+        elsif change.direction == :expense
           change.transaction.update!(dest_account: change.new_account)
         else
           change.transaction.update!(src_account: change.new_account)
@@ -48,11 +50,16 @@ class ImportRule::RetroactiveApply
         next unless rule
         next if rule.account_id == counterpart.id
 
+        merge_candidate = if rule.account.balance_sheet?
+          find_merge_candidate(transaction, rule.account)
+        end
+
         changes << Change.new(
           transaction: transaction,
           old_account: counterpart,
           new_account: rule.account,
-          direction: direction
+          direction: direction,
+          merge_candidate: merge_candidate
         )
       end
 
@@ -83,6 +90,23 @@ class ImportRule::RetroactiveApply
       return @rule_cache[normalized] if @rule_cache.key?(normalized)
 
       @rule_cache[normalized] = rule_scope.for_description(description).first
+    end
+
+    def find_merge_candidate(transaction, rule_account)
+      candidates = @user.transactions
+        .unmerged
+        .includes(:src_account, :dest_account)
+        .where.not(id: transaction.id)
+        .where(amount_minor: transaction.amount_minor, currency_id: transaction.currency_id)
+        .where(opening_balance: false, split: false, parent_transaction_id: nil)
+        .where(fx_amount_minor: nil)
+        .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: rule_account.id)
+        .where(transacted_at: (transaction.transacted_at - 7.days)..(transaction.transacted_at + 7.days))
+        .where.missing(:merged_sources)
+        .to_a
+        .select { |t| !t.src_account.balance_sheet? || !t.dest_account.balance_sheet? }
+
+      candidates.size == 1 ? candidates.first : nil
     end
 
     def rule_scope

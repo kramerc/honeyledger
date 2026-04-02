@@ -17,15 +17,26 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
 
     transactions.find_each do |sft|
       user = sft.account.connection.user
-      src_account = sft.account.ledger_account
+      ledger_account = sft.account.ledger_account
 
       amount_bd = BigDecimal(sft.amount)
-      if amount_bd.negative?
-        transaction_src = src_account
-        transaction_dest = Account.find_or_create_for_import(user: user, description: sft.description, kind: :expense, currency: src_account.currency)
+      rule = user.import_rules.for_description(sft.description).first
+      rule_account = rule&.account
+      bs_rule_account = rule_account if rule_account&.balance_sheet?
+
+      kind = amount_bd.negative? ? :expense : :revenue
+      counterpart = if rule_account && !bs_rule_account
+        rule_account
       else
-        transaction_src = Account.find_or_create_for_import(user: user, description: sft.description, kind: :revenue, currency: src_account.currency)
-        transaction_dest = src_account
+        Account.find_or_create_for_import(user: user, description: sft.description, kind: kind, currency: ledger_account.currency, skip_rules: true)
+      end
+
+      if amount_bd.negative?
+        transaction_src = ledger_account
+        transaction_dest = counterpart
+      else
+        transaction_src = counterpart
+        transaction_dest = ledger_account
       end
 
       transaction = Transaction.find_or_initialize_by(sourceable: sft)
@@ -34,11 +45,13 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
       transaction.dest_account = transaction_dest
       transaction.description = sft.description
       transaction.amount_minor = sft.amount_minor.abs
-      transaction.currency = src_account.currency
+      transaction.currency = ledger_account.currency
       transaction.transacted_at = sft.transacted_at || sft.posted || Time.current
       transaction.cleared_at = sft.posted
       transaction.synced_at = Time.current
       transaction.save!
+
+      Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
     end
   end
 end

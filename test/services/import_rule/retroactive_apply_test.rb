@@ -258,4 +258,109 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     assert_not_nil matching
     assert_equal @new_expense, matching.new_account
   end
+
+  # --- Balance sheet rules with auto-merge ---
+
+  test "preview includes merge candidate for balance sheet rule" do
+    savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
+    bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
+
+    transfer_out = Transaction.create!(
+      user: @user, src_account: @bank_account, dest_account: @original_expense,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    # The other side of the transfer (from savings import)
+    revenue = Account.create!(user: @user, name: "Transfer In", kind: :revenue, currency: @currency)
+    other_side = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: savings,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER FROM CHECKING",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_two)
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: bs_rule)
+    changes = service.preview
+
+    matching = changes.find { |c| c.transaction.id == transfer_out.id }
+    assert_not_nil matching
+    assert_equal savings, matching.new_account
+    assert_equal other_side, matching.merge_candidate
+  end
+
+  test "preview has nil merge candidate when no match exists for balance sheet rule" do
+    savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
+    bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
+
+    transfer_out = Transaction.create!(
+      user: @user, src_account: @bank_account, dest_account: @original_expense,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: bs_rule)
+    changes = service.preview
+
+    matching = changes.find { |c| c.transaction.id == transfer_out.id }
+    assert_not_nil matching
+    assert_nil matching.merge_candidate
+  end
+
+  test "apply uses auto-merge for balance sheet rule with merge candidate" do
+    savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
+    ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
+
+    transfer_out = Transaction.create!(
+      user: @user, src_account: @bank_account, dest_account: @original_expense,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    revenue = Account.create!(user: @user, name: "Transfer In", kind: :revenue, currency: @currency)
+    other_side = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: savings,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER FROM CHECKING",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_two)
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user)
+    service.apply
+
+    transfer_out.reload
+    other_side.reload
+
+    # Both originals should be zeroed and merged
+    assert_equal 0, transfer_out.amount_minor
+    assert_equal 0, other_side.amount_minor
+    assert_not_nil transfer_out.merged_into_id
+    assert_equal transfer_out.merged_into_id, other_side.merged_into_id
+
+    # Merged transaction should be a transfer
+    merged = Transaction.find(transfer_out.merged_into_id)
+    assert_equal @bank_account, merged.src_account
+    assert_equal savings, merged.dest_account
+    assert_equal 5000, merged.amount_minor
+  end
+
+  test "apply falls back to account change for balance sheet rule without merge candidate" do
+    savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
+    ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
+
+    transfer_out = Transaction.create!(
+      user: @user, src_account: @bank_account, dest_account: @original_expense,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user)
+    service.apply
+
+    transfer_out.reload
+
+    # No merge candidate — rule account applied directly
+    assert_equal @bank_account, transfer_out.src_account
+    assert_equal savings, transfer_out.dest_account
+    assert_equal 5000, transfer_out.amount_minor
+    assert_nil transfer_out.merged_into_id
+  end
 end
