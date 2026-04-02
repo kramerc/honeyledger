@@ -3,7 +3,7 @@
 <h1>Preview Rule: <%= @import_rule.match_pattern %></h1>
 
 <% if @changes.any? %>
-  <p><%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be recategorized by this rule.</p>
+  <p><%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be reassigned by this rule.</p>
 
   <%= render "preview_table", changes: @changes %>
 <% else %>
