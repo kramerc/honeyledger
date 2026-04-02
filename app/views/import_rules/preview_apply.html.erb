@@ -1,0 +1,15 @@
+<% content_for :title, "Preview Rule Application" %>
+
+<h1>Preview Rule Application</h1>
+
+<% if @changes.any? %>
+  <p><%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be reassigned to different accounts.</p>
+
+  <%= render "preview_table", changes: @changes %>
+
+  <%= button_to "Apply Changes", apply_import_rules_path, data: { turbo_confirm: "Reassign #{@changes.size} #{"transaction".pluralize(@changes.size)}?" } %>
+<% else %>
+  <p>All transactions already match current rules. No changes needed.</p>
+<% end %>
+
+<p><%= link_to "Back to Import Rules", import_rules_path %></p>

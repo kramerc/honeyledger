@@ -4,7 +4,15 @@ Rails.application.routes.draw do
   resources :accounts do
     resources :transactions, only: %i[ index ]
   end
-  resources :import_rules, except: %i[ show ]
+  resources :import_rules, except: %i[ show ] do
+    collection do
+      get :preview_apply
+      post :apply
+    end
+    member do
+      get :preview
+    end
+  end
   resources :categories
   resources :currencies
   resources :transactions do
