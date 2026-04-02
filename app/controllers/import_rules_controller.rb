@@ -1,6 +1,6 @@
 class ImportRulesController < ApplicationController
   before_action :authenticate_user!
-  before_action :set_import_rule, only: %i[ edit update destroy ]
+  before_action :set_import_rule, only: %i[ edit update destroy preview ]
 
   def index
     @import_rules = current_user.import_rules.includes(:account).order(priority: :desc, match_pattern: :asc)
@@ -46,6 +46,27 @@ class ImportRulesController < ApplicationController
       format.html { redirect_to import_rules_path, notice: "Rule was successfully destroyed.", status: :see_other }
       format.json { head :no_content }
     end
+  end
+
+  def preview_apply
+    service = ImportRule::RetroactiveApply.new(user: current_user)
+    @changes = service.preview
+  end
+
+  def apply
+    service = ImportRule::RetroactiveApply.new(user: current_user)
+    count = service.apply
+
+    if service.errors.any?
+      redirect_to preview_apply_import_rules_path, alert: service.errors.first
+    else
+      redirect_to import_rules_path, notice: "#{count} #{"transaction".pluralize(count)} reassigned."
+    end
+  end
+
+  def preview
+    service = ImportRule::RetroactiveApply.new(user: current_user, rule: @import_rule)
+    @changes = service.preview
   end
 
   private

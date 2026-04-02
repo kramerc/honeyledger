@@ -1,0 +1,13 @@
+<% content_for :title, "Preview Rule: #{@import_rule.match_pattern}" %>
+
+<h1>Preview Rule: <%= @import_rule.match_pattern %></h1>
+
+<% if @changes.any? %>
+  <p><%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be reassigned by this rule.</p>
+
+  <%= render "preview_table", changes: @changes %>
+<% else %>
+  <p>No existing transactions would be changed by this rule.</p>
+<% end %>
+
+<p><%= link_to "Back to Import Rules", import_rules_path %></p>

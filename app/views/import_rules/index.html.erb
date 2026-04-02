@@ -22,6 +22,7 @@
         <td><%= rule.account.name %> (<%= rule.account.kind %>)</td>
         <td><%= rule.priority %></td>
         <td>
+          <%= link_to "Preview", preview_import_rule_path(rule) %>
           <%= link_to "Edit", edit_import_rule_path(rule) %>
           <%= link_to "Delete", import_rule_path(rule), data: { turbo_method: :delete, turbo_confirm: "Delete this rule?" } %>
         </td>
@@ -31,3 +32,4 @@
 </table>
 
 <%= link_to "New Rule", new_import_rule_path %>
+<%= link_to "Preview & Apply Rules", preview_apply_import_rules_path %>

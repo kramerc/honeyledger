@@ -146,6 +146,64 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_response :created
   end
 
+  test "should get preview_apply" do
+    get preview_apply_import_rules_url
+    assert_response :success
+  end
+
+  test "should apply rules and redirect" do
+    # Create an imported transaction that a rule would recategorize
+    bank = accounts(:linked_asset)
+    old_expense = Account.create!(user: @user, currency: currencies(:usd), name: "Old Category", kind: :expense)
+    new_expense = Account.create!(user: @user, currency: currencies(:usd), name: "Apply Target", kind: :expense)
+
+    Transaction.create!(
+      user: @user,
+      src_account: bank,
+      dest_account: old_expense,
+      amount_minor: 1000,
+      currency: currencies(:usd),
+      description: "APPLY_TEST_PATTERN",
+      transacted_at: 1.day.ago,
+      sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    ImportRule.create!(
+      user: @user,
+      account: new_expense,
+      match_pattern: "APPLY_TEST_PATTERN",
+      match_type: :exact,
+      priority: 100
+    )
+
+    post apply_import_rules_url
+    assert_redirected_to import_rules_path
+    assert_match(/reassigned/, flash[:notice])
+  end
+
+  test "should redirect with alert on apply error" do
+    service_mock = Minitest::Mock.new
+    service_mock.expect(:apply, 0)
+    service_mock.expect(:errors, [ "Something went wrong" ])
+    service_mock.expect(:errors, [ "Something went wrong" ])
+
+    ImportRule::RetroactiveApply.stub(:new, service_mock) do
+      post apply_import_rules_url
+      assert_redirected_to preview_apply_import_rules_path
+      assert_equal "Something went wrong", flash[:alert]
+    end
+  end
+
+  test "should apply with no changes" do
+    post apply_import_rules_url
+    assert_redirected_to import_rules_path
+  end
+
+  test "should get preview for a single rule" do
+    get preview_import_rule_url(@import_rule)
+    assert_response :success
+  end
+
   test "should create rule with asset account" do
     assert_difference("ImportRule.count") do
       post import_rules_url, params: { import_rule: {
