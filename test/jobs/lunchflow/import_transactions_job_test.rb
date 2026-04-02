@@ -104,6 +104,32 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil transaction.cleared_at
   end
 
+  test "uses account rule to route expense transaction" do
+    lf_account, _ = create_linked_lunchflow_account
+
+    grocery_account = Account.create!(user: @user, currency: @currency, name: "Groceries", kind: :expense)
+    ImportRule.create!(user: @user, account: grocery_account, match_pattern: "WHOLEFDS", match_type: :contains)
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_rule_expense",
+      amount: "-45.00",
+      currency: "USD",
+      description: "WHOLEFDS MKT #10234",
+      date: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert_equal grocery_account, transaction.dest_account
+  end
+
   test "auto-merges when import rule matches balance sheet account and duplicate exists" do
     lf_account_a, bank_a = create_linked_lunchflow_account(remote_id: 801, name: "Bank A")
     lf_account_b, bank_b = create_linked_lunchflow_account(remote_id: 802, name: "Bank B")
