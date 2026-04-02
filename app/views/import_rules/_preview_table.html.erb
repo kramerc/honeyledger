@@ -17,7 +17,12 @@
         <td class="numeric"><%= transaction_amount_with_currency(change.transaction) %></td>
         <td><%= change.old_account.name %> (<%= change.old_account.kind %>)</td>
         <td>&rarr;</td>
-        <td><%= change.new_account.name %> (<%= change.new_account.kind %>)</td>
+        <td>
+          <%= change.new_account.name %> (<%= change.new_account.kind %>)
+          <% if change.merge_candidate %>
+            <br><small>Will merge with: <%= change.merge_candidate.description %> (<%= change.merge_candidate.transacted_at&.strftime("%Y-%m-%d") %>)</small>
+          <% end %>
+        </td>
       </tr>
     <% end %>
   </tbody>
