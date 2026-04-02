@@ -20,7 +20,7 @@
         <td>
           <%= change.new_account.name %> (<%= change.new_account.kind %>)
           <% if change.merge_candidate %>
-            <br><small>Will merge with: <%= change.merge_candidate.description %> (<%= change.merge_candidate.transacted_at&.strftime("%Y-%m-%d") %>)</small>
+            <br><small>Will merge with: <%= change.merge_candidate.description %> (<%= change.merge_candidate.transacted_at&.strftime("%Y-%m-%d") %>, <%= transaction_amount_with_currency(change.merge_candidate) %>)</small>
           <% end %>
         </td>
       </tr>

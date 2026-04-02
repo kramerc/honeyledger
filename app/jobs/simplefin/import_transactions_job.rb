@@ -28,7 +28,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
       counterpart = if rule_account && !bs_rule_account
         rule_account
       else
-        Account.find_or_create_for_import(user: user, description: sft.description, kind: kind, currency: ledger_account.currency, skip_rules: bs_rule_account.present?)
+        Account.find_or_create_for_import(user: user, description: sft.description, kind: kind, currency: ledger_account.currency, skip_rules: true)
       end
 
       if amount_bd.negative?

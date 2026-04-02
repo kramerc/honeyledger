@@ -10,7 +10,8 @@ class Transaction::AutoMerge
 
   def call
     return if @transaction.merged_into_id? || @transaction.opening_balance? ||
-              @transaction.split? || @transaction.amount_minor == 0 ||
+              @transaction.split? || @transaction.parent_transaction_id? ||
+              @transaction.has_fx? || @transaction.amount_minor == 0 ||
               @transaction.merged_sources.exists?
 
     if @rule_account
@@ -22,13 +23,14 @@ class Transaction::AutoMerge
 
   private
 
-    # Find a matching expense/revenue transaction involving the rule account and merge via Transaction::Merge
+    # Find a matching expense/revenue transaction involving the rule account and merge via Transaction::Merge.
+    # Returns true if merged, :candidate_found if a candidate existed but merge failed, false if no candidate.
     def merge_with_counterpart
       candidate = find_expense_revenue_candidate
       return false unless candidate
 
       merger = Transaction::Merge.new(@transaction, candidate, user: @transaction.user)
-      merger.call
+      merger.call || :candidate_found
     end
 
     # Find an existing BS-to-BS transfer that this transaction duplicates and absorb into it
@@ -42,7 +44,7 @@ class Transaction::AutoMerge
           src_account: transfer.src_account,
           dest_account: transfer.dest_account,
           amount_minor: transfer.amount_minor,
-          currency: transfer.dest_account.currency,
+          currency: transfer.currency,
           description: transfer.description,
           transacted_at: [ @transaction.transacted_at, transfer.transacted_at ].compact.min,
           cleared_at: [ @transaction.cleared_at, transfer.cleared_at ].compact.min
@@ -66,36 +68,34 @@ class Transaction::AutoMerge
 
     # Find expense/revenue transactions involving the rule_account
     def find_expense_revenue_candidate
-      candidates = @transaction.user.transactions
-        .unmerged
-        .includes(:src_account, :dest_account)
-        .where.not(id: @transaction.id)
-        .where(amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id)
-        .where(opening_balance: false, split: false)
-        .where("src_account_id = :id OR dest_account_id = :id", id: @rule_account.id)
-        .where(transacted_at: date_range)
+      candidates = base_candidates
+        .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: @rule_account.id)
         .to_a
         .select { |t| !transfer?(t) }
-        .reject { |t| t.merged_sources.exists? }
 
       candidates.size == 1 ? candidates.first : nil
     end
 
     # Find BS-to-BS transfers involving the same ledger account
     def find_transfer_candidate
-      candidates = @transaction.user.transactions
+      candidates = base_candidates
+        .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: ledger_account_id)
+        .to_a
+        .select { |t| transfer?(t) }
+
+      candidates.size == 1 ? candidates.first : nil
+    end
+
+    def base_candidates
+      @transaction.user.transactions
         .unmerged
         .includes(:src_account, :dest_account)
         .where.not(id: @transaction.id)
         .where(amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id)
-        .where(opening_balance: false, split: false)
-        .where("src_account_id = :id OR dest_account_id = :id", id: ledger_account_id)
+        .where(opening_balance: false, split: false, parent_transaction_id: nil)
+        .where(fx_amount_minor: nil)
+        .where.missing(:merged_sources)
         .where(transacted_at: date_range)
-        .to_a
-        .select { |t| transfer?(t) }
-        .reject { |t| t.merged_sources.exists? }
-
-      candidates.size == 1 ? candidates.first : nil
     end
 
     def ledger_account_id

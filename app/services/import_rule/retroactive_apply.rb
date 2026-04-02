@@ -98,12 +98,13 @@ class ImportRule::RetroactiveApply
         .includes(:src_account, :dest_account)
         .where.not(id: transaction.id)
         .where(amount_minor: transaction.amount_minor, currency_id: transaction.currency_id)
-        .where(opening_balance: false, split: false)
-        .where("src_account_id = :id OR dest_account_id = :id", id: rule_account.id)
+        .where(opening_balance: false, split: false, parent_transaction_id: nil)
+        .where(fx_amount_minor: nil)
+        .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: rule_account.id)
         .where(transacted_at: (transaction.transacted_at - 7.days)..(transaction.transacted_at + 7.days))
+        .where.missing(:merged_sources)
         .to_a
         .select { |t| !t.src_account.balance_sheet? || !t.dest_account.balance_sheet? }
-        .reject { |t| t.merged_sources.exists? }
 
       candidates.size == 1 ? candidates.first : nil
     end
