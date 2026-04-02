@@ -30,7 +30,7 @@ class ImportRule::RetroactiveApply
       end
     end
     applied
-  rescue => e
+  rescue ActiveRecord::ActiveRecordError => e
     @errors << e.message
     0
   end
@@ -62,7 +62,7 @@ class ImportRule::RetroactiveApply
     def candidate_transactions
       @user.transactions
         .where.not(sourceable_type: nil)
-        .where(merged_into_id: nil, split: false, opening_balance: false)
+        .where(merged_into_id: nil, split: false, opening_balance: false, parent_transaction_id: nil)
         .includes(:src_account, :dest_account)
     end
 
@@ -87,7 +87,7 @@ class ImportRule::RetroactiveApply
 
     def rule_scope
       @rule_scope ||= if @rule
-        ImportRule.where(id: @rule.id)
+        @user.import_rules.where(id: @rule.id)
       else
         @user.import_rules
       end

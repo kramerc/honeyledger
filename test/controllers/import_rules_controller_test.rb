@@ -181,6 +181,19 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_match(/reassigned/, flash[:notice])
   end
 
+  test "should redirect with alert on apply error" do
+    service_mock = Minitest::Mock.new
+    service_mock.expect(:apply, 0)
+    service_mock.expect(:errors, [ "Something went wrong" ])
+    service_mock.expect(:errors, [ "Something went wrong" ])
+
+    ImportRule::RetroactiveApply.stub(:new, service_mock) do
+      post apply_import_rules_url
+      assert_redirected_to preview_apply_import_rules_path
+      assert_equal "Something went wrong", flash[:alert]
+    end
+  end
+
   test "should apply with no changes" do
     post apply_import_rules_url
     assert_redirected_to import_rules_path

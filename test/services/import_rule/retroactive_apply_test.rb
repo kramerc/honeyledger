@@ -153,6 +153,37 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     assert_equal new_expense_balance_before + 5000, @new_expense.balance_minor
   end
 
+  test "apply updates src_account for revenue transactions" do
+    revenue_account = Account.create!(user: @user, name: "Old Salary", kind: :revenue, currency: @currency)
+    new_revenue = Account.create!(user: @user, name: "Salary", kind: :revenue, currency: @currency)
+
+    revenue_transaction = Transaction.create!(
+      user: @user,
+      src_account: revenue_account,
+      dest_account: @bank_account,
+      amount_minor: 100_000,
+      currency: @currency,
+      description: "EMPLOYER PAYROLL",
+      transacted_at: 1.day.ago,
+      sourceable: simplefin_transactions(:transaction_two)
+    )
+
+    ImportRule.create!(
+      user: @user,
+      account: new_revenue,
+      match_pattern: "EMPLOYER PAYROLL",
+      match_type: :exact,
+      priority: 20
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user)
+    service.apply
+
+    revenue_transaction.reload
+    assert_equal new_revenue, revenue_transaction.src_account
+    assert_equal @bank_account, revenue_transaction.dest_account
+  end
+
   test "apply returns zero when no changes needed" do
     @imported_transaction.update!(dest_account: @new_expense)
 
@@ -194,6 +225,29 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     changes = service.preview
 
     assert_not changes.any? { |c| c.transaction.id == @imported_transaction.id }
+  end
+
+  test "preview skips split child transactions" do
+    @imported_transaction.update_columns(parent_transaction_id: @imported_transaction.id)
+
+    service = ImportRule::RetroactiveApply.new(user: @user)
+    changes = service.preview
+
+    assert_not changes.any? { |c| c.transaction.id == @imported_transaction.id }
+  end
+
+  test "apply populates errors on ActiveRecord failure" do
+    service = ImportRule::RetroactiveApply.new(user: @user)
+    service.preview
+
+    # Sabotage a change to trigger a validation error
+    service.changes.each do |change|
+      change.new_account = change.transaction.src_account
+    end
+
+    count = service.apply
+    assert_equal 0, count
+    assert service.errors.any?
   end
 
   test "per-rule preview finds matching transactions for the given rule" do
