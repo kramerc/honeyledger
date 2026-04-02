@@ -370,6 +370,36 @@ class Transaction::AutoMergeTest < ActiveSupport::TestCase
     assert_equal earlier.to_i, merged.transacted_at.to_i
   end
 
+  test "does not fall through to apply_rule_account when merge candidate exists but merge fails" do
+    # Create a valid-looking candidate
+    revenue = Account.create!(user: @user, name: "Transfer In", kind: :revenue, currency: @currency)
+    Transaction.create!(
+      user: @user, src_account: revenue, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "Transfer In",
+      transacted_at: 2.days.ago
+    )
+
+    expense = Account.create!(user: @user, name: "Transfer Out", kind: :expense, currency: @currency)
+    transaction = Transaction.create!(
+      user: @user, src_account: @bank_a, dest_account: expense,
+      amount_minor: 500, currency: @currency, description: "Transfer Out",
+      transacted_at: 2.days.ago
+    )
+
+    # Stub Transaction::Merge to always fail
+    failing_merger = Minitest::Mock.new
+    failing_merger.expect(:call, false)
+
+    Transaction::Merge.stub(:new, ->(*_args, **_kwargs) { failing_merger }) do
+      Transaction::AutoMerge.call(transaction, rule_account: @bank_b)
+    end
+
+    transaction.reload
+    # Should NOT have applied rule account — candidate existed but merge was rejected
+    assert_equal expense, transaction.dest_account
+    assert_nil transaction.merged_into_id
+  end
+
   test "does not merge non-transfer with non-transfer when no rule_account" do
     expense_1 = Account.create!(user: @user, name: "Expense 1", kind: :expense, currency: @currency)
     expense_2 = Account.create!(user: @user, name: "Expense 2", kind: :expense, currency: @currency)
