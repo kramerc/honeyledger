@@ -1,6 +1,4 @@
 class Transaction::AutoMerge
-  BALANCE_SHEET_KINDS = Transaction::Merge::BALANCE_SHEET_KINDS
-
   def self.call(transaction, rule_account: nil)
     new(transaction, rule_account: rule_account).call
   end
@@ -59,7 +57,7 @@ class Transaction::AutoMerge
 
     # No merge candidate found — apply the import rule's balance sheet account directly
     def apply_rule_account
-      if balance_sheet?(@transaction.src_account)
+      if @transaction.src_account.balance_sheet?
         @transaction.update!(dest_account: @rule_account)
       else
         @transaction.update!(src_account: @rule_account)
@@ -101,7 +99,7 @@ class Transaction::AutoMerge
     end
 
     def ledger_account_id
-      if balance_sheet?(@transaction.src_account)
+      if @transaction.src_account.balance_sheet?
         @transaction.src_account_id
       else
         @transaction.dest_account_id
@@ -109,11 +107,7 @@ class Transaction::AutoMerge
     end
 
     def transfer?(transaction)
-      balance_sheet?(transaction.src_account) && balance_sheet?(transaction.dest_account)
-    end
-
-    def balance_sheet?(account)
-      BALANCE_SHEET_KINDS.include?(account.kind)
+      transaction.src_account.balance_sheet? && transaction.dest_account.balance_sheet?
     end
 
     def date_range

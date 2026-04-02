@@ -54,6 +54,10 @@ class Account < ApplicationRecord
     Account.find_by(attributes) || raise
   end
 
+  def balance_sheet?
+    asset? || liability? || equity?
+  end
+
   def build_opening_balance_transaction(transaction_attributes = {})
     @opening_balance_transaction = Transaction.new({
       user: user,

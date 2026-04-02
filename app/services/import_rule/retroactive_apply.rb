@@ -1,6 +1,4 @@
 class ImportRule::RetroactiveApply
-  BALANCE_SHEET_KINDS = Transaction::Merge::BALANCE_SHEET_KINDS
-
   Change = Struct.new(:transaction, :old_account, :new_account, :direction, :merge_candidate, keyword_init: true)
 
   attr_reader :changes, :errors
@@ -23,7 +21,7 @@ class ImportRule::RetroactiveApply
     applied = 0
     ActiveRecord::Base.transaction do
       @changes.each do |change|
-        if balance_sheet_account?(change.new_account)
+        if change.new_account.balance_sheet?
           Transaction::AutoMerge.call(change.transaction, rule_account: change.new_account)
         elsif change.direction == :expense
           change.transaction.update!(dest_account: change.new_account)
@@ -52,7 +50,7 @@ class ImportRule::RetroactiveApply
         next unless rule
         next if rule.account_id == counterpart.id
 
-        merge_candidate = if balance_sheet_account?(rule.account)
+        merge_candidate = if rule.account.balance_sheet?
           find_merge_candidate(transaction, rule.account)
         end
 
@@ -104,14 +102,10 @@ class ImportRule::RetroactiveApply
         .where("src_account_id = :id OR dest_account_id = :id", id: rule_account.id)
         .where(transacted_at: (transaction.transacted_at - 7.days)..(transaction.transacted_at + 7.days))
         .to_a
-        .select { |t| !balance_sheet_account?(t.src_account) || !balance_sheet_account?(t.dest_account) }
+        .select { |t| !t.src_account.balance_sheet? || !t.dest_account.balance_sheet? }
         .reject { |t| t.merged_sources.exists? }
 
       candidates.size == 1 ? candidates.first : nil
-    end
-
-    def balance_sheet_account?(account)
-      BALANCE_SHEET_KINDS.include?(account.kind)
     end
 
     def rule_scope

@@ -190,6 +190,27 @@ class AccountTest < ActiveSupport::TestCase
     assert_not_includes linkable_unlinked, accounts(:revenue_account)
   end
 
+  test "balance_sheet? is true for asset accounts" do
+    assert accounts(:asset_account).balance_sheet?
+  end
+
+  test "balance_sheet? is true for liability accounts" do
+    assert accounts(:liability_account).balance_sheet?
+  end
+
+  test "balance_sheet? is true for equity accounts" do
+    account = Account.new(kind: :equity)
+    assert account.balance_sheet?
+  end
+
+  test "balance_sheet? is false for expense accounts" do
+    assert_not accounts(:expense_account).balance_sheet?
+  end
+
+  test "balance_sheet? is false for revenue accounts" do
+    assert_not accounts(:revenue_account).balance_sheet?
+  end
+
   test "empty? is false if account contains transactions" do
     @account.dest_transactions << transactions(:one)
 

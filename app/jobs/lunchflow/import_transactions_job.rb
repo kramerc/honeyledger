@@ -23,7 +23,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       amount_bd = BigDecimal(lft.amount)
       rule = user.import_rules.for_description(description).first
       rule_account = rule&.account
-      bs_rule_account = rule_account if rule_account && Transaction::Merge::BALANCE_SHEET_KINDS.include?(rule_account.kind)
+      bs_rule_account = rule_account if rule_account&.balance_sheet?
 
       kind = amount_bd.negative? ? :expense : :revenue
       counterpart = if rule_account && !bs_rule_account
