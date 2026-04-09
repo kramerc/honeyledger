@@ -460,6 +460,64 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil merged.sourceable # Merge result has no sourceable
   end
 
+  test "skips excluded transactions during reimport" do
+    sf_account, _ = create_linked_simplefin_account
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_excluded",
+      amount: "-50.00",
+      description: "Excluded Transaction",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+
+    # First import
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_not_nil transaction
+
+    # Exclude it
+    Transaction::Exclude.new(transaction, user: @user).call
+    original_synced_at = transaction.reload.synced_at
+
+    # Update sf transaction to simulate refresh
+    travel 2.seconds
+    sf_transaction.update!(synced_at: Time.current)
+
+    # Reimport should skip excluded transaction
+    assert_no_difference "Transaction.count" do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    # synced_at should not have changed
+    assert_equal original_synced_at, transaction.reload.synced_at
+  end
+
+  test "exclude rule auto-excludes imported transaction" do
+    sf_account, _ = create_linked_simplefin_account
+
+    ImportRule.create!(user: @user, match_pattern: "SPAM", match_type: :contains, exclude: true)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_auto_exclude",
+      amount: "-10.00",
+      description: "SPAM Transaction",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert transaction.excluded?
+  end
+
   test "falls back to exact name match when no rule matches" do
     sf_account, _ = create_linked_simplefin_account
 

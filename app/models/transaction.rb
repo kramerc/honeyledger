@@ -30,6 +30,12 @@ class Transaction < ApplicationRecord
 
   scope :opening_balances, -> { where(opening_balance: true) }
   scope :unmerged, -> { where(merged_into_id: nil) }
+  scope :excluded, -> { where.not(excluded_at: nil) }
+  scope :unexcluded, -> { where(excluded_at: nil) }
+
+  def excluded?
+    excluded_at.present?
+  end
 
   validates :amount_minor, numericality: { allow_blank: true, unless: :amount_written? } # Blank is translated to 0
   validates :transacted_at, presence: true
@@ -85,6 +91,7 @@ class Transaction < ApplicationRecord
     end
 
     def transfer_account_balances
+      return if excluded?
       return unless saved_change_to_amount_minor? || saved_change_to_fx_amount_minor? ||
                     saved_change_to_src_account_id? || saved_change_to_dest_account_id?
 
@@ -116,6 +123,7 @@ class Transaction < ApplicationRecord
     end
 
     def reverse_account_balances
+      return if excluded?
       # Use persisted (_was) values so reassigning associations in-memory before destroy! doesn't reverse the wrong accounts
       return if amount_minor_was.nil?
 

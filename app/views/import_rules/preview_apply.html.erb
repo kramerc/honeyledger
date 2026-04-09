@@ -3,7 +3,14 @@
 <h1>Preview Rule Application</h1>
 
 <% if @changes.any? %>
-  <p><%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be reassigned to different accounts.</p>
+  <% exclude_count = @changes.count { |c| c.action == :exclude } %>
+  <% reassign_count = @changes.size - exclude_count %>
+  <p>
+    <% parts = [] %>
+    <% parts << "#{reassign_count} reassigned" if reassign_count > 0 %>
+    <% parts << "#{exclude_count} excluded" if exclude_count > 0 %>
+    <%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be updated (<%= parts.join(", ") %>).
+  </p>
 
   <%= render "preview_table", changes: @changes %>
 

@@ -452,6 +452,21 @@
   display: block; /* Show edit portion when editing */
 }
 
+/* Excluded badge */
+.excluded-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--bark-light);
+  margin-left: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--bark-light);
+  border-radius: 3px;
+}
+
+.transaction:has(.excluded-badge) .row.show > div:not(.actions):not(.select) {
+  opacity: 0.5;
+}
+
 /* Merged badge */
 .merged-badge {
   font-size: 0.7rem;

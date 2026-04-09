@@ -21,11 +21,21 @@
     <%= form.select :match_type, ImportRule.match_types.keys.map { |t| [ t.humanize, t ] } %>
   </div>
 
-  <div>
-    <%= form.label :account_id, "Account", style: "display: block" %>
-    <%= form.select :account_id,
-      grouped_account_options_for_select(current_user.accounts.real.order(:kind, :name), Account.kinds.keys, selected_key: import_rule.account_id),
-      include_blank: "Select an account..." %>
+  <div data-controller="toggle-field">
+    <div style="margin-top: 0.5em">
+      <label for="<%= form.field_id(:exclude) %>">
+        <%= form.check_box :exclude, id: form.field_id(:exclude), data: { toggle_field_target: "checkbox", action: "change->toggle-field#toggle" } %>
+        Exclude matching transactions from calculations instead of assigning them to an account.
+      </label>
+    </div>
+
+    <div>
+      <%= form.label :account_id, "Account", style: "display: block" %>
+      <%= form.select :account_id,
+        grouped_account_options_for_select(current_user.accounts.real.order(:kind, :name), Account.kinds.keys, selected_key: import_rule.account_id),
+        { include_blank: "Select an account..." },
+        data: { toggle_field_target: "field" } %>
+    </div>
   </div>
 
   <div>

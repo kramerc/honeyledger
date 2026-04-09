@@ -363,4 +363,44 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     assert_equal 5000, transfer_out.amount_minor
     assert_nil transfer_out.merged_into_id
   end
+
+  test "preview shows exclude action for exclude rule" do
+    @rule.destroy!
+    exclude_rule = ImportRule.create!(
+      user: @user, match_pattern: "GROCERY", match_type: :contains, exclude: true
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: exclude_rule)
+    changes = service.preview
+
+    assert_equal 1, changes.size
+    assert_equal :exclude, changes.first.action
+    assert_nil changes.first.new_account
+  end
+
+  test "apply excludes transaction with exclude rule" do
+    @rule.destroy!
+    exclude_rule = ImportRule.create!(
+      user: @user, match_pattern: "GROCERY", match_type: :contains, exclude: true
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: exclude_rule)
+    count = service.apply
+
+    assert_equal 1, count
+    assert @imported_transaction.reload.excluded?
+  end
+
+  test "apply skips already excluded transactions" do
+    @rule.destroy!
+    exclude_rule = ImportRule.create!(
+      user: @user, match_pattern: "GROCERY", match_type: :contains, exclude: true
+    )
+
+    Transaction::Exclude.new(@imported_transaction, user: @user).call
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: exclude_rule)
+    changes = service.preview
+    assert_equal 0, changes.size
+  end
 end

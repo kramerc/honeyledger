@@ -1,6 +1,6 @@
 class ImportRule < ApplicationRecord
   belongs_to :user
-  belongs_to :account
+  belongs_to :account, optional: true
 
   enum :match_type, %i[ contains exact starts_with ends_with ]
 
@@ -8,8 +8,9 @@ class ImportRule < ApplicationRecord
 
   validates :match_pattern, presence: true
   validates :match_pattern, uniqueness: { scope: [ :user_id, :match_type ], case_sensitive: false }
-  validate :account_must_not_be_virtual
-  validate :account_must_belong_to_user
+  validates :account_id, presence: true, unless: :exclude?
+  validate :account_must_not_be_virtual, unless: :exclude?
+  validate :account_must_belong_to_user, unless: :exclude?
 
   scope :for_description, ->(description) {
     downcased = description.to_s.strip.downcase
