@@ -209,8 +209,9 @@ class TransactionsController < ApplicationController
     end
 
     def find_preceding_transaction(transaction)
-      current_user.transactions.unmerged.unexcluded
-        .where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
+      scope = current_user.transactions.unmerged
+      scope = scope.unexcluded unless show_excluded?
+      scope.where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
         .order(transacted_at: :desc, created_at: :desc).first
     end
 
