@@ -142,11 +142,11 @@ class TransactionsController < ApplicationController
             render turbo_stream: turbo_stream.remove(@transaction)
           end
         }
-        format.html { redirect_to transactions_url, notice: "Transaction was excluded." }
+        format.html { redirect_back fallback_location: transactions_url, notice: "Transaction was excluded." }
       else
         @exclude_errors = excluder.errors
         format.turbo_stream { render :exclude_error, status: :unprocessable_entity }
-        format.html { redirect_to transactions_url, alert: excluder.errors.first }
+        format.html { redirect_back fallback_location: transactions_url, alert: excluder.errors.first }
       end
     end
   end
@@ -160,11 +160,11 @@ class TransactionsController < ApplicationController
       if unexcluder.call
         @transaction.reload
         format.turbo_stream { render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction }) }
-        format.html { redirect_to transactions_url(show_excluded: 1), notice: "Transaction was restored." }
+        format.html { redirect_back fallback_location: transactions_url(show_excluded: 1), notice: "Transaction was restored." }
       else
         @exclude_errors = unexcluder.errors
         format.turbo_stream { render :exclude_error, status: :unprocessable_entity }
-        format.html { redirect_to transactions_url(excluded: 1), alert: unexcluder.errors.first }
+        format.html { redirect_back fallback_location: transactions_url(show_excluded: 1), alert: unexcluder.errors.first }
       end
     end
   end
