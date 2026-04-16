@@ -75,7 +75,7 @@ class AccountsHelperTest < ActionView::TestCase
     with_path(account_transactions_path(account))
     result = account_nav_link_to(account)
 
-    assert_match(/\bactive\b/, result)
+    assert_match(/class="[^"]*\bactive\b/, result)
   end
 
   test "account_nav_link_to has active class on sub-path of account" do
@@ -83,7 +83,7 @@ class AccountsHelperTest < ActionView::TestCase
     with_path("#{account_path(account)}/something")
     result = account_nav_link_to(account)
 
-    assert_match(/\bactive\b/, result)
+    assert_match(/class="[^"]*\bactive\b/, result)
   end
 
   test "account_nav_link_to has no active class on a different account path" do
@@ -92,7 +92,7 @@ class AccountsHelperTest < ActionView::TestCase
     with_path(account_transactions_path(other))
     result = account_nav_link_to(account)
 
-    assert_no_match(/\bactive\b/, result)
+    assert_no_match(/class="[^"]*\bactive\b/, result)
   end
 
   test "account_nav_link_to has no active class on unrelated path" do
@@ -100,7 +100,7 @@ class AccountsHelperTest < ActionView::TestCase
     with_path("/categories")
     result = account_nav_link_to(account)
 
-    assert_no_match(/\bactive\b/, result)
+    assert_no_match(/class="[^"]*\bactive\b/, result)
   end
 
   # account_options

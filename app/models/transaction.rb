@@ -27,6 +27,7 @@ class Transaction < ApplicationRecord
   after_destroy :unmark_parent_if_last_child, if: :parent_transaction_id?
   after_save :transfer_account_balances
   after_destroy :reverse_account_balances
+  after_commit :broadcast_sidebar_balances
 
   scope :opening_balances, -> { where(opening_balance: true) }
   scope :unmerged, -> { where(merged_into_id: nil) }
@@ -120,6 +121,17 @@ class Transaction < ApplicationRecord
           Account.update_counters(dest_account_id, balance_minor: amount_minor) if dest_account&.real?
         end
       end
+    end
+
+    def broadcast_sidebar_balances
+      ids = if destroyed?
+        [ src_account_id_was, dest_account_id_was ]
+      else
+        [ src_account_id_before_last_save, dest_account_id_before_last_save,
+          src_account_id, dest_account_id ]
+      end.compact.uniq
+
+      Account.real.where(id: ids).includes(:currency).find_each(&:broadcast_sidebar_replace)
     end
 
     def reverse_account_balances

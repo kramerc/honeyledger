@@ -543,6 +543,43 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal "Random Store", transaction.dest_account.name
   end
 
+  test "aggregates sidebar broadcasts to one per affected account regardless of row count" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    expense_account = Account.create!(user: @user, currency: @currency, name: "Coffee", kind: :expense)
+
+    3.times do |i|
+      Simplefin::Transaction.create!(
+        account: sf_account,
+        remote_id: "txn_agg_#{i}",
+        amount: "-#{i + 1}.00",
+        description: "Coffee",
+        posted: i.days.ago,
+        transacted_at: i.days.ago,
+        pending: false
+      )
+    end
+
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(bank_account, :sidebar),
+      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "broadcasts nothing when there are no aggregator transactions to import" do
+    sf_account, _ = create_linked_simplefin_account
+
+    assert_no_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+  end
+
   private
 
     def create_linked_simplefin_account(remote_id: "acc_test", name: "SF Test Checking")

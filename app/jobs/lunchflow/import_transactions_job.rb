@@ -15,48 +15,57 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       .left_joins(:ledger_transaction)
       .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
-    transactions.find_each do |lft|
-      user = lft.account.connection.user
-      ledger_account = lft.account.ledger_account
-      description = lft.merchant.presence || lft.description
+    affected_account_ids = Set.new
 
-      amount_bd = BigDecimal(lft.amount)
-      rule = user.import_rules.for_description(description).first
-      rule_account = rule&.account
-      bs_rule_account = rule_account if rule_account&.balance_sheet?
+    Account.suppressing_turbo_broadcasts do
+      transactions.find_each do |lft|
+        user = lft.account.connection.user
+        ledger_account = lft.account.ledger_account
+        description = lft.merchant.presence || lft.description
 
-      kind = amount_bd.negative? ? :expense : :revenue
-      counterpart = if rule_account && !bs_rule_account
-        rule_account
-      else
-        Account.find_or_create_for_import(user: user, description: description, kind: kind, currency: ledger_account.currency, skip_rules: true)
-      end
+        amount_bd = BigDecimal(lft.amount)
+        rule = user.import_rules.for_description(description).first
+        rule_account = rule&.account
+        bs_rule_account = rule_account if rule_account&.balance_sheet?
 
-      if amount_bd.negative?
-        transaction_src = ledger_account
-        transaction_dest = counterpart
-      else
-        transaction_src = counterpart
-        transaction_dest = ledger_account
-      end
+        kind = amount_bd.negative? ? :expense : :revenue
+        counterpart = if rule_account && !bs_rule_account
+          rule_account
+        else
+          Account.find_or_create_for_import(user: user, description: description, kind: kind, currency: ledger_account.currency, skip_rules: true)
+        end
 
-      transaction = Transaction.find_or_initialize_by(sourceable: lft)
-      transaction.user = user
-      transaction.src_account = transaction_src
-      transaction.dest_account = transaction_dest
-      transaction.description = description
-      transaction.amount_minor = lft.amount_minor.abs
-      transaction.currency = ledger_account.currency
-      transaction.transacted_at = lft.date || Time.current
-      transaction.cleared_at = lft.pending ? nil : lft.date
-      transaction.synced_at = Time.current
-      transaction.save!
+        if amount_bd.negative?
+          transaction_src = ledger_account
+          transaction_dest = counterpart
+        else
+          transaction_src = counterpart
+          transaction_dest = ledger_account
+        end
 
-      if rule&.exclude?
-        Transaction::Exclude.new(transaction, user: user).call
-      else
-        Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
+        transaction = Transaction.find_or_initialize_by(sourceable: lft)
+        transaction.user = user
+        transaction.src_account = transaction_src
+        transaction.dest_account = transaction_dest
+        transaction.description = description
+        transaction.amount_minor = lft.amount_minor.abs
+        transaction.currency = ledger_account.currency
+        transaction.transacted_at = lft.date || Time.current
+        transaction.cleared_at = lft.pending ? nil : lft.date
+        transaction.synced_at = Time.current
+        transaction.save!
+
+        if rule&.exclude?
+          Transaction::Exclude.new(transaction, user: user).call
+        else
+          Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
+        end
+
+        affected_account_ids << transaction.src_account_id
+        affected_account_ids << transaction.dest_account_id
       end
     end
+
+    Account.real.where(id: affected_account_ids).includes(:currency).find_each(&:broadcast_sidebar_replace)
   end
 end

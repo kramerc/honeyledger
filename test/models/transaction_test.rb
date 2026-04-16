@@ -603,4 +603,136 @@ class TransactionTest < ActiveSupport::TestCase
     t = transactions(:opening_balance_expense)
     assert_equal accounts(:liability_account_with_opening_balance), t.opening_balance_target_account
   end
+
+  test "creating a transaction broadcasts sidebar replaces for both real accounts" do
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      Transaction.create!(
+        user: users(:one),
+        src_account: accounts(:asset_account),
+        dest_account: accounts(:expense_account),
+        description: "Lunch",
+        amount_minor: 1234,
+        currency: currencies(:usd),
+        transacted_at: Time.current
+      )
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(accounts(:asset_account), :sidebar),
+      ActionView::RecordIdentifier.dom_id(accounts(:expense_account), :sidebar)
+    ].sort
+    assert_equal expected, targets
+    assert streams.all? { |s| s["action"] == "replace" }
+  end
+
+  test "creating an opening balance transaction broadcasts only the real account" do
+    real = accounts(:asset_account)
+    virtual = Account.opening_balance_for(user: users(:one), kind: :revenue)
+
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      Transaction.create!(
+        user: users(:one),
+        src_account: virtual,
+        dest_account: real,
+        amount_minor: 5000,
+        currency: currencies(:usd),
+        transacted_at: 1.month.ago,
+        opening_balance: true
+      )
+    end
+
+    assert_equal 1, streams.size
+    assert_equal ActionView::RecordIdentifier.dom_id(real, :sidebar), streams.first["target"]
+  end
+
+  test "updating description-only still broadcasts sidebar" do
+    transaction = transactions(:one)
+
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      transaction.update!(description: "Renamed")
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(transaction.src_account, :sidebar),
+      ActionView::RecordIdentifier.dom_id(transaction.dest_account, :sidebar)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "updating with src account reassignment broadcasts old src, new src, and dest" do
+    transaction = transactions(:one)
+    new_src = accounts(:liability_account)
+    old_src = transaction.src_account
+    dest = transaction.dest_account
+
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      transaction.update!(src_account: new_src)
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(old_src, :sidebar),
+      ActionView::RecordIdentifier.dom_id(new_src, :sidebar),
+      ActionView::RecordIdentifier.dom_id(dest, :sidebar)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "updating with dest account reassignment broadcasts src, old dest, and new dest" do
+    transaction = transactions(:one)
+    new_dest = Account.create!(user: users(:one), currency: currencies(:usd), name: "Dining", kind: :expense)
+    old_dest = transaction.dest_account
+    src = transaction.src_account
+
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      transaction.update!(dest_account: new_dest)
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(src, :sidebar),
+      ActionView::RecordIdentifier.dom_id(old_dest, :sidebar),
+      ActionView::RecordIdentifier.dom_id(new_dest, :sidebar)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "destroying a transaction broadcasts persisted src and dest" do
+    transaction = transactions(:one)
+    src = transaction.src_account
+    dest = transaction.dest_account
+
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      transaction.destroy!
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(src, :sidebar),
+      ActionView::RecordIdentifier.dom_id(dest, :sidebar)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "destroying with in-memory account reassignment still broadcasts persisted accounts" do
+    transaction = transactions(:one)
+    persisted_src = transaction.src_account
+    persisted_dest = transaction.dest_account
+    other_account = accounts(:liability_account)
+
+    streams = capture_turbo_stream_broadcasts([ users(:one), :sidebar ]) do
+      transaction.src_account = other_account
+      transaction.destroy!
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(persisted_src, :sidebar),
+      ActionView::RecordIdentifier.dom_id(persisted_dest, :sidebar)
+    ].sort
+    assert_equal expected, targets
+    refute_includes targets, ActionView::RecordIdentifier.dom_id(other_account, :sidebar)
+  end
 end

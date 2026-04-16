@@ -122,6 +122,15 @@ class Account < ApplicationRecord
     user_id == user.id
   end
 
+  def broadcast_sidebar_replace
+    broadcast_replace_to(
+      user, :sidebar,
+      target: ActionView::RecordIdentifier.dom_id(self, :sidebar),
+      partial: "accounts/sidebar_item",
+      locals: { account: self }
+    )
+  end
+
   private
 
     def should_enqueue_source_import?

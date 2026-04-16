@@ -545,4 +545,54 @@ class AccountTest < ActiveSupport::TestCase
     assert_not duplicate.valid?
     assert_includes duplicate.errors[:name], "has already been taken"
   end
+
+  test "broadcast_sidebar_replace emits a replace turbo stream targeting the account's sidebar dom id" do
+    account = accounts(:asset_account)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.broadcast_sidebar_replace
+    end
+
+    assert_equal 1, streams.size
+    stream = streams.first
+    assert_equal "replace", stream["action"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), stream["target"]
+    template = stream.at("template").inner_html
+    assert_includes template, ActionView::RecordIdentifier.dom_id(account, :sidebar)
+    assert_includes template, account.name
+  end
+
+  test "setting an opening balance broadcasts only the real account's sidebar" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Brokerage", kind: :asset)
+    Account.opening_balance_for(user: account.user, kind: :revenue) # ensure virtual counterpart exists
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(opening_balance_amount: "100", opening_balance_transacted_at: 1.month.ago)
+    end
+
+    assert_equal 1, streams.size
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), streams.first["target"]
+  end
+
+  test "changing an opening balance broadcasts the real account's sidebar" do
+    account = accounts(:asset_account_with_opening_balance)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(opening_balance_amount: "999", opening_balance_transacted_at: 1.month.ago)
+    end
+
+    assert_equal 1, streams.size
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), streams.first["target"]
+  end
+
+  test "clearing an opening balance broadcasts the real account's sidebar" do
+    account = accounts(:asset_account_with_opening_balance)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(opening_balance_amount: "0", opening_balance_transacted_at: 1.month.ago)
+    end
+
+    assert_equal 1, streams.size
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), streams.first["target"]
+  end
 end

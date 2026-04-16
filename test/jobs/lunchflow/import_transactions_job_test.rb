@@ -227,6 +227,44 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert transaction.excluded?
   end
 
+  test "aggregates sidebar broadcasts to one per affected account regardless of row count" do
+    lf_account, lf_bank_account = create_linked_lunchflow_account
+
+    expense_account = Account.create!(user: @user, currency: @currency, name: "Coffee", kind: :expense)
+
+    3.times do |i|
+      Lunchflow::Transaction.create!(
+        account: lf_account,
+        remote_id: "lf_agg_#{i}",
+        amount: "-#{i + 1}.00",
+        currency: "USD",
+        description: "Coffee",
+        merchant: "Coffee",
+        pending: false,
+        date: i.days.ago.to_date
+      )
+    end
+
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(lf_bank_account, :sidebar),
+      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "broadcasts nothing when there are no aggregator transactions to import" do
+    lf_account, _ = create_linked_lunchflow_account
+
+    assert_no_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
