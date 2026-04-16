@@ -7,7 +7,10 @@ class TransactionsController < ApplicationController
   def index
     @new_transaction = build_new_transaction
 
-    @transactions = current_user.transactions.unmerged.includes(:category, :src_account, :dest_account, :currency, :fx_currency, merged_sources: [ :src_account, :dest_account ]).order(transacted_at: :desc, created_at: :desc)
+    @show_excluded = params[:show_excluded] == "1"
+    scope = current_user.transactions.unmerged
+    scope = scope.unexcluded unless @show_excluded
+    @transactions = scope.includes(:category, :src_account, :dest_account, :currency, :fx_currency, merged_sources: [ :src_account, :dest_account ]).order(transacted_at: :desc, created_at: :desc)
     account_id = params.fetch(:account_id, nil)
     if account_id.present?
       @account = current_user.accounts.find(account_id)
@@ -75,7 +78,7 @@ class TransactionsController < ApplicationController
         # Find the nearest transaction that's newer (appears above in the list) to insert after.
         # This element is already in the DOM, unlike older ones which may be off-screen or absent.
         newest = @restored_transactions.first
-        @after_transaction = current_user.transactions.unmerged
+        @after_transaction = current_user.transactions.unmerged.unexcluded
           .where.not(id: @restored_transactions.map(&:id))
           .where("transacted_at > :at OR (transacted_at = :at AND created_at > :cat)",
                  at: newest.transacted_at, cat: newest.created_at)
@@ -124,6 +127,48 @@ class TransactionsController < ApplicationController
     end
   end
 
+  # POST /transactions/:id/exclude
+  def exclude
+    @transaction = current_user.transactions.find(params.expect(:id))
+    excluder = Transaction::Exclude.new(@transaction, user: current_user)
+
+    respond_to do |format|
+      if excluder.call
+        @transaction.reload
+        format.turbo_stream {
+          if show_excluded?
+            render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction })
+          else
+            render turbo_stream: turbo_stream.remove(@transaction)
+          end
+        }
+        format.html { redirect_back fallback_location: transactions_url, notice: "Transaction was excluded." }
+      else
+        @exclude_errors = excluder.errors
+        format.turbo_stream { render :exclude_error, status: :unprocessable_entity }
+        format.html { redirect_back fallback_location: transactions_url, alert: excluder.errors.first }
+      end
+    end
+  end
+
+  # POST /transactions/:id/unexclude
+  def unexclude
+    @transaction = current_user.transactions.find(params.expect(:id))
+    unexcluder = Transaction::Unexclude.new(@transaction, user: current_user)
+
+    respond_to do |format|
+      if unexcluder.call
+        @transaction.reload
+        format.turbo_stream { render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction }) }
+        format.html { redirect_back fallback_location: transactions_url(show_excluded: 1), notice: "Transaction was restored." }
+      else
+        @exclude_errors = unexcluder.errors
+        format.turbo_stream { render :exclude_error, status: :unprocessable_entity }
+        format.html { redirect_back fallback_location: transactions_url(show_excluded: 1), alert: unexcluder.errors.first }
+      end
+    end
+  end
+
   # DELETE /transactions/1 or /transactions/1.json
   def destroy
     @transaction.destroy!
@@ -164,13 +209,21 @@ class TransactionsController < ApplicationController
     end
 
     def find_preceding_transaction(transaction)
-      current_user.transactions.unmerged
-        .where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
+      scope = current_user.transactions.unmerged
+      scope = scope.unexcluded unless show_excluded?
+      scope.where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
         .order(transacted_at: :desc, created_at: :desc).first
     end
 
     def set_form_collections
       @accounts = current_user.accounts.real.includes(:currency).order(:name)
       @categories = current_user.categories.order(:name)
+    end
+
+    def show_excluded?
+      referer = request.referer
+      referer.present? && URI.parse(referer).query&.include?("show_excluded=1")
+    rescue URI::InvalidURIError
+      false
     end
 end

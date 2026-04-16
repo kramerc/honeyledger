@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_31_230603) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_02_173250) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -55,8 +55,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_31_230603) do
   end
 
   create_table "import_rules", force: :cascade do |t|
-    t.bigint "account_id", null: false
+    t.bigint "account_id"
     t.datetime "created_at", null: false
+    t.boolean "exclude", default: false, null: false
     t.string "match_pattern", null: false
     t.integer "match_type", default: 0, null: false
     t.integer "priority", default: 0, null: false
@@ -162,6 +163,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_31_230603) do
     t.bigint "currency_id", null: false
     t.string "description", default: "", null: false
     t.bigint "dest_account_id", null: false
+    t.datetime "excluded_at"
     t.integer "fx_amount_minor"
     t.bigint "fx_currency_id"
     t.bigint "merged_into_id"
@@ -180,6 +182,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_31_230603) do
     t.index ["category_id"], name: "index_transactions_on_category_id"
     t.index ["currency_id"], name: "index_transactions_on_currency_id"
     t.index ["dest_account_id"], name: "index_transactions_on_dest_account_id"
+    t.index ["excluded_at"], name: "index_transactions_on_excluded_at", where: "(excluded_at IS NOT NULL)"
     t.index ["fx_currency_id"], name: "index_transactions_on_fx_currency_id"
     t.index ["merged_into_id"], name: "index_transactions_on_merged_into_id"
     t.index ["parent_transaction_id"], name: "index_transactions_on_parent_transaction_id"

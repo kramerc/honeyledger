@@ -9,7 +9,7 @@
     <tr>
       <th>Pattern</th>
       <th>Match Type</th>
-      <th>Account</th>
+      <th>Action</th>
       <th>Priority</th>
       <th>Actions</th>
     </tr>
@@ -19,7 +19,7 @@
       <tr>
         <td><%= rule.match_pattern %></td>
         <td><%= rule.match_type.humanize %></td>
-        <td><%= rule.account.name %> (<%= rule.account.kind %>)</td>
+        <td><%= rule.exclude? ? "Exclude" : "Assign to #{rule.account.name} (#{rule.account.kind})" %></td>
         <td><%= rule.priority %></td>
         <td>
           <%= link_to "Preview", preview_import_rule_path(rule) %>

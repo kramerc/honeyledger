@@ -1,12 +1,17 @@
+<% has_reassigns = changes.any? { |c| c.action != :exclude } %>
 <table>
   <thead>
     <tr>
       <th>Description</th>
       <th>Date</th>
       <th>Amount</th>
-      <th>Current Account</th>
-      <th></th>
-      <th>New Account</th>
+      <% if has_reassigns %>
+        <th>Current Account</th>
+        <th></th>
+        <th>New Account</th>
+      <% else %>
+        <th>Action</th>
+      <% end %>
     </tr>
   </thead>
   <tbody>
@@ -15,14 +20,22 @@
         <td><%= change.transaction.description %></td>
         <td><%= change.transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
         <td class="numeric"><%= transaction_amount_with_currency(change.transaction) %></td>
-        <td><%= change.old_account.name %> (<%= change.old_account.kind %>)</td>
-        <td>&rarr;</td>
-        <td>
-          <%= change.new_account.name %> (<%= change.new_account.kind %>)
-          <% if change.merge_candidate %>
-            <br><small>Will merge with: <%= change.merge_candidate.description %> (<%= change.merge_candidate.transacted_at&.strftime("%Y-%m-%d") %>, <%= transaction_amount_with_currency(change.merge_candidate) %>)</small>
-          <% end %>
-        </td>
+        <% if has_reassigns %>
+          <td><%= change.old_account.name %> (<%= change.old_account.kind %>)</td>
+          <td>&rarr;</td>
+          <td>
+            <% if change.action == :exclude %>
+              <em>Exclude</em>
+            <% else %>
+              <%= change.new_account.name %> (<%= change.new_account.kind %>)
+              <% if change.merge_candidate %>
+                <br><small>Will merge with: <%= change.merge_candidate.description %> (<%= change.merge_candidate.transacted_at&.strftime("%Y-%m-%d") %>, <%= transaction_amount_with_currency(change.merge_candidate) %>)</small>
+              <% end %>
+            <% end %>
+          </td>
+        <% else %>
+          <td><em>Exclude</em></td>
+        <% end %>
       </tr>
     <% end %>
   </tbody>

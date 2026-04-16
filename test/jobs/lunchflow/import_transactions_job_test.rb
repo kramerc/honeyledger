@@ -173,6 +173,60 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal 50000, merged.amount_minor
   end
 
+  test "skips excluded transactions during reimport" do
+    lf_account, _ = create_linked_lunchflow_account
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: 999,
+      amount: "-50.00",
+      currency: "USD",
+      description: "Excluded Transaction",
+      merchant: "Excluded Merchant",
+      pending: false,
+      date: 2.days.ago.to_date
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+
+    Transaction::Exclude.new(transaction, user: @user).call
+    original_synced_at = transaction.reload.synced_at
+
+    travel 2.seconds
+    lf_transaction.update!(synced_at: Time.current)
+
+    assert_no_difference "Transaction.count" do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    assert_equal original_synced_at, transaction.reload.synced_at
+  end
+
+  test "exclude rule auto-excludes imported transaction" do
+    lf_account, _ = create_linked_lunchflow_account
+
+    ImportRule.create!(user: @user, match_pattern: "SPAM", match_type: :contains, exclude: true)
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: 998,
+      amount: "-10.00",
+      currency: "USD",
+      description: "SPAM Transaction",
+      merchant: "SPAM Merchant",
+      pending: false,
+      date: 1.day.ago.to_date
+    )
+
+    assert_difference "Transaction.count", 1 do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert transaction.excluded?
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")

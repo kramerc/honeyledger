@@ -2,6 +2,15 @@
 
 <h1 class="sr-only">Transactions</h1>
 
+<% base_path = @account ? account_transactions_path(@account) : transactions_path %>
+<div class="transactions-filter">
+  <% if @show_excluded %>
+    <%= link_to "Hide excluded transactions", base_path %>
+  <% else %>
+    <%= link_to "Show excluded transactions", "#{base_path}?show_excluded=1" %>
+  <% end %>
+</div>
+
 <div data-controller="transactions--merge" data-transactions--merge-merge-url-value="<%= merge_transactions_path %>">
   <div class="transactions">
     <div class="row header">

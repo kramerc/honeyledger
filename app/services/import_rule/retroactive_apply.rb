@@ -1,5 +1,5 @@
 class ImportRule::RetroactiveApply
-  Change = Struct.new(:transaction, :old_account, :new_account, :direction, :merge_candidate, keyword_init: true)
+  Change = Struct.new(:transaction, :old_account, :new_account, :direction, :merge_candidate, :action, keyword_init: true)
 
   attr_reader :changes, :errors
 
@@ -21,7 +21,9 @@ class ImportRule::RetroactiveApply
     applied = 0
     ActiveRecord::Base.transaction do
       @changes.each do |change|
-        if change.new_account.balance_sheet?
+        if change.action == :exclude
+          Transaction::Exclude.new(change.transaction, user: @user).call
+        elsif change.new_account.balance_sheet?
           Transaction::AutoMerge.call(change.transaction, rule_account: change.new_account)
         elsif change.direction == :expense
           change.transaction.update!(dest_account: change.new_account)
@@ -48,6 +50,19 @@ class ImportRule::RetroactiveApply
 
         rule = find_matching_rule(transaction.description)
         next unless rule
+
+        if rule.exclude?
+          changes << Change.new(
+            transaction: transaction,
+            old_account: counterpart,
+            new_account: nil,
+            direction: direction,
+            merge_candidate: nil,
+            action: :exclude
+          )
+          next
+        end
+
         next if rule.account_id == counterpart.id
 
         merge_candidate = if rule.account.balance_sheet?
@@ -59,7 +74,8 @@ class ImportRule::RetroactiveApply
           old_account: counterpart,
           new_account: rule.account,
           direction: direction,
-          merge_candidate: merge_candidate
+          merge_candidate: merge_candidate,
+          action: :reassign
         )
       end
 
@@ -69,7 +85,7 @@ class ImportRule::RetroactiveApply
     def candidate_transactions
       @user.transactions
         .where.not(sourceable_type: nil)
-        .where(merged_into_id: nil, split: false, opening_balance: false, parent_transaction_id: nil)
+        .where(merged_into_id: nil, excluded_at: nil, split: false, opening_balance: false, parent_transaction_id: nil)
         .includes(:src_account, :dest_account)
     end
 
@@ -95,6 +111,7 @@ class ImportRule::RetroactiveApply
     def find_merge_candidate(transaction, rule_account)
       candidates = @user.transactions
         .unmerged
+        .unexcluded
         .includes(:src_account, :dest_account)
         .where.not(id: transaction.id)
         .where(amount_minor: transaction.amount_minor, currency_id: transaction.currency_id)

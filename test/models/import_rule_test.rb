@@ -143,6 +143,25 @@ class ImportRuleTest < ActiveSupport::TestCase
     assert_equal low, results.second
   end
 
+  # exclude rules
+
+  test "exclude rule valid without account" do
+    rule = ImportRule.new(user: @user, match_pattern: "SPAM", match_type: :contains, exclude: true)
+    assert rule.valid?
+  end
+
+  test "non-exclude rule requires account" do
+    rule = ImportRule.new(user: @user, match_pattern: "Test", match_type: :contains, exclude: false)
+    assert_not rule.valid?
+    assert_includes rule.errors[:account_id], "can't be blank"
+  end
+
+  test "exclude rule skips virtual account validation" do
+    rule = ImportRule.new(user: @user, match_pattern: "SPAM", match_type: :contains, exclude: true)
+    assert rule.valid?
+    assert_empty rule.errors[:account]
+  end
+
   # for_kind scope
 
   test "for_kind filters by account kind" do

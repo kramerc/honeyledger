@@ -9,7 +9,8 @@ class Transaction::AutoMerge
   end
 
   def call
-    return if @transaction.merged_into_id? || @transaction.opening_balance? ||
+    return if @transaction.merged_into_id? || @transaction.excluded? ||
+              @transaction.opening_balance? ||
               @transaction.split? || @transaction.parent_transaction_id? ||
               @transaction.has_fx? || @transaction.amount_minor == 0 ||
               @transaction.merged_sources.exists?
@@ -89,6 +90,7 @@ class Transaction::AutoMerge
     def base_candidates
       @transaction.user.transactions
         .unmerged
+        .unexcluded
         .includes(:src_account, :dest_account)
         .where.not(id: @transaction.id)
         .where(amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id)

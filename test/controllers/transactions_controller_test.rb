@@ -345,6 +345,173 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
+  test "exclude removes transaction from index via turbo_stream" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Exclude Ctrl Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Exclude me",
+      transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    post exclude_transaction_url(imported), as: :turbo_stream
+    assert_response :success
+
+    imported.reload
+    assert imported.excluded?
+  end
+
+  test "unexclude removes transaction from excluded list via turbo_stream" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Unexclude Ctrl Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Restore me",
+      transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_two)
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    post unexclude_transaction_url(imported), as: :turbo_stream
+    assert_response :success
+
+    imported.reload
+    assert_not imported.excluded?
+  end
+
+  test "index hides excluded transactions by default" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Hidden Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "This should be hidden",
+      transacted_at: Time.current
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    get transactions_url
+    assert_response :success
+    assert_not_includes response.body, "This should be hidden"
+  end
+
+  test "index shows excluded transactions with show_excluded param" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Excluded Indicator Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Excluded but visible",
+      transacted_at: Time.current
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    get transactions_url(show_excluded: 1)
+    assert_response :success
+    assert_includes response.body, "Excluded but visible"
+    assert_includes response.body, "excluded-badge"
+  end
+
+  test "account-scoped index hides excluded by default" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Scoped Hidden Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Scoped hidden txn",
+      transacted_at: Time.current
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    get account_transactions_url(bank)
+    assert_response :success
+    assert_not_includes response.body, "Scoped hidden txn"
+  end
+
+  test "account-scoped index shows excluded with show_excluded param" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Scoped Excluded Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Scoped excluded txn",
+      transacted_at: Time.current
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    get account_transactions_url(bank, show_excluded: 1)
+    assert_response :success
+    assert_includes response.body, "Scoped excluded txn"
+    assert_includes response.body, "excluded-badge"
+  end
+
+  test "exclude handles malformed referer gracefully" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bad Referer Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Bad referer",
+      transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    post exclude_transaction_url(imported), as: :turbo_stream,
+      headers: { "HTTP_REFERER" => "http://[invalid" }
+    assert_response :success
+
+    imported.reload
+    assert imported.excluded?
+  end
+
+  test "exclude replaces in-place when show_excluded is active" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Replace Exclude Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Replace in place",
+      transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    post exclude_transaction_url(imported), as: :turbo_stream,
+      headers: { "HTTP_REFERER" => transactions_url(show_excluded: 1) }
+    assert_response :success
+    assert_includes response.body, "replace"
+
+    imported.reload
+    assert imported.excluded?
+  end
+
+  test "exclude on already excluded transaction returns error" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Double Exclude Expense", kind: :expense, currency: currency)
+
+    imported = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Already excluded",
+      transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    post exclude_transaction_url(imported), as: :turbo_stream
+    assert_response :unprocessable_entity
+  end
+
+  test "unexclude on non-excluded transaction returns error" do
+    post unexclude_transaction_url(@transaction), as: :turbo_stream
+    assert_response :unprocessable_entity
+  end
+
   test "merge with wrong number of transaction IDs returns error" do
     post merge_transactions_url, params: {
       transaction_ids: [ @transaction.id ]

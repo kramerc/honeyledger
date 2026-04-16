@@ -15,7 +15,7 @@
 
     <div class="row show">
       <div class="select">
-        <% unless transaction.opening_balance? %>
+        <% unless transaction.opening_balance? || transaction.excluded? %>
           <input type="checkbox"
                  class="merge-checkbox"
                  data-transactions--merge-target="checkbox"
@@ -26,7 +26,9 @@
       <div data-label="Date"><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></div>
       <div data-label="Type">
         <%= transaction_type_indicator(transaction) %>
-        <% if transaction.merged_sources.any? %>
+        <% if transaction.excluded? %>
+          <span class="excluded-badge" title="Excluded from calculations">Excluded</span>
+        <% elsif transaction.merged_sources.any? %>
           <a href="#" class="merged-badge" data-action="transactions--row#toggleMergedDetails">Merged</a>
         <% end %>
       </div>
@@ -44,6 +46,11 @@
           <a href="#" data-action="transactions--row#edit">Edit</a>
         <% end %>
         <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
+        <% if transaction.excluded? %>
+          <%= link_to "Restore", unexclude_transaction_path(transaction), data: { turbo_method: :post } %>
+        <% elsif transaction.sourceable_type.present? && !transaction.opening_balance? && !transaction.merged_sources.any? %>
+          <%= link_to "Exclude", exclude_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
+        <% end %>
         <% if transaction.merged_sources.any? %>
           <%= link_to "Unmerge", unmerge_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
         <% end %>

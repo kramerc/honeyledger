@@ -18,6 +18,8 @@ Rails.application.routes.draw do
   resources :transactions do
     member do
       post :unmerge
+      post :exclude
+      post :unexclude
     end
     collection do
       post :merge

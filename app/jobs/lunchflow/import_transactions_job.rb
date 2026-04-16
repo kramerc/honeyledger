@@ -13,7 +13,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       .where(account_id: lunchflow_account_id)
       .includes(account: { connection: :user })
       .left_joins(:ledger_transaction)
-      .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
+      .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
     transactions.find_each do |lft|
       user = lft.account.connection.user
@@ -52,7 +52,11 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       transaction.synced_at = Time.current
       transaction.save!
 
-      Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
+      if rule&.exclude?
+        Transaction::Exclude.new(transaction, user: user).call
+      else
+        Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
+      end
     end
   end
 end

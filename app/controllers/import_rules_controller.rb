@@ -76,6 +76,6 @@ class ImportRulesController < ApplicationController
     end
 
     def import_rule_params
-      params.expect(import_rule: [ :match_pattern, :match_type, :account_id, :priority ])
+      params.expect(import_rule: [ :match_pattern, :match_type, :account_id, :priority, :exclude ])
     end
 end
