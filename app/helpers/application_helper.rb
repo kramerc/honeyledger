@@ -9,24 +9,17 @@ module ApplicationHelper
       active = options.delete(:active)
     end
 
-    active_path = case active
-    when :prefix then url
-    when String then active
-    end
-
-    is_active = if active_path
-      request.path == active_path || request.path.start_with?("#{active_path}/")
+    is_active = case active
+    when :prefix
+      request.path == url || request.path.start_with?("#{url}/")
+    when String
+      request.path == active || request.path.start_with?("#{active}/")
     else
       current_page?(url)
     end
 
     if is_active
       options[:class] = class_names(options[:class], "active")
-    end
-
-    if active_path
-      data = (options[:data] ||= {})
-      data[:nav_active_path] = active_path
     end
 
     if block_given?

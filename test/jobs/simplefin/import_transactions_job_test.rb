@@ -566,8 +566,8 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(bank_account, :sidebar),
-      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar)
+      ActionView::RecordIdentifier.dom_id(bank_account, :sidebar_balance),
+      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar_balance)
     ].sort
     assert_equal expected, targets
   end

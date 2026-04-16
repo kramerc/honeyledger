@@ -21,10 +21,10 @@ class TransactionsTest < ApplicationSystemTestCase
     fill_in "transaction[amount]", with: "12.34"
     click_button "Create"
 
-    within("##{ActionView::RecordIdentifier.dom_id(src, :sidebar)}") do
+    within("##{ActionView::RecordIdentifier.dom_id(src, :sidebar_balance)}") do
       assert_text "-$12.34"
     end
-    within("##{ActionView::RecordIdentifier.dom_id(dest, :sidebar)}") do
+    within("##{ActionView::RecordIdentifier.dom_id(dest, :sidebar_balance)}") do
       assert_text "$12.34"
     end
   end
@@ -37,8 +37,9 @@ class TransactionsTest < ApplicationSystemTestCase
 
     visit account_path(account)
 
-    sidebar_id = "##{ActionView::RecordIdentifier.dom_id(account, :sidebar)}"
-    assert_selector "#{sidebar_id} a.active"
+    balance_id = "##{ActionView::RecordIdentifier.dom_id(account, :sidebar_balance)}"
+    active_link_selector = "a.active[href='#{account_transactions_path(account)}']"
+    assert_selector active_link_selector
 
     Transaction.create!(
       user: @user,
@@ -50,10 +51,10 @@ class TransactionsTest < ApplicationSystemTestCase
       transacted_at: Time.current
     )
 
-    within(sidebar_id) do
+    within(balance_id) do
       assert_text "-$5.00"
     end
-    assert_selector "#{sidebar_id} a.active"
+    assert_selector active_link_selector
   end
 
   private

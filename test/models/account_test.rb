@@ -556,10 +556,10 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal 1, streams.size
     stream = streams.first
     assert_equal "replace", stream["action"]
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), stream["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), stream["target"]
     template = stream.at("template").inner_html
-    assert_includes template, ActionView::RecordIdentifier.dom_id(account, :sidebar)
-    assert_includes template, account.name
+    assert_includes template, ActionView::RecordIdentifier.dom_id(account, :sidebar_balance)
+    assert_includes template, "account__balance"
   end
 
   test "setting an opening balance broadcasts only the real account's sidebar" do
@@ -571,7 +571,7 @@ class AccountTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), streams.first["target"]
   end
 
   test "changing an opening balance broadcasts the real account's sidebar" do
@@ -582,7 +582,7 @@ class AccountTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), streams.first["target"]
   end
 
   test "clearing an opening balance broadcasts the real account's sidebar" do
@@ -593,6 +593,6 @@ class AccountTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), streams.first["target"]
   end
 end

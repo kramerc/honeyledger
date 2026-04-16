@@ -6,7 +6,9 @@
   <h4><%= kind.humanize.pluralize %></h4>
   <ul>
     <% accounts.each do |account| %>
-      <%= render "accounts/sidebar_item", account: account %>
+      <li class="account">
+        <%= account_nav_link_to account %>
+      </li>
     <% end %>
   </ul>
 <% end %>
