@@ -125,7 +125,7 @@ class Account < ApplicationRecord
   def broadcast_sidebar_replace
     broadcast_replace_to(
       user, :sidebar,
-      target: ActionView::RecordIdentifier.dom_id(self, :sidebar_balance),
+      target: [ self, :sidebar_balance ],
       partial: "accounts/sidebar_balance",
       locals: { account: self }
     )
