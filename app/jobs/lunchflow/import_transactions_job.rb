@@ -15,9 +15,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       .left_joins(:ledger_transaction)
       .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
-    affected_account_ids = Set.new
-
-    Account.suppressing_turbo_broadcasts do
+    Transaction.collecting_sidebar_broadcasts do
       transactions.find_each do |lft|
         user = lft.account.connection.user
         ledger_account = lft.account.ledger_account
@@ -60,12 +58,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         else
           Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
         end
-
-        affected_account_ids << transaction.src_account_id
-        affected_account_ids << transaction.dest_account_id
       end
     end
-
-    Account.real.where(id: affected_account_ids).includes(:currency).find_each(&:broadcast_sidebar_replace)
   end
 end
