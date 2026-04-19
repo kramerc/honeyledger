@@ -20,6 +20,10 @@ class Account < ApplicationRecord
   belongs_to :sourceable, polymorphic: true, optional: true
   after_save_commit :enqueue_source_import, if: :should_enqueue_source_import?
 
+  after_create_commit  :broadcast_sidebar_insert, if: :real?
+  after_update_commit  :broadcast_sidebar_change, if: :real?
+  after_destroy_commit :broadcast_sidebar_remove, if: :real?
+
   enum :kind, %i[ asset liability equity expense revenue ]
 
   validates :currency, presence: true, unless: :virtual?
@@ -122,16 +126,42 @@ class Account < ApplicationRecord
     user_id == user.id
   end
 
-  def broadcast_sidebar_replace
-    broadcast_replace_to(
+  def self.sidebar_kind_target_id(kind)
+    "sidebar_accounts_#{kind}"
+  end
+
+  def broadcast_sidebar_update
+    broadcast_update_to(
       user, :sidebar,
-      target: [ self, :sidebar_balance ],
-      partial: "accounts/sidebar_balance",
+      target: [ self, :sidebar_link ],
+      partial: "accounts/sidebar_link_content",
       locals: { account: self }
     )
   end
 
+  def broadcast_sidebar_insert
+    broadcast_append_to(
+      user, :sidebar,
+      target: self.class.sidebar_kind_target_id(kind),
+      partial: "accounts/sidebar_item",
+      locals: { account: self }
+    )
+  end
+
+  def broadcast_sidebar_remove
+    broadcast_remove_to(user, :sidebar, target: [ self, :sidebar_item ])
+  end
+
   private
+
+    def broadcast_sidebar_change
+      if saved_change_to_kind?
+        broadcast_sidebar_remove
+        broadcast_sidebar_insert
+      elsif saved_change_to_name?
+        broadcast_sidebar_update
+      end
+    end
 
     def should_enqueue_source_import?
       return false unless sourceable_id?

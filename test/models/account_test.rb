@@ -546,20 +546,21 @@ class AccountTest < ActiveSupport::TestCase
     assert_includes duplicate.errors[:name], "has already been taken"
   end
 
-  test "broadcast_sidebar_replace emits a replace turbo stream targeting the account's sidebar dom id" do
+  test "broadcast_sidebar_update emits an update turbo stream targeting the account's sidebar link" do
     account = accounts(:asset_account)
 
     streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
-      account.broadcast_sidebar_replace
+      account.broadcast_sidebar_update
     end
 
     assert_equal 1, streams.size
     stream = streams.first
-    assert_equal "replace", stream["action"]
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), stream["target"]
+    assert_equal "update", stream["action"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_link), stream["target"]
     template = stream.at("template").inner_html
-    assert_includes template, ActionView::RecordIdentifier.dom_id(account, :sidebar_balance)
+    assert_includes template, "account__name"
     assert_includes template, "account__balance"
+    assert_includes template, account.name
   end
 
   test "setting an opening balance broadcasts only the real account's sidebar" do
@@ -571,7 +572,7 @@ class AccountTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_link), streams.first["target"]
   end
 
   test "changing an opening balance broadcasts the real account's sidebar" do
@@ -582,7 +583,7 @@ class AccountTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_link), streams.first["target"]
   end
 
   test "clearing an opening balance broadcasts the real account's sidebar" do
@@ -593,6 +594,106 @@ class AccountTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_balance), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_link), streams.first["target"]
+  end
+
+  test "renaming a real account emits a single update turbo stream with the new name" do
+    account = accounts(:asset_account)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(name: "Renamed Asset")
+    end
+
+    assert_equal 1, streams.size
+    stream = streams.first
+    assert_equal "update", stream["action"]
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_link), stream["target"]
+    assert_includes stream.at("template").inner_html, "Renamed Asset"
+  end
+
+  test "touching an unrelated attribute on a real account does not broadcast a sidebar update" do
+    account = accounts(:asset_account)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.touch
+    end
+
+    assert_empty streams
+  end
+
+  test "creating a real account emits an append turbo stream to the kind's ul" do
+    user = users(:one)
+
+    streams = capture_turbo_stream_broadcasts([ user, :sidebar ]) do
+      @new_account = Account.create!(user: user, currency: currencies(:usd), name: "Brand New", kind: :asset)
+    end
+
+    append = streams.find { |s| s["action"] == "append" }
+    assert append, "expected an append stream for the new account"
+    assert_equal Account.sidebar_kind_target_id("asset"), append["target"]
+    template = append.at("template").inner_html
+    assert_includes template, ActionView::RecordIdentifier.dom_id(@new_account, :sidebar_item)
+    assert_includes template, "Brand New"
+  end
+
+  test "creating a virtual account does not broadcast a sidebar append" do
+    user = users(:one)
+
+    streams = capture_turbo_stream_broadcasts([ user, :sidebar ]) do
+      Account.opening_balance_for(user: user, kind: :asset)
+    end
+
+    assert_empty streams.select { |s| s["action"] == "append" }
+  end
+
+  test "destroying a real account emits a remove turbo stream for the sidebar item" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Throwaway", kind: :asset)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.destroy!
+    end
+
+    remove = streams.find { |s| s["action"] == "remove" }
+    assert remove, "expected a remove stream"
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_item), remove["target"]
+  end
+
+  test "changing an account's kind emits remove + append to the new kind's ul" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Shiftable", kind: :asset)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(kind: :liability)
+    end
+
+    removes = streams.select { |s| s["action"] == "remove" && s["target"] == ActionView::RecordIdentifier.dom_id(account, :sidebar_item) }
+    appends = streams.select { |s| s["action"] == "append" && s["target"] == Account.sidebar_kind_target_id("liability") }
+    updates = streams.select { |s| s["action"] == "update" }
+    assert_equal 1, removes.size
+    assert_equal 1, appends.size
+    assert_empty updates, "rename broadcast should not fire when kind changes"
+  end
+
+  test "simultaneous name and kind change emits only the move broadcasts" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Original", kind: :asset)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(name: "Moved", kind: :liability)
+    end
+
+    removes = streams.select { |s| s["action"] == "remove" }
+    appends = streams.select { |s| s["action"] == "append" }
+    updates = streams.select { |s| s["action"] == "update" }
+    assert_equal 1, removes.size
+    assert_equal 1, appends.size
+    assert_empty updates, "rename broadcast should not fire alongside a move"
+    assert_includes appends.first.at("template").inner_html, "Moved"
+  end
+
+  test "broadcast_sidebar_insert renders without raising when no request is in scope" do
+    account = accounts(:asset_account)
+
+    assert_nothing_raised do
+      account.broadcast_sidebar_insert
+    end
   end
 end

@@ -132,6 +132,9 @@ header h1 {
   margin: 0;
 }
 
+.sidebar-kind-group { display: none; }
+.sidebar-kind-group:has(li) { display: block; }
+
 .sidebar nav ul li a {
   display: flex;
   align-items: center;

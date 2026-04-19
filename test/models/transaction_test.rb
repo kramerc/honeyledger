@@ -619,11 +619,11 @@ class TransactionTest < ActiveSupport::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(accounts(:asset_account), :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(accounts(:expense_account), :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(accounts(:asset_account), :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(accounts(:expense_account), :sidebar_link)
     ].sort
     assert_equal expected, targets
-    assert streams.all? { |s| s["action"] == "replace" }
+    assert streams.all? { |s| s["action"] == "update" }
   end
 
   test "creating an opening balance transaction broadcasts only the real account" do
@@ -643,7 +643,7 @@ class TransactionTest < ActiveSupport::TestCase
     end
 
     assert_equal 1, streams.size
-    assert_equal ActionView::RecordIdentifier.dom_id(real, :sidebar_balance), streams.first["target"]
+    assert_equal ActionView::RecordIdentifier.dom_id(real, :sidebar_link), streams.first["target"]
   end
 
   test "updating description-only still broadcasts sidebar" do
@@ -655,8 +655,8 @@ class TransactionTest < ActiveSupport::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(transaction.src_account, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(transaction.dest_account, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(transaction.src_account, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(transaction.dest_account, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
@@ -673,9 +673,9 @@ class TransactionTest < ActiveSupport::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(old_src, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(new_src, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(dest, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(old_src, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(new_src, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(dest, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
@@ -692,9 +692,9 @@ class TransactionTest < ActiveSupport::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(src, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(old_dest, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(new_dest, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(src, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(old_dest, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(new_dest, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
@@ -710,8 +710,8 @@ class TransactionTest < ActiveSupport::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(src, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(dest, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(src, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(dest, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
@@ -729,10 +729,10 @@ class TransactionTest < ActiveSupport::TestCase
 
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(persisted_src, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(persisted_dest, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(persisted_src, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(persisted_dest, :sidebar_link)
     ].sort
     assert_equal expected, targets
-    refute_includes targets, ActionView::RecordIdentifier.dom_id(other_account, :sidebar_balance)
+    refute_includes targets, ActionView::RecordIdentifier.dom_id(other_account, :sidebar_link)
   end
 end

@@ -1,4 +1,9 @@
 module ApplicationHelper
+  def path_active?(current_path, target_path)
+    current_path.present? && target_path.present? &&
+      (current_path == target_path || current_path.start_with?("#{target_path}/"))
+  end
+
   def nav_link_to(name = nil, url = nil, options = {}, &block)
     if block_given?
       # nav_link_to(url, options) { content }
@@ -11,9 +16,9 @@ module ApplicationHelper
 
     is_active = case active
     when :prefix
-      request.path == url || request.path.start_with?("#{url}/")
+      path_active?(request.path, url)
     when String
-      request.path == active || request.path.start_with?("#{active}/")
+      path_active?(request.path, active)
     else
       current_page?(url)
     end

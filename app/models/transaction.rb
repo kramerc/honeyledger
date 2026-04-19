@@ -39,7 +39,7 @@ class Transaction < ApplicationRecord
     previous = sidebar_broadcast_collector
     self.sidebar_broadcast_collector = Set.new
     yield
-    Account.real.where(id: sidebar_broadcast_collector).includes(:currency).find_each(&:broadcast_sidebar_replace)
+    Account.real.where(id: sidebar_broadcast_collector).includes(:currency).find_each(&:broadcast_sidebar_update)
   ensure
     self.sidebar_broadcast_collector = previous
   end
@@ -151,7 +151,7 @@ class Transaction < ApplicationRecord
         return
       end
 
-      Account.real.where(id: ids).includes(:currency).find_each(&:broadcast_sidebar_replace)
+      Account.real.where(id: ids).includes(:currency).find_each(&:broadcast_sidebar_update)
     end
 
     def reverse_account_balances
