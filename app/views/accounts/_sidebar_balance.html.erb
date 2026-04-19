@@ -1,0 +1,7 @@
+<% balance_minor = account.balance_minor %>
+<% modifier = if balance_minor
+     balance_minor >= 0 ? "account__balance--positive" : "account__balance--negative"
+   end %>
+<span id="<%= dom_id(account, :sidebar_balance) %>" class="account__balance <%= modifier %>">
+  <%= amount_to_currency(balance_minor, account.currency) if balance_minor %>
+</span>

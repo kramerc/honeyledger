@@ -27,6 +27,22 @@ class Transaction < ApplicationRecord
   after_destroy :unmark_parent_if_last_child, if: :parent_transaction_id?
   after_save :transfer_account_balances
   after_destroy :reverse_account_balances
+  after_commit :broadcast_sidebar_balances
+
+  thread_mattr_accessor :sidebar_broadcast_collector, instance_accessor: false
+
+  # Yields while collecting affected real-account IDs from every transaction
+  # committed during the block (including cascading auto-merge / exclude
+  # mutations), then broadcasts each account's sidebar balance once at block
+  # end. Use this to aggregate broadcasts from bulk import jobs.
+  def self.collecting_sidebar_broadcasts
+    previous = sidebar_broadcast_collector
+    self.sidebar_broadcast_collector = Set.new
+    yield
+    Account.real.where(id: sidebar_broadcast_collector).includes(:currency).find_each(&:broadcast_sidebar_replace)
+  ensure
+    self.sidebar_broadcast_collector = previous
+  end
 
   scope :opening_balances, -> { where(opening_balance: true) }
   scope :unmerged, -> { where(merged_into_id: nil) }
@@ -120,6 +136,22 @@ class Transaction < ApplicationRecord
           Account.update_counters(dest_account_id, balance_minor: amount_minor) if dest_account&.real?
         end
       end
+    end
+
+    def broadcast_sidebar_balances
+      ids = if destroyed?
+        [ src_account_id_was, dest_account_id_was ]
+      else
+        [ src_account_id_before_last_save, dest_account_id_before_last_save,
+          src_account_id, dest_account_id ]
+      end.compact.uniq
+
+      if (collector = self.class.sidebar_broadcast_collector)
+        collector.merge(ids)
+        return
+      end
+
+      Account.real.where(id: ids).includes(:currency).find_each(&:broadcast_sidebar_replace)
     end
 
     def reverse_account_balances

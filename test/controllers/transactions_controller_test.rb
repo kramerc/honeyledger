@@ -519,4 +519,100 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_entity
   end
+
+  test "create broadcasts sidebar replaces for affected accounts" do
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+      post transactions_url, params: { transaction: {
+        transacted_at: Time.current,
+        src_account_id: accounts(:asset_account).id,
+        dest_account_id: accounts(:expense_account).id,
+        description: "Broadcast test",
+        amount: "10.00"
+      } }, as: :turbo_stream
+    end
+  end
+
+  test "update broadcasts sidebar replaces for affected accounts" do
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      patch transaction_url(@transaction), params: { transaction: { description: "Updated" } }, as: :turbo_stream
+    end
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_balance),
+      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_balance)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "destroy broadcasts sidebar replaces for affected accounts" do
+    src_id = ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_balance)
+    dest_id = ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_balance)
+
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      delete transaction_url(@transaction), as: :turbo_stream
+    end
+
+    assert_equal [ src_id, dest_id ].sort, streams.map { |s| s["target"] }.sort
+  end
+
+  test "merge broadcasts sidebar replaces for affected accounts" do
+    currency = currencies(:usd)
+    bank_a = accounts(:asset_account)
+    bank_b = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "MergeBroadcast Expense", kind: :expense, currency: currency)
+    revenue = Account.create!(user: @user, name: "MergeBroadcast Revenue", kind: :revenue, currency: currency)
+    withdrawal = Transaction.create!(user: @user, src_account: bank_a, dest_account: expense,
+                                     amount_minor: 700, currency: currency, description: "Merge me",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: revenue, dest_account: bank_b,
+                                  amount_minor: 700, currency: currency, description: "Merge me",
+                                  transacted_at: Time.current)
+
+    assert_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      post merge_transactions_url, params: {
+        transaction_ids: [ withdrawal.id, deposit.id ],
+        description: "Transfer", transacted_at: Time.current
+      }, as: :turbo_stream
+    end
+  end
+
+  test "unmerge broadcasts sidebar replaces for affected accounts" do
+    currency = currencies(:usd)
+    bank_a = accounts(:asset_account)
+    bank_b = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "UnmergeBroadcast Expense", kind: :expense, currency: currency)
+    revenue = Account.create!(user: @user, name: "UnmergeBroadcast Revenue", kind: :revenue, currency: currency)
+    withdrawal = Transaction.create!(user: @user, src_account: bank_a, dest_account: expense,
+                                     amount_minor: 800, currency: currency, description: "Unmerge target",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: revenue, dest_account: bank_b,
+                                  amount_minor: 800, currency: currency, description: "Unmerge target",
+                                  transacted_at: Time.current)
+    merger = Transaction::Merge.new(withdrawal, deposit, user: @user)
+    assert merger.call
+
+    assert_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      post unmerge_transaction_url(merger.merged_transaction), as: :turbo_stream
+    end
+  end
+
+  test "exclude broadcasts sidebar replaces for affected accounts" do
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      post exclude_transaction_url(@transaction), as: :turbo_stream
+    end
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_balance),
+      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_balance)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "unexclude broadcasts sidebar replaces for affected accounts" do
+    Transaction::Exclude.new(@transaction, user: @user).call
+
+    assert_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      post unexclude_transaction_url(@transaction), as: :turbo_stream
+    end
+  end
 end

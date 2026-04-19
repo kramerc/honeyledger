@@ -122,6 +122,15 @@ class Account < ApplicationRecord
     user_id == user.id
   end
 
+  def broadcast_sidebar_replace
+    broadcast_replace_to(
+      user, :sidebar,
+      target: [ self, :sidebar_balance ],
+      partial: "accounts/sidebar_balance",
+      locals: { account: self }
+    )
+  end
+
   private
 
     def should_enqueue_source_import?

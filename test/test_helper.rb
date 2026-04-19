@@ -12,6 +12,7 @@ require_relative "../config/environment"
 require "rails/test_help"
 require "minitest/mock"
 require "minitest/stub_any_instance"
+require "turbo/broadcastable/test_helper"
 Minitest.load_plugins
 
 module ActiveSupport
@@ -22,6 +23,8 @@ module ActiveSupport
 
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all
+
+    include Turbo::Broadcastable::TestHelper
 
     # Add more helper methods to be used by all tests here...
   end

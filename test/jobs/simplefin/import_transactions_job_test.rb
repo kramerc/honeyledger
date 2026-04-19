@@ -543,6 +543,89 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal "Random Store", transaction.dest_account.name
   end
 
+  test "aggregates sidebar broadcasts to one per affected account regardless of row count" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    expense_account = Account.create!(user: @user, currency: @currency, name: "Coffee", kind: :expense)
+
+    3.times do |i|
+      Simplefin::Transaction.create!(
+        account: sf_account,
+        remote_id: "txn_agg_#{i}",
+        amount: "-#{i + 1}.00",
+        description: "Coffee",
+        posted: i.days.ago,
+        transacted_at: i.days.ago,
+        pending: false
+      )
+    end
+
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    targets = streams.map { |s| s["target"] }.sort
+    expected = [
+      ActionView::RecordIdentifier.dom_id(bank_account, :sidebar_balance),
+      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar_balance)
+    ].sort
+    assert_equal expected, targets
+  end
+
+  test "broadcasts nothing when there are no aggregator transactions to import" do
+    sf_account, _ = create_linked_simplefin_account
+
+    assert_no_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+  end
+
+  test "auto-merge broadcasts include counterparty accounts from merged candidates" do
+    sf_account_a, bank_a = create_linked_simplefin_account(remote_id: "acc_broadcast_a", name: "Bank A")
+    sf_account_b, bank_b = create_linked_simplefin_account(remote_id: "acc_broadcast_b", name: "Bank B")
+
+    # First import from bank_b: creates a revenue -> bank_b transaction; revenue account is
+    # auto-created here and will be affected again when Merge zeroes out the candidate.
+    Simplefin::Transaction.create!(
+      account: sf_account_b,
+      remote_id: "broadcast_dup",
+      amount: "500.00",
+      description: "TRANSFER FROM A",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_b.id)
+    revenue_counterparty = @user.accounts.find_by!(name: "TRANSFER FROM A", kind: :revenue)
+
+    # Rule maps TRANSFER TO B -> bank_b, so auto-merge kicks in on the bank_a import.
+    ImportRule.create!(user: @user, account: bank_b, match_pattern: "TRANSFER TO B", match_type: :contains)
+
+    Simplefin::Transaction.create!(
+      account: sf_account_a,
+      remote_id: "broadcast_transfer",
+      amount: "-500.00",
+      description: "TRANSFER TO B",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_a.id)
+    end
+
+    targets = streams.map { |s| s["target"] }
+    # Broadcasts must cover every real account whose balance moved during the job:
+    # the two bank accounts from the final transfer, plus the revenue counterparty
+    # whose balance was reversed when its transaction was absorbed into the merge.
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_a, :sidebar_balance)
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_b, :sidebar_balance)
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(revenue_counterparty, :sidebar_balance)
+    # Each affected account should appear exactly once (aggregation).
+    assert_equal targets.uniq.size, targets.size
+  end
+
   private
 
     def create_linked_simplefin_account(remote_id: "acc_test", name: "SF Test Checking")
