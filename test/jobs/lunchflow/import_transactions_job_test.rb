@@ -249,10 +249,10 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
-    targets = streams.map { |s| s["target"] }.sort
+    targets = streams.select { |s| s["action"] == "update" }.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(lf_bank_account, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(lf_bank_account, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
@@ -260,9 +260,11 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
   test "broadcasts nothing when there are no aggregator transactions to import" do
     lf_account, _ = create_linked_lunchflow_account
 
-    assert_no_turbo_stream_broadcasts([ @user, :sidebar ]) do
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
+
+    assert_empty streams
   end
 
   test "auto-merge broadcasts include counterparty accounts from merged candidates" do
@@ -300,13 +302,13 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account_a.id)
     end
 
-    targets = streams.map { |s| s["target"] }
+    targets = streams.select { |s| s["action"] == "update" }.map { |s| s["target"] }
     # Broadcasts must cover every real account whose balance moved during the job:
     # the two bank accounts from the final transfer, plus the revenue counterparty
     # whose balance was reversed when its transaction was absorbed into the merge.
-    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_a, :sidebar_balance)
-    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_b, :sidebar_balance)
-    assert_includes targets, ActionView::RecordIdentifier.dom_id(revenue_counterparty, :sidebar_balance)
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_a, :sidebar_link)
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_b, :sidebar_link)
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(revenue_counterparty, :sidebar_link)
     # Each affected account should appear exactly once (aggregation).
     assert_equal targets.uniq.size, targets.size
   end

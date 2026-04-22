@@ -1,10 +1,10 @@
 module AccountsHelper
-  def account_nav_link_to(account)
+  def account_sidebar_link(account, active_path: nil)
     target = account_transactions_path(account)
+    is_active = prefix_active?(active_path, account_path(account))
 
-    nav_link_to target, { active: account_path(account) } do
-      content_tag(:span, account.name, class: "account__name") +
-        render("accounts/sidebar_balance", account: account)
+    link_to target, id: dom_id(account, :sidebar_link), class: ("active" if is_active) do
+      render("accounts/sidebar_link_content", account: account)
     end
   end
 

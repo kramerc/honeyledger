@@ -5,100 +5,97 @@ class AccountsHelperTest < ActionView::TestCase
   include ApplicationHelper
   include CurrenciesHelper
 
-  # Provide a controllable request for helpers that call request.path
-  def request
-    @mock_request ||= ActionDispatch::TestRequest.create
-  end
+  # account_sidebar_link
 
-  def with_path(path)
-    request.env["PATH_INFO"] = path
-  end
-
-  setup do
-    with_path("/")
-  end
-
-  # account_nav_link_to
-
-  test "account_nav_link_to renders link to account transactions path" do
+  test "account_sidebar_link renders link to account transactions path" do
     account = accounts(:asset_account)
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account)
 
     assert_match account_transactions_path(account), result
   end
 
-  test "account_nav_link_to includes account name" do
+  test "account_sidebar_link includes account name" do
     account = accounts(:asset_account)
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account)
 
     assert_match account.name, result
   end
 
-  test "account_nav_link_to shows positive balance class for zero balance" do
+  test "account_sidebar_link gives the link a stable dom id for broadcast updates" do
+    account = accounts(:asset_account)
+    result = account_sidebar_link(account)
+
+    assert_match(/id="#{ActionView::RecordIdentifier.dom_id(account, :sidebar_link)}"/, result)
+  end
+
+  test "account_sidebar_link shows positive balance class for zero balance" do
     account = accounts(:asset_account)
     account.balance_minor = 0
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account)
 
     assert_match(/account__balance--positive/, result)
     assert_no_match(/account__balance--negative/, result)
   end
 
-  test "account_nav_link_to shows positive balance class for positive balance" do
+  test "account_sidebar_link shows positive balance class for positive balance" do
     account = accounts(:asset_account)
     account.balance_minor = 1500
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account)
 
     assert_match(/account__balance--positive/, result)
     assert_no_match(/account__balance--negative/, result)
   end
 
-  test "account_nav_link_to shows negative balance class for negative balance" do
+  test "account_sidebar_link shows negative balance class for negative balance" do
     account = accounts(:asset_account)
     account.balance_minor = -500
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account)
 
     assert_match(/account__balance--negative/, result)
     assert_no_match(/account__balance--positive/, result)
   end
 
-  test "account_nav_link_to omits balance when balance_minor is nil" do
+  test "account_sidebar_link omits balance when balance_minor is nil" do
     account = accounts(:asset_account)
     account.balance_minor = nil
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account)
 
     assert_no_match(/account__balance--positive/, result)
     assert_no_match(/account__balance--negative/, result)
   end
 
-  test "account_nav_link_to has active class on exact transactions path" do
+  test "account_sidebar_link has active class on exact transactions path" do
     account = accounts(:asset_account)
-    with_path(account_transactions_path(account))
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account, active_path: account_transactions_path(account))
 
     assert_match(/\bactive\b/, result)
   end
 
-  test "account_nav_link_to has active class on sub-path of account" do
+  test "account_sidebar_link has active class on sub-path of account" do
     account = accounts(:asset_account)
-    with_path("#{account_path(account)}/something")
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account, active_path: "#{account_path(account)}/something")
 
     assert_match(/\bactive\b/, result)
   end
 
-  test "account_nav_link_to has no active class on a different account path" do
+  test "account_sidebar_link has no active class on a different account path" do
     account = accounts(:asset_account)
     other = accounts(:liability_account)
-    with_path(account_transactions_path(other))
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account, active_path: account_transactions_path(other))
 
     assert_no_match(/\bactive\b/, result)
   end
 
-  test "account_nav_link_to has no active class on unrelated path" do
+  test "account_sidebar_link has no active class on unrelated path" do
     account = accounts(:asset_account)
-    with_path("/categories")
-    result = account_nav_link_to(account)
+    result = account_sidebar_link(account, active_path: "/categories")
+
+    assert_no_match(/\bactive\b/, result)
+  end
+
+  test "account_sidebar_link has no active class when active_path is nil (broadcast render)" do
+    account = accounts(:asset_account)
+    result = account_sidebar_link(account)
 
     assert_no_match(/\bactive\b/, result)
   end

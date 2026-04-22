@@ -538,15 +538,15 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     end
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
 
   test "destroy broadcasts sidebar replaces for affected accounts" do
-    src_id = ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_balance)
-    dest_id = ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_balance)
+    src_id = ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link)
+    dest_id = ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_link)
 
     streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
       delete transaction_url(@transaction), as: :turbo_stream
@@ -602,8 +602,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     end
     targets = streams.map { |s| s["target"] }.sort
     expected = [
-      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_balance),
-      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_balance)
+      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link),
+      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_link)
     ].sort
     assert_equal expected, targets
   end
