@@ -1,7 +1,7 @@
 module AccountsHelper
   def account_sidebar_link(account, active_path: nil)
     target = account_transactions_path(account)
-    is_active = path_active?(active_path, account_path(account))
+    is_active = prefix_active?(active_path, account_path(account))
 
     link_to target, id: dom_id(account, :sidebar_link), class: ("active" if is_active) do
       render("accounts/sidebar_link_content", account: account)

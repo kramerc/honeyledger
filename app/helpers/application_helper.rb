@@ -1,5 +1,5 @@
 module ApplicationHelper
-  def path_active?(current_path, target_path)
+  def prefix_active?(current_path, target_path)
     current_path.present? && target_path.present? &&
       (current_path == target_path || current_path.start_with?("#{target_path}/"))
   end
@@ -9,7 +9,7 @@ module ApplicationHelper
 
     is_active = case active
     when :prefix
-      path_active?(request.path, url)
+      prefix_active?(request.path, url)
     else
       current_page?(url)
     end
