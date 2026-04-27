@@ -30,4 +30,22 @@ class AggregatorLinkableTest < ActiveSupport::TestCase
       assert_equal :nullify, reflection.options[:dependent]
     end
   end
+
+  test "registry resolves to the current class object even after the class is redefined" do
+    # Simulates Zeitwerk reload: register a stand-in class under a name, then
+    # redefine the class under the same name. Registry should resolve to the
+    # current (redefined) class, not retain a reference to the old object.
+    Object.const_set(:ReloadFixture, Class.new)
+    AggregatorLinkable.register(ReloadFixture)
+    original = ReloadFixture
+    Object.send(:remove_const, :ReloadFixture)
+    Object.const_set(:ReloadFixture, Class.new)
+
+    resolved = AggregatorLinkable.registry.find { |klass| klass.name == "ReloadFixture" }
+    assert_equal ReloadFixture, resolved
+    refute_same original, resolved
+  ensure
+    AggregatorLinkable.send(:registry_names).delete("ReloadFixture")
+    Object.send(:remove_const, :ReloadFixture) if defined?(ReloadFixture)
+  end
 end
