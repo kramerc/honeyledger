@@ -66,12 +66,20 @@ class Transaction::AdoptOrphan
     # description on the value-starts-with-column side, where the stored value
     # would otherwise be interpolated into the LIKE pattern. LEFT(...) = ...
     # avoids pattern semantics entirely.
+    #
+    # The reverse branch (value-starts-with-column) requires an explicit
+    # non-empty-column guard. Without it, `LEFT(value, 0) = ''` would always
+    # equal `LOWER('')`, so a single blank stored description with the same
+    # amount/day/account would be adopted under any nonblank importing
+    # description. The forward branch is unaffected: `LEFT('', N) = ''` cannot
+    # equal a nonblank importing value (we early-return on blank @description).
     def prefix_match(column, value)
       column_lower = lower_col(column)
       value_lower = lower_quoted(value)
 
       column_starts_with_value = left_function(column_lower, value.length).eq(value_lower)
-      value_starts_with_column = left_function(value_lower, length_function(column_lower)).eq(column_lower)
+      value_starts_with_column = length_function(column_lower).gt(0)
+        .and(left_function(value_lower, length_function(column_lower)).eq(column_lower))
 
       column_starts_with_value.or(value_starts_with_column)
     end

@@ -618,6 +618,37 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     assert_nil candidate
   end
 
+  test "does not adopt a stale-aggregator orphan whose stored description is blank" do
+    # The DB has no constraint preventing empty descriptions on Transaction or
+    # on aggregator transactions. Without an explicit guard, the bidirectional
+    # prefix predicate `LEFT(value, LENGTH(column)) = column` degenerates to
+    # `'' = ''` whenever column is empty, and a single blank-description orphan
+    # on the same amount/day/account would silently swallow any importing row.
+    blank_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account,
+      remote_id: "blank_remote",
+      amount: "-12.34",
+      description: "",
+      transacted_at: 2.days.ago,
+      posted: 2.days.ago
+    )
+    Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1234, currency: @currency, description: "",
+      transacted_at: 2.days.ago, sourceable: blank_simplefin_transaction
+    )
+
+    candidate = Transaction::AdoptOrphan.call(
+      ledger_account: @ledger_account,
+      amount_minor: 1234,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "Some unrelated importing description"
+    )
+
+    assert_nil candidate
+  end
+
   test "treats LIKE metacharacters in stored descriptions literally (no false-positive prefix match)" do
     # Stored orphan description contains `%` and `_`. If those are interpreted
     # as LIKE wildcards in the prefix-match clause, an importing description
