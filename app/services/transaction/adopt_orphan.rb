@@ -61,14 +61,28 @@ class Transaction::AdoptOrphan
       lower_col(column).eq(lower_quoted(value))
     end
 
+    # Bidirectional case-insensitive "starts with" using LEFT/LENGTH instead of
+    # LIKE. LIKE would require escaping `%`, `_`, and `\` from the stored
+    # description on the value-starts-with-column side, where the stored value
+    # would otherwise be interpolated into the LIKE pattern. LEFT(...) = ...
+    # avoids pattern semantics entirely.
     def prefix_match(column, value)
       column_lower = lower_col(column)
       value_lower = lower_quoted(value)
-      column_starts_with_value = column_lower.matches("#{escape_like(value)}%".downcase)
-      value_starts_with_column = value_lower.matches(
-        Arel::Nodes::Concat.new(column_lower, Arel::Nodes::Quoted.new("%"))
-      )
+
+      column_starts_with_value = left_function(column_lower, value.length).eq(value_lower)
+      value_starts_with_column = left_function(value_lower, length_function(column_lower)).eq(column_lower)
+
       column_starts_with_value.or(value_starts_with_column)
+    end
+
+    def left_function(node, length)
+      length_node = length.is_a?(Integer) ? Arel::Nodes::Quoted.new(length) : length
+      Arel::Nodes::NamedFunction.new("LEFT", [ node, length_node ])
+    end
+
+    def length_function(node)
+      Arel::Nodes::NamedFunction.new("LENGTH", [ node ])
     end
 
     def lower_col(column)
@@ -77,10 +91,6 @@ class Transaction::AdoptOrphan
 
     def lower_quoted(value)
       Arel::Nodes::NamedFunction.new("LOWER", [ Arel::Nodes::Quoted.new(value) ])
-    end
-
-    def escape_like(s)
-      s.gsub(/[\\%_]/) { |c| "\\#{c}" }
     end
 
     def stale_transactions_for(account_class)

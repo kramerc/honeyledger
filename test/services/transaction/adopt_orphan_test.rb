@@ -618,20 +618,26 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     assert_nil candidate
   end
 
-  test "treats LIKE metacharacters in the importing description literally" do
-    description_with_metacharacters = "Refund 100% guaranteed_X"
+  test "treats LIKE metacharacters in stored descriptions literally (no false-positive prefix match)" do
+    # Stored orphan description contains `%` and `_`. If those are interpreted
+    # as LIKE wildcards in the prefix-match clause, an importing description
+    # whose static text happens to coincide around those positions could be
+    # erroneously adopted. The shape "X%Y_Z" + a value matching that LIKE
+    # pattern is the classic false-positive.
+    orphan_description = "Refund 100% guaranteed_X"
+    importing_description = "Refund 100abc guaranteed_X with extras"
 
     stale_simplefin_transaction = Simplefin::Transaction.create!(
       account: @stale_simplefin_account,
       remote_id: "metachar_remote",
       amount: "-12.34",
-      description: "Different transaction entirely",
+      description: orphan_description,
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
     Transaction.create!(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
-      amount_minor: 1234, currency: @currency, description: "Different transaction entirely",
+      amount_minor: 1234, currency: @currency, description: orphan_description,
       transacted_at: 2.days.ago, sourceable: stale_simplefin_transaction
     )
 
@@ -640,7 +646,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       amount_minor: 1234,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
-      description: description_with_metacharacters
+      description: importing_description
     )
 
     assert_nil candidate
