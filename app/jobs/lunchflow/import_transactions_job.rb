@@ -21,6 +21,25 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         ledger_account = lft.account.ledger_account
         description = lft.merchant.presence || lft.description
 
+        transaction = Transaction.find_or_initialize_by(sourceable: lft)
+
+        if transaction.new_record?
+          orphan = Transaction::AdoptOrphan.call(
+            ledger_account: ledger_account,
+            amount_minor: lft.amount_minor.abs,
+            currency_id: ledger_account.currency_id,
+            transacted_at: lft.date || Time.current,
+            description: description,
+            sourceable_type: "Lunchflow::Transaction",
+            aggregator_account_class: Lunchflow::Account
+          )
+
+          if orphan
+            orphan.update!(sourceable: lft, synced_at: Time.current)
+            next
+          end
+        end
+
         amount_bd = BigDecimal(lft.amount)
         rule = user.import_rules.for_description(description).first
         rule_account = rule&.account
@@ -41,7 +60,6 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           transaction_dest = ledger_account
         end
 
-        transaction = Transaction.find_or_initialize_by(sourceable: lft)
         transaction.user = user
         transaction.src_account = transaction_src
         transaction.dest_account = transaction_dest

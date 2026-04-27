@@ -20,6 +20,25 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         user = sft.account.connection.user
         ledger_account = sft.account.ledger_account
 
+        transaction = Transaction.find_or_initialize_by(sourceable: sft)
+
+        if transaction.new_record?
+          orphan = Transaction::AdoptOrphan.call(
+            ledger_account: ledger_account,
+            amount_minor: sft.amount_minor.abs,
+            currency_id: ledger_account.currency_id,
+            transacted_at: sft.transacted_at || sft.posted || Time.current,
+            description: sft.description,
+            sourceable_type: "Simplefin::Transaction",
+            aggregator_account_class: Simplefin::Account
+          )
+
+          if orphan
+            orphan.update!(sourceable: sft, synced_at: Time.current)
+            next
+          end
+        end
+
         amount_bd = BigDecimal(sft.amount)
         rule = user.import_rules.for_description(sft.description).first
         rule_account = rule&.account
@@ -40,7 +59,6 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           transaction_dest = ledger_account
         end
 
-        transaction = Transaction.find_or_initialize_by(sourceable: sft)
         transaction.user = user
         transaction.src_account = transaction_src
         transaction.dest_account = transaction_dest

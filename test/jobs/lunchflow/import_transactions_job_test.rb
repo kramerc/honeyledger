@@ -313,6 +313,52 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal targets.uniq.size, targets.size
   end
 
+  test "adopts an orphan ledger transaction when an institution is reconnected with new IDs" do
+    original_lunchflow_account, ledger_account = create_linked_lunchflow_account(remote_id: 1001, name: "Reconnected LF Account")
+
+    original_lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: original_lunchflow_account,
+      remote_id: "lf_original",
+      amount: "-50.00",
+      currency: "USD",
+      description: "Coffee Shop",
+      pending: false,
+      date: 2.days.ago.to_date
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: original_lunchflow_account.id)
+    original_ledger_transaction = Transaction.find_by!(sourceable: original_lunchflow_transaction)
+
+    ledger_account.update!(sourceable: nil)
+
+    reissued_lunchflow_account = Lunchflow::Account.create!(
+      connection: original_lunchflow_account.connection,
+      remote_id: 1002,
+      name: original_lunchflow_account.name,
+      currency: original_lunchflow_account.currency,
+      balance: original_lunchflow_account.balance
+    )
+
+    reissued_lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: reissued_lunchflow_account,
+      remote_id: "lf_reissued",
+      amount: original_lunchflow_transaction.amount,
+      currency: original_lunchflow_transaction.currency,
+      description: original_lunchflow_transaction.description,
+      pending: false,
+      date: original_lunchflow_transaction.date
+    )
+
+    ledger_account.update!(sourceable: reissued_lunchflow_account)
+
+    assert_no_difference -> { Transaction.unmerged.where("src_account_id = :id OR dest_account_id = :id", id: ledger_account.id).count } do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: reissued_lunchflow_account.id)
+    end
+
+    original_ledger_transaction.reload
+    assert_equal reissued_lunchflow_transaction, original_ledger_transaction.sourceable
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
