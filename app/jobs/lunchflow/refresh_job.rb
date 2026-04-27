@@ -42,12 +42,16 @@ class Lunchflow::RefreshJob < ApplicationJob
       lf_account.provider = api_account["provider"]
       lf_account.currency = api_account["currency"]
       lf_account.status = api_account["status"]
+      lf_account.last_seen_at = refreshed_at
+      # Persist the appearance in the latest refresh BEFORE per-account API
+      # calls so a transient balance or transactions failure doesn't leave a
+      # still-active account looking stale on the integrations page.
+      lf_account.save!
 
       balance_data = client.balance(api_account["id"])
       lf_account.balance = balance_data["amount"].to_s
       lf_account.currency ||= balance_data["currency"]
 
-      lf_account.last_seen_at = refreshed_at
       lf_account.save!
 
       api_transactions = client.transactions(api_account["id"], include_pending: true)

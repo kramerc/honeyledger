@@ -276,6 +276,35 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     assert_equal @lunchflow_connection.refreshed_at, synced_account.last_seen_at
   end
 
+  test "bumps last_seen_at even when per-account balance fetch fails" do
+    existing_account = lunchflow_accounts(:linked_one)
+    existing_account.update!(last_seen_at: 3.days.ago)
+    original_last_seen = existing_account.last_seen_at
+
+    mock_client = Object.new
+
+    def mock_client.accounts
+      [ { "id" => 101, "name" => "Test Bank Checking", "institution_name" => "Test Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" } ]
+    end
+
+    def mock_client.balance(account_id)
+      raise LunchflowClient::Error, "Balance fetch failed"
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+
+    existing_account.reload
+    assert existing_account.last_seen_at > original_last_seen,
+      "expected last_seen_at to be bumped despite balance failure"
+    assert_equal @lunchflow_connection.reload.refreshed_at, existing_account.last_seen_at
+  end
+
   test "continues to next account when one account fails" do
     mock_client = Object.new
 
