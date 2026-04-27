@@ -17,6 +17,13 @@ class Lunchflow::Account < ApplicationRecord
     ledger_account.blank?
   end
 
+  def current?(threshold = connection&.refreshed_at)
+    return false if last_seen_at.nil?
+    return false if threshold.nil?
+
+    last_seen_at >= threshold
+  end
+
   # Maps the Lunch Flow account's currency to a ledger currency.
   def ledger_currency
     @ledger_currency ||= ledger_account&.currency || Currency.find_by(code: currency)

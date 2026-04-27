@@ -9,28 +9,29 @@ class Lunchflow::RefreshJob < ApplicationJob
     end
 
     connections.find_each do |lunchflow_connection|
-      refresh_connection(lunchflow_connection)
+      refreshed_at = Time.current
+      refresh_connection(lunchflow_connection, refreshed_at)
     rescue LunchflowClient::Error => e
-      lunchflow_connection.update!(error: e.message, refreshed_at: Time.current)
+      lunchflow_connection.update!(error: e.message, refreshed_at: refreshed_at)
     end
   end
 
   private
 
-    def refresh_connection(lunchflow_connection)
+    def refresh_connection(lunchflow_connection, refreshed_at)
       client = lunchflow_connection.client
       api_accounts = client.accounts
 
       api_accounts.each do |api_account|
-        refresh_account(client, lunchflow_connection, api_account)
+        refresh_account(client, lunchflow_connection, api_account, refreshed_at)
       rescue LunchflowClient::Error => e
         Rails.logger.error("Lunchflow refresh failed for account #{api_account["id"]}: #{e.message}")
       end
 
-      lunchflow_connection.update!(error: nil, refreshed_at: Time.current)
+      lunchflow_connection.update!(error: nil, refreshed_at: refreshed_at)
     end
 
-    def refresh_account(client, lunchflow_connection, api_account)
+    def refresh_account(client, lunchflow_connection, api_account, refreshed_at)
       lf_account = Lunchflow::Account.find_or_initialize_by(
         connection: lunchflow_connection,
         remote_id: api_account["id"]
@@ -46,6 +47,7 @@ class Lunchflow::RefreshJob < ApplicationJob
       lf_account.balance = balance_data["amount"].to_s
       lf_account.currency ||= balance_data["currency"]
 
+      lf_account.last_seen_at = refreshed_at
       lf_account.save!
 
       api_transactions = client.transactions(api_account["id"], include_pending: true)

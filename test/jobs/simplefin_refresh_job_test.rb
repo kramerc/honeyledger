@@ -341,6 +341,85 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     end
   end
 
+  test "sets last_seen_at on accounts that appear in the response" do
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts(start_date:)
+      {
+        "errlist" => [],
+        "connections" => [],
+        "accounts" => [
+          {
+            "id" => "acc_seen",
+            "name" => "Seen",
+            "currency" => "USD",
+            "balance" => "1.00",
+            "transactions" => []
+          }
+        ]
+      }
+    end
+
+    travel_to Time.zone.local(2026, 4, 27, 12, 0, 0) do
+      SimplefinClient.stub :new, mock_client do
+        Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+      end
+
+      seen_account = Simplefin::Account.find_by(remote_id: "acc_seen")
+      assert_equal Time.current, seen_account.last_seen_at
+    end
+  end
+
+  test "does not bump last_seen_at on accounts absent from the response" do
+    stale_account = Simplefin::Account.create!(
+      connection: @simplefin_connection,
+      remote_id: "acc_stale",
+      last_seen_at: 3.days.ago
+    )
+    original_last_seen = stale_account.last_seen_at
+
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts(start_date:)
+      { "errlist" => [], "connections" => [], "accounts" => [] }
+    end
+
+    SimplefinClient.stub :new, mock_client do
+      Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+    end
+
+    stale_account.reload
+    assert_in_delta original_last_seen, stale_account.last_seen_at, 1.second
+  end
+
+  test "uses the same timestamp for account last_seen_at and connection refreshed_at" do
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts(start_date:)
+      {
+        "errlist" => [],
+        "connections" => [],
+        "accounts" => [
+          {
+            "id" => "acc_sync",
+            "name" => "Sync",
+            "currency" => "USD",
+            "balance" => "1.00",
+            "transactions" => []
+          }
+        ]
+      }
+    end
+
+    SimplefinClient.stub :new, mock_client do
+      Simplefin::RefreshJob.perform_now(@simplefin_connection.id)
+    end
+
+    @simplefin_connection.reload
+    synced_account = Simplefin::Account.find_by(remote_id: "acc_sync")
+    assert_equal @simplefin_connection.refreshed_at, synced_account.last_seen_at
+  end
+
   test "continues to next account when one account raises an error" do
     mock_client = Minitest::Mock.new
 

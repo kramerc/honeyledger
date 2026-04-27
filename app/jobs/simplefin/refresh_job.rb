@@ -9,25 +9,26 @@ class Simplefin::RefreshJob < ApplicationJob
     end
 
     connections.find_each do |simplefin_connection|
+      refreshed_at = Time.current
       simplefin_client = simplefin_connection.client
       simplefin_accounts = simplefin_client.accounts(start_date: 1.month.ago.to_i)
 
       connections_by_id = (simplefin_accounts["connections"] || []).index_by { |c| c["conn_id"] }
 
       simplefin_accounts["accounts"].each do |sf_account_data|
-        refresh_account(simplefin_connection, connections_by_id, sf_account_data)
+        refresh_account(simplefin_connection, connections_by_id, sf_account_data, refreshed_at)
       rescue => e
         Rails.logger.error("SimpleFIN refresh failed for account #{sf_account_data["id"]}: #{e.message}")
       end
 
       simplefin_connection.errlist = simplefin_accounts["errlist"] || []
-      simplefin_connection.update!(refreshed_at: Time.current)
+      simplefin_connection.update!(refreshed_at: refreshed_at)
     end
   end
 
   private
 
-    def refresh_account(simplefin_connection, connections_by_id, sf_account_data)
+    def refresh_account(simplefin_connection, connections_by_id, sf_account_data, refreshed_at)
       sf_account = Simplefin::Account.find_or_initialize_by(
         connection: simplefin_connection,
         remote_id: sf_account_data["id"],
@@ -40,6 +41,7 @@ class Simplefin::RefreshJob < ApplicationJob
       sf_account.available_balance = sf_account_data["available-balance"]
       sf_account.balance_date = sf_account_data["balance-date"] ? Time.at(sf_account_data["balance-date"]) : nil
       sf_account.extra = sf_account_data["extra"]
+      sf_account.last_seen_at = refreshed_at
       sf_account.save!
 
       sf_account_data["transactions"].each do |sf_transaction_data|
