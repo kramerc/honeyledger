@@ -30,21 +30,39 @@ class Transaction::AdoptOrphan
         .where(opening_balance: false, split: false, parent_transaction_id: nil)
         .where(merged_into_id: nil, fx_amount_minor: nil)
         .where.missing(:merged_sources)
-        .where(
-          "transactions.sourceable_id IS NULL
-           OR (transactions.sourceable_type = ? AND transactions.sourceable_id IN (?))",
-          @sourceable_type, stale_aggregator_transaction_ids.presence || [ 0 ]
-        )
+        .where(orphan_sourceable_clause)
     end
 
-    def stale_aggregator_transaction_ids
+    def orphan_sourceable_clause
+      table = Transaction.arel_table
+      table[:sourceable_id].eq(nil).or(
+        table[:sourceable_type].eq(@sourceable_type).and(
+          table[:sourceable_id].in(stale_aggregator_transactions.arel)
+        )
+      )
+    end
+
+    def stale_aggregator_transactions
       aggregator_transaction_class
-        .joins(:account)
-        .where(account: @aggregator_account_class.where.missing(:ledger_account))
-        .pluck(:id)
+        .where(account_id: stale_aggregator_accounts.select(:id))
+        .select(:id)
+    end
+
+    def stale_aggregator_accounts
+      @aggregator_account_class
+        .where.missing(:ledger_account)
+        .where(connection_id: user_aggregator_connections.select(:id))
+    end
+
+    def user_aggregator_connections
+      aggregator_connection_class.where(user_id: @ledger_account.user_id)
     end
 
     def aggregator_transaction_class
       @sourceable_type.constantize
+    end
+
+    def aggregator_connection_class
+      @aggregator_account_class.reflect_on_association(:connection).klass
     end
 end

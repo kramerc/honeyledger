@@ -296,6 +296,52 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     assert_nil candidate
   end
 
+  test "ignores stale aggregator transactions belonging to a different user" do
+    # Another user has a stale Simplefin::Account with a transaction whose amount, day, and
+    # description happen to match. Their data must not pollute the current user's candidate set.
+    other_user = users(:two)
+    other_user_currency = currencies(:eur)
+
+    other_user_stale_simplefin_account = Simplefin::Account.create!(
+      connection: simplefin_connections(:two),
+      remote_id: "other_user_stale",
+      name: "Other User Stale Account",
+      currency: "EUR",
+      balance: "1000.00"
+    )
+    other_user_stale_simplefin_transaction = Simplefin::Transaction.create!(
+      account: other_user_stale_simplefin_account,
+      remote_id: "other_user_old_remote",
+      amount: "-50.00",
+      description: "Coffee Shop",
+      transacted_at: 2.days.ago,
+      posted: 2.days.ago
+    )
+    other_user_account = Account.create!(
+      user: other_user, currency: other_user_currency, name: "Other User Bank", kind: :asset
+    )
+    other_user_expense = Account.create!(
+      user: other_user, currency: other_user_currency, name: "Other User Coffee", kind: :expense
+    )
+    Transaction.create!(
+      user: other_user, src_account: other_user_account, dest_account: other_user_expense,
+      amount_minor: 5000, currency: other_user_currency, description: "Coffee Shop",
+      transacted_at: 2.days.ago, sourceable: other_user_stale_simplefin_transaction
+    )
+
+    candidate = Transaction::AdoptOrphan.call(
+      ledger_account: @ledger_account,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "Coffee Shop",
+      sourceable_type: "Simplefin::Transaction",
+      aggregator_account_class: Simplefin::Account
+    )
+
+    assert_nil candidate
+  end
+
   test "works for Lunchflow aggregator" do
     lunchflow_account = accounts(:lunchflow_linked_asset)
 
