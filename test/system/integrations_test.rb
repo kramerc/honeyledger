@@ -128,6 +128,47 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_text "Lunch Flow account unlinked successfully."
   end
 
+  test "hides stale unlinked aggregator accounts" do
+    @user.simplefin_connection.update!(refreshed_at: Time.current)
+    stale_simplefin = simplefin_accounts(:unlinked_one)
+    stale_simplefin.update!(last_seen_at: 1.day.ago)
+
+    @user.lunchflow_connection.update!(refreshed_at: Time.current)
+    stale_lunchflow = lunchflow_accounts(:unlinked_one)
+    stale_lunchflow.update!(last_seen_at: 1.day.ago)
+
+    visit integrations_path
+
+    assert_no_text stale_simplefin.name
+    assert_no_text stale_lunchflow.name
+  end
+
+  test "shows stale linked aggregator accounts with stale indicator" do
+    @user.simplefin_connection.update!(refreshed_at: Time.current)
+    stale_linked_simplefin = simplefin_accounts(:linked_one)
+    stale_linked_simplefin.update!(last_seen_at: 1.day.ago)
+
+    @user.lunchflow_connection.update!(refreshed_at: Time.current)
+    stale_linked_lunchflow = lunchflow_accounts(:linked_one)
+    stale_linked_lunchflow.update!(last_seen_at: 1.day.ago)
+
+    visit integrations_path
+
+    within("tr", text: stale_linked_simplefin.name) do
+      assert_text "(stale)"
+    end
+
+    within("tr", text: stale_linked_lunchflow.name) do
+      assert_text "(stale)"
+    end
+  end
+
+  test "does not show stale indicator on current aggregator accounts" do
+    visit integrations_path
+
+    assert_no_text "(stale)"
+  end
+
   private
 
   def sign_in_as(user)
