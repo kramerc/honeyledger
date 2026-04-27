@@ -518,6 +518,97 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert transaction.excluded?
   end
 
+  test "adopts an orphan ledger transaction when an institution is reconnected with new IDs" do
+    original_simplefin_account, ledger_account = create_linked_simplefin_account(remote_id: "acc_original", name: "Reconnected Account")
+
+    original_simplefin_transaction = Simplefin::Transaction.create!(
+      account: original_simplefin_account,
+      remote_id: "txn_original",
+      amount: "-50.00",
+      description: "Coffee Shop",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: original_simplefin_account.id)
+    original_ledger_transaction = Transaction.find_by!(sourceable: original_simplefin_transaction)
+    coffee_account = original_ledger_transaction.dest_account
+
+    # Simulate the institution being disconnected and reconnected on simplefin.org:
+    # - Original Simplefin::Account stays in DB but is unlinked from the ledger account.
+    # - A brand-new Simplefin::Account row appears under the same connection with a new
+    #   remote_id, plus a new Simplefin::Transaction row for the same real-world transaction.
+    ledger_account.update!(sourceable: nil)
+
+    reissued_simplefin_account = Simplefin::Account.create!(
+      connection: original_simplefin_account.connection,
+      remote_id: "acc_reissued",
+      name: original_simplefin_account.name,
+      currency: original_simplefin_account.currency,
+      balance: original_simplefin_account.balance
+    )
+
+    reissued_simplefin_transaction = Simplefin::Transaction.create!(
+      account: reissued_simplefin_account,
+      remote_id: "txn_reissued",
+      amount: original_simplefin_transaction.amount,
+      description: original_simplefin_transaction.description,
+      posted: original_simplefin_transaction.posted,
+      transacted_at: original_simplefin_transaction.transacted_at,
+      pending: false
+    )
+
+    ledger_account.update!(sourceable: reissued_simplefin_account)
+
+    assert_no_difference -> { Transaction.unmerged.where("src_account_id = :id OR dest_account_id = :id", id: ledger_account.id).count } do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: reissued_simplefin_account.id)
+    end
+
+    original_ledger_transaction.reload
+    assert_equal reissued_simplefin_transaction, original_ledger_transaction.sourceable
+    assert_equal coffee_account, original_ledger_transaction.dest_account
+    assert_nil Transaction.where(sourceable: reissued_simplefin_transaction).where.not(id: original_ledger_transaction.id).first
+  end
+
+  test "does not adopt a same-amount-same-day transaction whose sourceable is on a still-linked aggregator account" do
+    sf_account_a, ledger_a = create_linked_simplefin_account(remote_id: "acc_concurrent_a", name: "Concurrent A")
+    sf_account_b, ledger_b = create_linked_simplefin_account(remote_id: "acc_concurrent_b", name: "Concurrent B")
+
+    Simplefin::Transaction.create!(
+      account: sf_account_a,
+      remote_id: "txn_a",
+      amount: "-25.00",
+      description: "ATM Withdrawal",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_a.id)
+    transactions_on_a_before = Transaction.where("src_account_id = :id OR dest_account_id = :id", id: ledger_a.id).count
+
+    # An entirely separate, currently-linked SimpleFIN account imports a transaction with
+    # the same amount, day, and description. It must NOT adopt the existing ledger row on
+    # ledger_a — that row's sourceable is on a still-linked account.
+    sf_transaction_b = Simplefin::Transaction.create!(
+      account: sf_account_b,
+      remote_id: "txn_b",
+      amount: "-25.00",
+      description: "ATM Withdrawal",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_b.id)
+
+    # The new import lands on ledger_b as expected, leaving ledger_a's transaction untouched.
+    new_ledger_transaction = Transaction.find_by(sourceable: sf_transaction_b)
+    assert_not_nil new_ledger_transaction
+    assert_includes [ new_ledger_transaction.src_account, new_ledger_transaction.dest_account ], ledger_b
+    assert_equal transactions_on_a_before, Transaction.where("src_account_id = :id OR dest_account_id = :id", id: ledger_a.id).count
+  end
+
   test "falls back to exact name match when no rule matches" do
     sf_account, _ = create_linked_simplefin_account
 
