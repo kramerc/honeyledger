@@ -205,6 +205,106 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     end
   end
 
+  test "sets last_seen_at on accounts that appear in the response" do
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts
+      [ { "id" => 501, "name" => "Seen", "institution_name" => "Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" } ]
+    end
+
+    def mock_client.balance(account_id)
+      { "amount" => 1.0, "currency" => "USD" }
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    travel_to Time.zone.local(2026, 4, 27, 12, 0, 0) do
+      LunchflowClient.stub :new, mock_client do
+        Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+      end
+
+      seen_account = Lunchflow::Account.find_by(remote_id: 501)
+      assert_equal Time.current, seen_account.last_seen_at
+    end
+  end
+
+  test "does not bump last_seen_at on accounts absent from the response" do
+    stale_account = Lunchflow::Account.create!(
+      connection: @lunchflow_connection,
+      remote_id: 502,
+      last_seen_at: 3.days.ago
+    )
+    original_last_seen = stale_account.last_seen_at
+
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+
+    stale_account.reload
+    assert_in_delta original_last_seen, stale_account.last_seen_at, 1.second
+  end
+
+  test "uses the same timestamp for account last_seen_at and connection refreshed_at" do
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts
+      [ { "id" => 503, "name" => "Sync", "institution_name" => "Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" } ]
+    end
+
+    def mock_client.balance(account_id)
+      { "amount" => 1.0, "currency" => "USD" }
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+
+    @lunchflow_connection.reload
+    synced_account = Lunchflow::Account.find_by(remote_id: 503)
+    assert_equal @lunchflow_connection.refreshed_at, synced_account.last_seen_at
+  end
+
+  test "bumps last_seen_at even when per-account balance fetch fails" do
+    existing_account = lunchflow_accounts(:linked_one)
+    existing_account.update!(last_seen_at: 3.days.ago)
+    original_last_seen = existing_account.last_seen_at
+
+    mock_client = Object.new
+
+    def mock_client.accounts
+      [ { "id" => 101, "name" => "Test Bank Checking", "institution_name" => "Test Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" } ]
+    end
+
+    def mock_client.balance(account_id)
+      raise LunchflowClient::Error, "Balance fetch failed"
+    end
+
+    def mock_client.transactions(account_id, include_pending: false)
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+
+    existing_account.reload
+    assert existing_account.last_seen_at > original_last_seen,
+      "expected last_seen_at to be bumped despite balance failure"
+    assert_equal @lunchflow_connection.reload.refreshed_at, existing_account.last_seen_at
+  end
+
   test "continues to next account when one account fails" do
     mock_client = Object.new
 

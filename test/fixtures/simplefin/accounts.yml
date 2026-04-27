@@ -9,6 +9,7 @@ linked_one:
   balance: "1000.00"
   available_balance: "1000.00"
   balance_date: 2026-01-13 05:53:24
+  last_seen_at: 2026-04-25 00:00:00
 
 unlinked_one:
   connection: one
@@ -19,6 +20,7 @@ unlinked_one:
   balance: "5000.00"
   available_balance: "5000.00"
   balance_date: 2026-01-13 05:53:24
+  last_seen_at: 2026-04-25 00:00:00
 
 reconciled_one:
   connection: one
@@ -29,3 +31,4 @@ reconciled_one:
   balance: "50.00"
   available_balance: "50.00"
   balance_date: 2026-02-28 07:23:00
+  last_seen_at: 2026-04-25 00:00:00

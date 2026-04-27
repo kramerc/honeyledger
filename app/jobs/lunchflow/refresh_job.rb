@@ -9,28 +9,29 @@ class Lunchflow::RefreshJob < ApplicationJob
     end
 
     connections.find_each do |lunchflow_connection|
-      refresh_connection(lunchflow_connection)
+      refreshed_at = Time.current
+      refresh_connection(lunchflow_connection, refreshed_at)
     rescue LunchflowClient::Error => e
-      lunchflow_connection.update!(error: e.message, refreshed_at: Time.current)
+      lunchflow_connection.update!(error: e.message, refreshed_at: refreshed_at)
     end
   end
 
   private
 
-    def refresh_connection(lunchflow_connection)
+    def refresh_connection(lunchflow_connection, refreshed_at)
       client = lunchflow_connection.client
       api_accounts = client.accounts
 
       api_accounts.each do |api_account|
-        refresh_account(client, lunchflow_connection, api_account)
+        refresh_account(client, lunchflow_connection, api_account, refreshed_at)
       rescue LunchflowClient::Error => e
         Rails.logger.error("Lunchflow refresh failed for account #{api_account["id"]}: #{e.message}")
       end
 
-      lunchflow_connection.update!(error: nil, refreshed_at: Time.current)
+      lunchflow_connection.update!(error: nil, refreshed_at: refreshed_at)
     end
 
-    def refresh_account(client, lunchflow_connection, api_account)
+    def refresh_account(client, lunchflow_connection, api_account, refreshed_at)
       lf_account = Lunchflow::Account.find_or_initialize_by(
         connection: lunchflow_connection,
         remote_id: api_account["id"]
@@ -41,6 +42,11 @@ class Lunchflow::RefreshJob < ApplicationJob
       lf_account.provider = api_account["provider"]
       lf_account.currency = api_account["currency"]
       lf_account.status = api_account["status"]
+      lf_account.last_seen_at = refreshed_at
+      # Persist the appearance in the latest refresh BEFORE per-account API
+      # calls so a transient balance or transactions failure doesn't leave a
+      # still-active account looking stale on the integrations page.
+      lf_account.save!
 
       balance_data = client.balance(api_account["id"])
       lf_account.balance = balance_data["amount"].to_s

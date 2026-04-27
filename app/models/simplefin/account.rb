@@ -15,6 +15,13 @@ class Simplefin::Account < ApplicationRecord
     ledger_account.blank?
   end
 
+  def current?(threshold = connection&.refreshed_at)
+    return false if last_seen_at.nil?
+    return false if threshold.nil?
+
+    last_seen_at >= threshold
+  end
+
   # Maps the SimpleFIN account's currency to a ledger currency.
   # This is not an association because SimpleFIN might provide a currency that is not registered in the app.
   def ledger_currency

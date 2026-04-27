@@ -62,7 +62,12 @@
       <% @simplefin_accounts.each do |sf_account| %>
         <tr>
           <td><%= sf_account.org&.[]("name") %></td>
-          <td><%= sf_account.name %></td>
+          <td>
+            <%= sf_account.name %>
+            <% unless sf_account.current?(@simplefin_connection.refreshed_at) %>
+              <span style="color: orange" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
+            <% end %>
+          </td>
           <td><%= render partial: "integrations/simplefin_link_form", locals: { sf_account: sf_account, linkable_accounts: @linkable_accounts } %></td>
         </tr>
       <% end %>
@@ -91,7 +96,12 @@
       <% @lunchflow_accounts.each do |lf_account| %>
         <tr>
           <td><%= lf_account.institution_name %></td>
-          <td><%= lf_account.name %></td>
+          <td>
+            <%= lf_account.name %>
+            <% unless lf_account.current?(@lunchflow_connection.refreshed_at) %>
+              <span style="color: orange" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
+            <% end %>
+          </td>
           <td>
             <% case lf_account.status %>
             <% when "ACTIVE" %>
