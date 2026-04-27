@@ -64,7 +64,7 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     assert_match current_unlinked.name, response.body
   end
 
-  test "shows stale linked simplefin accounts" do
+  test "shows stale linked simplefin accounts with stale indicator" do
     @user.simplefin_connection.update!(refreshed_at: Time.current)
     stale_linked = simplefin_accounts(:linked_one)
     stale_linked.update!(last_seen_at: 1.day.ago)
@@ -73,6 +73,20 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_match stale_linked.name, response.body
+    assert_match "(stale)", response.body
+  end
+
+  test "does not show stale indicator on current linked simplefin accounts" do
+    @user.simplefin_connection.update!(refreshed_at: 1.hour.ago)
+    current_linked = simplefin_accounts(:linked_one)
+    current_linked.update!(last_seen_at: Time.current)
+    simplefin_accounts(:unlinked_one).update!(last_seen_at: Time.current)
+    simplefin_accounts(:reconciled_one).update!(last_seen_at: Time.current)
+
+    get integrations_url
+
+    assert_response :success
+    assert_no_match "(stale)", response.body
   end
 
   test "hides stale unlinked lunchflow accounts" do
@@ -97,14 +111,20 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     assert_match current_unlinked.name, response.body
   end
 
-  test "shows stale linked lunchflow accounts" do
+  test "shows stale linked lunchflow accounts with stale indicator" do
     @user.lunchflow_connection.update!(refreshed_at: Time.current)
     stale_linked = lunchflow_accounts(:linked_one)
     stale_linked.update!(last_seen_at: 1.day.ago)
+    # Hide the unlinked simplefin fixture so the only "(stale)" we could see is from lunchflow.
+    @user.simplefin_connection.update!(refreshed_at: Time.current)
+    simplefin_accounts(:unlinked_one).update!(last_seen_at: Time.current)
+    simplefin_accounts(:linked_one).update!(last_seen_at: Time.current)
+    simplefin_accounts(:reconciled_one).update!(last_seen_at: Time.current)
 
     get integrations_url
 
     assert_response :success
     assert_match stale_linked.name, response.body
+    assert_match "(stale)", response.body
   end
 end
