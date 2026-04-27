@@ -3,17 +3,17 @@ class Transaction::AdoptOrphan
     new(**kwargs).call
   end
 
-  def initialize(ledger_account:, amount_minor:, currency_id:, transacted_at:, description:, sourceable_type:, aggregator_account_class:)
+  def initialize(ledger_account:, amount_minor:, currency_id:, transacted_at:, description:)
     @ledger_account = ledger_account
     @amount_minor = amount_minor
     @currency_id = currency_id
     @transacted_at = transacted_at
     @description = description
-    @sourceable_type = sourceable_type
-    @aggregator_account_class = aggregator_account_class
   end
 
   def call
+    return nil if @description.blank?
+
     candidates = candidate_query.limit(2).to_a
     candidates.size == 1 ? candidates.first : nil
   end
@@ -26,43 +26,77 @@ class Transaction::AdoptOrphan
         .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: @ledger_account.id)
         .where(amount_minor: @amount_minor, currency_id: @currency_id)
         .where(transacted_at: @transacted_at.beginning_of_day..@transacted_at.end_of_day)
-        .where(description: @description)
         .where(opening_balance: false, split: false, parent_transaction_id: nil)
         .where(merged_into_id: nil, fx_amount_minor: nil)
         .where.missing(:merged_sources)
-        .where(orphan_sourceable_clause)
+        .where(orphan_with_description_clause)
     end
 
-    def orphan_sourceable_clause
+    # Manual-entry orphans (sourceable_id IS NULL) require an exact case-insensitive
+    # description match — preserves #117 safety so a user's manual placeholder cannot
+    # be scooped up by an unrelated long aggregator description that happens to share
+    # a short prefix.
+    #
+    # Stale-aggregator orphans (sourceable points into any aggregator's stale-account
+    # transaction set) use a bidirectional case-insensitive prefix match — covers the
+    # cross-aggregator truncation case (e.g. Lunch Flow's 32-char merchant truncation
+    # of a longer SimpleFIN description).
+    def orphan_with_description_clause
       table = Transaction.arel_table
-      table[:sourceable_id].eq(nil).or(
-        table[:sourceable_type].eq(@sourceable_type).and(
-          table[:sourceable_id].in(stale_aggregator_transactions.arel)
-        )
-      )
+
+      manual_entry = table[:sourceable_id].eq(nil)
+        .and(case_insensitive_eq(table[:description], @description))
+
+      aggregator_clauses = AggregatorLinkable.registry.map do |account_class|
+        table[:sourceable_type].eq(account_class.transaction_class.name)
+          .and(table[:sourceable_id].in(stale_transactions_for(account_class).arel))
+      end
+      stale_aggregator = aggregator_clauses.reduce(:or)
+        &.and(prefix_match(table[:description], @description))
+
+      stale_aggregator ? manual_entry.or(stale_aggregator) : manual_entry
     end
 
-    def stale_aggregator_transactions
-      aggregator_transaction_class
-        .where(account_id: stale_aggregator_accounts.select(:id))
+    def case_insensitive_eq(column, value)
+      lower_col(column).eq(lower_quoted(value))
+    end
+
+    def prefix_match(column, value)
+      column_lower = lower_col(column)
+      value_lower = lower_quoted(value)
+      column_starts_with_value = column_lower.matches("#{escape_like(value)}%".downcase)
+      value_starts_with_column = value_lower.matches(
+        Arel::Nodes::Concat.new(column_lower, Arel::Nodes::Quoted.new("%"))
+      )
+      column_starts_with_value.or(value_starts_with_column)
+    end
+
+    def lower_col(column)
+      Arel::Nodes::NamedFunction.new("LOWER", [ column ])
+    end
+
+    def lower_quoted(value)
+      Arel::Nodes::NamedFunction.new("LOWER", [ Arel::Nodes::Quoted.new(value) ])
+    end
+
+    def escape_like(s)
+      s.gsub(/[\\%_]/) { |c| "\\#{c}" }
+    end
+
+    def stale_transactions_for(account_class)
+      account_class.transaction_class
+        .where(account_id: stale_accounts_for(account_class).select(:id))
         .select(:id)
     end
 
-    def stale_aggregator_accounts
-      @aggregator_account_class
+    def stale_accounts_for(account_class)
+      account_class
         .where.missing(:ledger_account)
-        .where(connection_id: user_aggregator_connections.select(:id))
+        .where(connection_id: connections_for(account_class).select(:id))
     end
 
-    def user_aggregator_connections
-      aggregator_connection_class.where(user_id: @ledger_account.user_id)
-    end
-
-    def aggregator_transaction_class
-      @sourceable_type.constantize
-    end
-
-    def aggregator_connection_class
-      @aggregator_account_class.reflect_on_association(:connection).klass
+    def connections_for(account_class)
+      account_class.reflect_on_association(:connection).klass
+        .where(user_id: @ledger_account.user_id)
     end
 end

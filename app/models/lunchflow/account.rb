@@ -1,10 +1,9 @@
 class Lunchflow::Account < ApplicationRecord
   include Minorable
+  include AggregatorLinkable
+
   minorable :balance, with: :ledger_currency
 
-  has_one :ledger_account, class_name: "Account", as: :sourceable, dependent: :nullify
-
-  belongs_to :connection
   has_many :transactions, dependent: :destroy
 
   validates :remote_id, uniqueness: { scope: :connection_id }

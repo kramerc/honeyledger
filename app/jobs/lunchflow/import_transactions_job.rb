@@ -29,9 +29,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
             amount_minor: lft.amount_minor.abs,
             currency_id: ledger_account.currency_id,
             transacted_at: lft.date || Time.current,
-            description: description,
-            sourceable_type: "Lunchflow::Transaction",
-            aggregator_account_class: Lunchflow::Account
+            description: description
           )
 
           if orphan
