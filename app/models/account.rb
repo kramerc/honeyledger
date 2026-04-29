@@ -50,6 +50,9 @@ class Account < ApplicationRecord
     user.accounts.create!(name: description, kind: kind, currency: currency)
   rescue ActiveRecord::RecordNotUnique
     scope.first || raise
+  rescue ActiveRecord::RecordInvalid => e
+    raise unless e.record.errors.of_kind?(:name, :taken)
+    scope.first || raise
   end
 
   def self.opening_balance_for(user:, kind:)
@@ -60,6 +63,9 @@ class Account < ApplicationRecord
 
     Account.create!(user: user, kind: kind, name: "Opening Balance", virtual: true)
   rescue ActiveRecord::RecordNotUnique
+    scope.first || raise
+  rescue ActiveRecord::RecordInvalid => e
+    raise unless e.record.errors.of_kind?(:name, :taken)
     scope.first || raise
   end
 
