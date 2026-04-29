@@ -1,4 +1,14 @@
 <span class="account__name"><%= account.name %></span>
+
+<button type="button"
+        class="account__edit-pencil"
+        data-controller="edit-pencil"
+        data-edit-pencil-url-value="<%= edit_account_path(account) %>"
+        data-action="click->edit-pencil#navigate"
+        aria-label="Edit <%= account.name %>">
+  <span aria-hidden="true">✏️</span>
+</button>
+
 <% balance_minor = account.balance_minor %>
 <% modifier = if balance_minor
      balance_minor >= 0 ? "account__balance--positive" : "account__balance--negative"
