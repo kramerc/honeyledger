@@ -333,6 +333,28 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
+  test "PATCH update with turbo_stream returns no_content on success" do
+    patch account_url(@account),
+          params: { account: { name: "Streamed Name" } },
+          headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+    assert_response :no_content
+    assert_equal "Streamed Name", @account.reload.name
+  end
+
+  test "PATCH update with turbo_stream returns error stream on validation failure" do
+    Account.create!(user: @user, currency: @account.currency, name: "Already Taken", kind: @account.kind)
+
+    patch account_url(@account),
+          params: { account: { name: "Already Taken" } },
+          headers: { "Accept" => "text/vnd.turbo-stream.html" }
+
+    assert_response :unprocessable_entity
+    target = ActionView::RecordIdentifier.dom_id(@account, :sidebar_link)
+    assert_match %r{<turbo-stream action="update" target="#{target}">}, response.body
+    assert_match "account__rename-error", response.body
+  end
+
   test "should destroy account" do
     unused_account = Account.create!(
       user: users(:one),

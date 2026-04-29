@@ -1,20 +1,29 @@
-<span class="account__name" data-inline-rename-target="name"><%= account.name %></span>
+<span class="account__name" data-inline-rename-target="name" hidden><%= account.name_was || account.name %></span>
 
 <input type="text"
        value="<%= account.name %>"
-       class="account__rename-input"
+       class="account__rename-input account__rename-input--invalid"
        autocomplete="off"
-       hidden
+       aria-invalid="true"
+       aria-describedby="<%= dom_id(account, :sidebar_link) %>_error"
        data-inline-rename-target="input"
        data-action="keydown.enter->inline-rename#submit:prevent:stop keydown.esc->inline-rename#cancel:prevent:stop blur->inline-rename#submit:stop">
 
 <button type="button"
         class="account__rename-pencil"
-        aria-label="Rename <%= account.name %>"
+        hidden
+        aria-label="Rename"
         data-inline-rename-target="pencil"
         data-action="click->inline-rename#start:prevent:stop">
   <span aria-hidden="true">✏️</span>
 </button>
+
+<span id="<%= dom_id(account, :sidebar_link) %>_error"
+      class="account__rename-error"
+      role="alert"
+      data-inline-rename-target="error">
+  <%= account.errors[:name].first %>
+</span>
 
 <% balance_minor = account.balance_minor %>
 <% modifier = if balance_minor

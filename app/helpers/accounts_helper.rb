@@ -3,7 +3,13 @@ module AccountsHelper
     target = account_transactions_path(account)
     is_active = prefix_active?(active_path, account_path(account))
 
-    link_to target, id: dom_id(account, :sidebar_link), class: ("active" if is_active) do
+    link_to target,
+            id: dom_id(account, :sidebar_link),
+            class: ("active" if is_active),
+            data: {
+              controller: "inline-rename",
+              inline_rename_url_value: account_path(account)
+            } do
       render("accounts/sidebar_link_content", account: account)
     end
   end

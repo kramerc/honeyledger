@@ -57,9 +57,17 @@ class AccountsController < ApplicationController
       if @account.save
         format.html { redirect_to @account, notice: "Account was successfully updated.", status: :see_other }
         format.json { render :show, status: :ok, location: @account }
+        format.turbo_stream { head :no_content }
       else
         format.html { render :edit, status: :unprocessable_entity }
         format.json { render json: @account.errors, status: :unprocessable_entity }
+        format.turbo_stream do
+          render turbo_stream: turbo_stream.update(
+            view_context.dom_id(@account, :sidebar_link),
+            partial: "accounts/sidebar_rename_error",
+            locals: { account: @account }
+          ), status: :unprocessable_entity
+        end
       end
     end
   end
