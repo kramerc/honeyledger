@@ -1,9 +1,23 @@
+<%
+  scoped_account = local_assigns[:account]
+  initial_anchor_id = transaction_form_anchor_id(transaction, scoped_account: scoped_account)
+  initial_counterparty_id = transaction_form_counterparty_id(transaction, scoped_account: scoped_account)
+  initial_amount = transaction_form_amount(transaction, scoped_account: scoped_account)
+%>
 <%= form_with(model: transaction, data: {
   controller: "transactions--form",
   action: "transactions--form#clearError",
   transactions__row_target: "form"
 }, html: { autocomplete: "off" }) do |form| %>
-  <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
+  <% if scoped_account %>
+    <%= hidden_field_tag :account_id, scoped_account.id %>
+    <%= form.hidden_field :anchor_account_id, value: scoped_account.id, data: {
+      transactions__form_target: "anchorAccount",
+      kind: scoped_account.kind,
+      currency: scoped_account.currency&.code
+    } %>
+  <% end %>
+  <div class="row<%= " row--scoped" if scoped_account %>" data-action="keydown.esc->transactions--row#cancelEdit">
     <div class="select"></div>
     <div>
       <%= form.label :transacted_at, "Date" %>
@@ -19,31 +33,36 @@
       <%= form.text_field :description %>
     </div>
 
+    <% unless scoped_account %>
+      <div>
+        <%= form.label :anchor_account_id, "Account" %>
+        <%= form.select :anchor_account_id,
+          grouped_account_options_for_select(accounts, Account.kinds.keys, selected_key: initial_anchor_id),
+          { include_blank: "Account…" },
+          data: {
+            action: "transactions--form#updateEnabledAccounts transactions--form#updateCurrency transactions--form#updateTypeFromSelectedAccounts",
+            transactions__form_target: "anchorAccount"
+          } %>
+      </div>
+    <% end %>
+
     <div>
-      <%= form.label :src_account_id, "From" %>
-      <%= form.select :src_account_id,
-        grouped_account_options_for_select(accounts, Account.kinds.keys, selected_key: transaction.src_account_id),
-        { include_blank: "From…" },
+      <%= form.label :counterparty_account_id, "Counterparty" %>
+      <%= form.select :counterparty_account_id,
+        grouped_account_options_for_select(accounts, Account.kinds.keys, selected_key: initial_counterparty_id),
+        { include_blank: "Counterparty…" },
         data: {
           action: "transactions--form#updateEnabledAccounts transactions--form#updateTypeFromSelectedAccounts",
-          transactions__form_target: "srcAccount"
+          transactions__form_target: "counterpartyAccount"
         } %>
     </div>
 
-    <div>
-      <%= form.label :dest_account_id, "To" %>
-      <%= form.select :dest_account_id,
-        grouped_account_options_for_select(accounts, Account.kinds.keys, selected_key: transaction.dest_account_id),
-        { include_blank: "To…" },
-        data: {
-          action: "transactions--form#updateEnabledAccounts transactions--form#updateCurrency transactions--form#updateTypeFromSelectedAccounts",
-          transactions__form_target: "destAccount"
-        } %>
-    </div>
-
-    <div class="numeric">
+    <div class="numeric field-amount">
       <%= form.label :amount %>
-      <%= form.text_field :amount, data: { transactions__form_target: "amount" } %>
+      <%= form.text_field :amount, value: initial_amount, data: {
+        action: "input->transactions--form#updateTypeFromSelectedAccounts",
+        transactions__form_target: "amount"
+      } %>
     </div>
 
     <div class="field-currency">

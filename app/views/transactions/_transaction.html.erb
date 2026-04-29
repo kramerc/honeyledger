@@ -1,3 +1,16 @@
+<%
+  scoped_account = local_assigns[:account]
+  perspective = scoped_account || transaction.anchor_account
+  counterparty = if scoped_account
+    if transaction.src_account_id == scoped_account.id
+      transaction.dest_account
+    elsif transaction.dest_account_id == scoped_account.id
+      transaction.src_account
+    end
+  else
+    transaction.counterparty_account
+  end
+%>
 <!-- Show -->
 <%= turbo_frame_tag transaction do %>
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
@@ -13,7 +26,7 @@
        data-merge-currency-code="<%= transaction.currency.code %>"
        data-merge-currency-decimal-places="<%= transaction.currency.decimal_places %>">
 
-    <div class="row show">
+    <div class="row show<%= " row--scoped" if scoped_account %>">
       <div class="select">
         <% unless transaction.opening_balance? || transaction.excluded? %>
           <input type="checkbox"
@@ -33,9 +46,11 @@
         <% end %>
       </div>
       <div data-label="Description"><%= transaction.description %></div>
-      <div data-label="From"><%= transaction.src_account&.name %></div>
-      <div data-label="To"><%= transaction.dest_account&.name %></div>
-      <div data-label="Amount" class="numeric"><%= transaction_amount_with_currency(transaction) %></div>
+      <% unless scoped_account %>
+        <div data-label="Account"><%= transaction.anchor_account&.name %></div>
+      <% end %>
+      <div data-label="Counterparty"><%= counterparty&.name %></div>
+      <div data-label="Amount" class="numeric"><%= transaction_signed_amount_with_currency(transaction, perspective: perspective) %></div>
       <div data-label="Currency"><%= transaction.currency.code %></div>
       <div data-label="Category"><%= transaction.category&.name %></div>
       <div data-label="Cleared" class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
@@ -45,14 +60,14 @@
         <% else %>
           <a href="#" data-action="transactions--row#edit">Edit</a>
         <% end %>
-        <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
+        <%= link_to "Delete", transaction_path(transaction, account_id: scoped_account&.id), data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
         <% if transaction.excluded? %>
-          <%= link_to "Restore", unexclude_transaction_path(transaction), data: { turbo_method: :post } %>
+          <%= link_to "Restore", unexclude_transaction_path(transaction, account_id: scoped_account&.id), data: { turbo_method: :post } %>
         <% elsif transaction.sourceable_type.present? && !transaction.opening_balance? && !transaction.merged_sources.any? %>
-          <%= link_to "Exclude", exclude_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
+          <%= link_to "Exclude", exclude_transaction_path(transaction, account_id: scoped_account&.id), data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
         <% end %>
         <% if transaction.merged_sources.any? %>
-          <%= link_to "Unmerge", unmerge_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
+          <%= link_to "Unmerge", unmerge_transaction_path(transaction, account_id: scoped_account&.id), data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
         <% end %>
       </div>
 
@@ -71,8 +86,8 @@
     </div>
 
     <!-- Edit -->
-    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction), loading: "lazy", class: "edit" do %>
-      <div class="row">
+    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction, account_id: scoped_account&.id), loading: "lazy", class: "edit" do %>
+      <div class="row<%= " row--scoped" if scoped_account %>">
         <div class="loading">Loading...</div>
       </div>
     <% end %>

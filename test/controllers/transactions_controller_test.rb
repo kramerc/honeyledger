@@ -106,6 +106,78 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :no_content
   end
 
+  test "create with negative amount translates to src=anchor, dest=counterparty (outflow)" do
+    asset = accounts(:asset_account)
+    expense = accounts(:expense_account)
+
+    post transactions_url, params: { transaction: {
+      transacted_at: Time.current,
+      anchor_account_id: asset.id,
+      counterparty_account_id: expense.id,
+      description: "Outflow translation",
+      amount: "-9.99"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    created = Transaction.find_by(description: "Outflow translation")
+    assert_equal asset.id, created.src_account_id
+    assert_equal expense.id, created.dest_account_id
+    # Sign is stripped before reaching the model; amount_minor is positive.
+    assert_equal 999, created.amount_minor
+  end
+
+  test "create with positive amount translates to src=counterparty, dest=anchor (inflow)" do
+    asset = accounts(:asset_account)
+    revenue = accounts(:revenue_account)
+
+    post transactions_url, params: { transaction: {
+      transacted_at: Time.current,
+      anchor_account_id: asset.id,
+      counterparty_account_id: revenue.id,
+      description: "Inflow translation",
+      amount: "42.00"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    created = Transaction.find_by(description: "Inflow translation")
+    assert_equal revenue.id, created.src_account_id
+    assert_equal asset.id, created.dest_account_id
+    assert_equal 4200, created.amount_minor
+  end
+
+  test "update translates anchor/counterparty params with signed amount" do
+    new_dest = accounts(:liability_account)
+    asset = accounts(:asset_account)
+
+    patch transaction_url(@transaction), params: { transaction: {
+      anchor_account_id: asset.id,
+      counterparty_account_id: new_dest.id,
+      amount: "-7.50"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    @transaction.reload
+    assert_equal asset.id, @transaction.src_account_id
+    assert_equal new_dest.id, @transaction.dest_account_id
+    assert_equal 750, @transaction.amount_minor
+  end
+
+  test "JSON API still accepts src_account_id/dest_account_id directly" do
+    assert_difference("Transaction.count") do
+      post transactions_url, params: { transaction: {
+        transacted_at: Time.current,
+        src_account_id: accounts(:asset_account).id,
+        dest_account_id: accounts(:expense_account).id,
+        description: "Direct API",
+        amount: "1.00"
+      } }, as: :json
+    end
+
+    assert_response :created
+    assert_equal accounts(:asset_account).id, Transaction.last.src_account_id
+    assert_equal accounts(:expense_account).id, Transaction.last.dest_account_id
+  end
+
   test "should create transaction with turbo_stream" do
     assert_difference("Transaction.count") do
       post transactions_url, params: { transaction: {

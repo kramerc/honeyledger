@@ -22,7 +22,7 @@
   white-space: nowrap;
 }
 
-/* Table row */
+/* Table row — unfiltered view: 11 cols (Account + Counterparty) */
 .transactions .row {
   display: grid;
   grid-template-columns:
@@ -30,8 +30,8 @@
     minmax(140px, 2fr)        /* Date */
     minmax(90px,  1.2fr)      /* Type */
     minmax(80px,  2fr)        /* Description */
-    minmax(90px,  1.5fr)      /* From */
-    minmax(90px,  1.5fr)      /* To */
+    minmax(90px,  1.5fr)      /* Account */
+    minmax(90px,  1.5fr)      /* Counterparty */
     minmax(75px,  1.2fr)      /* Amount */
     minmax(60px,  0.8fr)      /* Currency */
     minmax(80px,  1.3fr)      /* Category */
@@ -39,6 +39,21 @@
     minmax(120px, 1.6fr);     /* Actions */
   gap: 0;
   align-items: stretch;
+}
+
+/* Scoped view: 10 cols (no Account column — it's the page context) */
+.transactions .row.row--scoped {
+  grid-template-columns:
+    32px                      /* Select */
+    minmax(140px, 2fr)        /* Date */
+    minmax(90px,  1.2fr)      /* Type */
+    minmax(80px,  2fr)        /* Description */
+    minmax(90px,  1.5fr)      /* Counterparty */
+    minmax(75px,  1.2fr)      /* Amount */
+    minmax(60px,  0.8fr)      /* Currency */
+    minmax(80px,  1.3fr)      /* Category */
+    minmax(60px,  0.7fr)      /* Cleared */
+    minmax(120px, 1.6fr);     /* Actions */
 }
 
 
@@ -50,8 +65,8 @@
       minmax(140px, 2fr)        /* Date */
       minmax(90px,  1.2fr)      /* Type */
                                 /* Description — hidden */
-      minmax(90px,  1.5fr)      /* From */
-      minmax(90px,  1.5fr)      /* To */
+      minmax(90px,  1.5fr)      /* Account */
+      minmax(90px,  1.5fr)      /* Counterparty */
       minmax(75px,  1.2fr)      /* Amount */
                                 /* Currency — hidden */
                                 /* Category — hidden */
@@ -59,10 +74,33 @@
       minmax(120px, 1.6fr);     /* Actions */
   }
 
-  .transactions .row > div:nth-child(4),
-  .transactions .row > div:nth-child(8),
-  .transactions .row > div:nth-child(9),
-  .transactions .row > div:nth-child(10) {
+  .transactions .row.row--scoped {
+    grid-template-columns:
+      32px                      /* Select */
+      minmax(140px, 2fr)        /* Date */
+      minmax(90px,  1.2fr)      /* Type */
+                                /* Description — hidden */
+      minmax(90px,  1.5fr)      /* Counterparty */
+      minmax(75px,  1.2fr)      /* Amount */
+                                /* Currency — hidden */
+                                /* Category — hidden */
+                                /* Cleared — hidden */
+      minmax(120px, 1.6fr);     /* Actions */
+  }
+
+  /* Unfiltered (11 col): hide Description (4), Currency (8), Category (9), Cleared (10) */
+  .transactions .row:not(.row--scoped) > div:nth-child(4),
+  .transactions .row:not(.row--scoped) > div:nth-child(8),
+  .transactions .row:not(.row--scoped) > div:nth-child(9),
+  .transactions .row:not(.row--scoped) > div:nth-child(10) {
+    display: none;
+  }
+
+  /* Scoped (10 col): hide Description (4), Currency (7), Category (8), Cleared (9) */
+  .transactions .row.row--scoped > div:nth-child(4),
+  .transactions .row.row--scoped > div:nth-child(7),
+  .transactions .row.row--scoped > div:nth-child(8),
+  .transactions .row.row--scoped > div:nth-child(9) {
     display: none;
   }
 }
@@ -91,13 +129,23 @@
   border-right: 0;
 }
 
-/* Cells that must not wrap */
-.transactions .row > div:nth-child(1),  /* Select */
-.transactions .row > div:nth-child(2),  /* Date */
-.transactions .row > div:nth-child(7),  /* Amount */
-.transactions .row > div:nth-child(8),  /* Currency */
-.transactions .row > div:nth-child(10), /* Cleared */
-.transactions .row > div:nth-child(11)  /* Actions */ {
+/* Cells that must not wrap (unfiltered: 11 cols) */
+.transactions .row:not(.row--scoped) > div:nth-child(1),  /* Select */
+.transactions .row:not(.row--scoped) > div:nth-child(2),  /* Date */
+.transactions .row:not(.row--scoped) > div:nth-child(7),  /* Amount */
+.transactions .row:not(.row--scoped) > div:nth-child(8),  /* Currency */
+.transactions .row:not(.row--scoped) > div:nth-child(10), /* Cleared */
+.transactions .row:not(.row--scoped) > div:nth-child(11)  /* Actions */ {
+  white-space: nowrap;
+}
+
+/* Cells that must not wrap (scoped: 10 cols, no Account column) */
+.transactions .row.row--scoped > div:nth-child(1),  /* Select */
+.transactions .row.row--scoped > div:nth-child(2),  /* Date */
+.transactions .row.row--scoped > div:nth-child(6),  /* Amount */
+.transactions .row.row--scoped > div:nth-child(7),  /* Currency */
+.transactions .row.row--scoped > div:nth-child(9),  /* Cleared */
+.transactions .row.row--scoped > div:nth-child(10)  /* Actions */ {
   white-space: nowrap;
 }
 
@@ -141,6 +189,10 @@
 .tx-type--withdrawal { color: var(--color-negative); }
 .tx-type--clawback   { color: var(--color-negative); }
 .tx-type--transfer   { color: var(--bark-light); }
+
+/* Signed amount color */
+.tx-amount--inflow  { color: var(--color-positive); }
+.tx-amount--outflow { color: var(--color-negative); }
 
 /* Forms */
 .transactions form {

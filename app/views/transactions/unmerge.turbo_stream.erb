@@ -2,12 +2,14 @@
 
 <% if @after_transaction %>
   <% @restored_transactions.reverse_each do |transaction| %>
-    <%= turbo_stream.after dom_id(@after_transaction), transaction %>
+    <%= turbo_stream.after dom_id(@after_transaction) do %>
+      <%= render partial: 'transaction', locals: { transaction: transaction, account: @account } %>
+    <% end %>
   <% end %>
 <% else %>
   <% @restored_transactions.reverse_each do |transaction| %>
     <%= turbo_stream.prepend :transactions do %>
-      <%= render transaction %>
+      <%= render partial: 'transaction', locals: { transaction: transaction, account: @account } %>
     <% end %>
   <% end %>
 <% end %>

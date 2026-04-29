@@ -1,6 +1,7 @@
 class TransactionsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_transaction, only: %i[ show edit update destroy ]
+  before_action :set_scoped_account, only: %i[ index new create edit update show destroy exclude unexclude merge unmerge ]
   before_action :set_form_collections, only: %i[ index new create edit update show ]
 
   # GET /transactions or /transactions.json
@@ -11,9 +12,7 @@ class TransactionsController < ApplicationController
     scope = current_user.transactions.unmerged
     scope = scope.unexcluded unless @show_excluded
     @transactions = scope.includes(:category, :src_account, :dest_account, :currency, :fx_currency, merged_sources: [ :src_account, :dest_account ]).order(transacted_at: :desc, created_at: :desc)
-    account_id = params.fetch(:account_id, nil)
-    if account_id.present?
-      @account = current_user.accounts.find(account_id)
+    if @account
       @transactions = @transactions.where(src_account_id: @account.id).or(@transactions.where(dest_account_id: @account.id))
     end
   end
@@ -137,7 +136,7 @@ class TransactionsController < ApplicationController
         @transaction.reload
         format.turbo_stream {
           if show_excluded?
-            render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction })
+            render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction, account: @account })
           else
             render turbo_stream: turbo_stream.remove(@transaction)
           end
@@ -159,7 +158,7 @@ class TransactionsController < ApplicationController
     respond_to do |format|
       if unexcluder.call
         @transaction.reload
-        format.turbo_stream { render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction }) }
+        format.turbo_stream { render turbo_stream: turbo_stream.replace(@transaction, partial: "transactions/transaction", locals: { transaction: @transaction, account: @account }) }
         format.html { redirect_back fallback_location: transactions_url(show_excluded: 1), notice: "Transaction was restored." }
       else
         @exclude_errors = unexcluder.errors
@@ -191,9 +190,14 @@ class TransactionsController < ApplicationController
       current_user.transactions.build(transacted_at: Time.current)
     end
 
+    def set_scoped_account
+      account_id = params[:account_id]
+      @account = current_user.accounts.find(account_id) if account_id.present?
+    end
+
     # Only allow a list of trusted parameters through.
     def transaction_params
-      params.expect(transaction: [
+      raw = params.expect(transaction: [
         :transacted_at,
         :category_id,
         :src_account_id,
@@ -204,8 +208,45 @@ class TransactionsController < ApplicationController
         :fx_amount_minor,
         :fx_currency_id,
         :notes,
-        :cleared
+        :cleared,
+        :anchor_account_id,
+        :counterparty_account_id
       ])
+      translate_form_params(raw)
+    end
+
+    # Translates the form's anchor + counterparty + signed amount into the
+    # model's underlying src/dest pair. Direction is inferred from the amount's
+    # sign: negative → outflow (anchor as src), zero/positive/blank → inflow
+    # (anchor as dest). The sign is stripped before the model sees the amount,
+    # since amount_minor is always stored positive. The JSON API may continue to
+    # post src_account_id/dest_account_id directly and bypass translation.
+    def translate_form_params(raw)
+      counterparty_id = raw[:counterparty_account_id].presence
+      anchor_id = raw[:anchor_account_id].presence
+
+      stripped = raw.except(:anchor_account_id, :counterparty_account_id)
+      return stripped if counterparty_id.nil? || anchor_id.nil?
+
+      amount_str = raw[:amount].to_s.strip
+      decimal = begin
+        BigDecimal(amount_str) if amount_str.present?
+      rescue ArgumentError, TypeError
+        nil
+      end
+
+      direction = if decimal.nil? || decimal.negative?
+        "out" # blank, unparseable, or explicit minus → outflow (the common case)
+      else
+        "in"
+      end
+
+      src_id, dest_id = direction == "in" ? [ counterparty_id, anchor_id ] : [ anchor_id, counterparty_id ]
+      # Preserve the user's typed formatting (e.g. "5.00") by stripping just the
+      # leading sign rather than round-tripping through BigDecimal#to_s.
+      abs_amount = amount_str.sub(/\A[+-]/, "")
+
+      stripped.merge(src_account_id: src_id, dest_account_id: dest_id, amount: abs_amount)
     end
 
     def find_preceding_transaction(transaction)

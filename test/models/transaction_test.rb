@@ -716,6 +716,68 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal expected, targets
   end
 
+  test "anchor_account is the balance-sheet src for a withdrawal" do
+    transaction = transactions(:one) # asset → expense
+    assert_equal accounts(:asset_account), transaction.anchor_account
+  end
+
+  test "anchor_account is the balance-sheet dest for a deposit" do
+    transaction = transactions(:two) # revenue → asset
+    assert_equal accounts(:asset_account), transaction.anchor_account
+  end
+
+  test "anchor_account is the balance-sheet dest for a refund" do
+    refund = Transaction.create!(
+      user: users(:one),
+      src_account: accounts(:expense_account),
+      dest_account: accounts(:asset_account),
+      amount_minor: 1000, currency: currencies(:usd), transacted_at: Time.current
+    )
+    assert_equal accounts(:asset_account), refund.anchor_account
+  end
+
+  test "anchor_account is the balance-sheet src for a clawback" do
+    clawback = Transaction.create!(
+      user: users(:one),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:revenue_account),
+      amount_minor: 1000, currency: currencies(:usd), transacted_at: Time.current
+    )
+    assert_equal accounts(:asset_account), clawback.anchor_account
+  end
+
+  test "anchor_account is the src for an asset-to-asset transfer" do
+    transfer = Transaction.create!(
+      user: users(:one),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:linked_asset),
+      amount_minor: 1000, currency: currencies(:usd), transacted_at: Time.current
+    )
+    assert_equal accounts(:asset_account), transfer.anchor_account
+  end
+
+  test "counterparty_account returns the side opposite to anchor" do
+    transaction = transactions(:one) # anchor = asset (src), counterparty = expense (dest)
+    assert_equal accounts(:expense_account), transaction.counterparty_account
+
+    deposit = transactions(:two) # anchor = asset (dest), counterparty = revenue (src)
+    assert_equal accounts(:revenue_account), deposit.counterparty_account
+  end
+
+  test "signed_amount_minor_for is negative when account is the src side" do
+    transaction = transactions(:one)
+    assert_equal(-transaction.amount_minor, transaction.signed_amount_minor_for(transaction.src_account))
+  end
+
+  test "signed_amount_minor_for is positive when account is the dest side" do
+    transaction = transactions(:one)
+    assert_equal transaction.amount_minor, transaction.signed_amount_minor_for(transaction.dest_account)
+  end
+
+  test "signed_amount_minor_for returns nil when account is nil" do
+    assert_nil transactions(:one).signed_amount_minor_for(nil)
+  end
+
   test "destroying with in-memory account reassignment still broadcasts persisted accounts" do
     transaction = transactions(:one)
     persisted_src = transaction.src_account

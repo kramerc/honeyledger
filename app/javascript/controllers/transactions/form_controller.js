@@ -1,8 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = [ "srcAccount", "destAccount", "type", "amount", "currency", "error" ]
-  static values = { accountName: String }
+  static targets = [ "anchorAccount", "counterpartyAccount", "type", "amount", "currency", "error" ]
   static TYPE_CONFIG = {
     withdrawal: { label: "↓ Withdrawal", class: "tx-type tx-type--withdrawal" },
     refund:     { label: "↑ Refund",     class: "tx-type tx-type--refund" },
@@ -23,54 +22,53 @@ export default class extends Controller {
     }
   }
 
+  // Filter the counterparty options based on the anchor's kind. The model
+  // requires that any income/expense side pair with a balance-sheet account, so
+  // when the anchor is itself income/expense the counterparty must be balance-sheet.
   updateEnabledAccounts(resetInvalidFields = true) {
-    if (!this.hasSrcAccountTarget || !this.hasDestAccountTarget) return
+    if (!this.hasCounterpartyAccountTarget) return
 
-    const { id: srcId, kind: srcKind } = this.selectedAccount(this.srcAccountTarget)
-    const { id: destId, kind: destKind } = this.selectedAccount(this.destAccountTarget)
-    const srcOptions = this.srcAccountTarget.options
-    const destOptions = this.destAccountTarget.options
+    const anchor = this.anchor()
+    const counterpartyOptions = this.counterpartyAccountTarget.options
 
-    /*
-      Disable options that would create invalid transactions:
-      - Source and destination accounts cannot be the same
-      - Cannot transact from a revenue account to an expense account
-      - Cannot transact from an expense account to a revenue account
-    */
     const isIncomeExpense = (kind) => kind === "expense" || kind === "revenue"
 
-    for (const option of srcOptions) {
-      const sameId = option.value !== "" && option.value === destId
-      const incompatibleKind = isIncomeExpense(destKind) && isIncomeExpense(option.dataset.kind)
+    for (const option of counterpartyOptions) {
+      if (option.value === "") continue
+      const sameId = option.value === anchor.id
+      const incompatibleKind = isIncomeExpense(anchor.kind) && isIncomeExpense(option.dataset.kind)
       option.disabled = sameId || incompatibleKind
       if (resetInvalidFields && option.disabled && option.selected) {
-        this.srcAccountTarget.selectedIndex = 0
-      }
-    }
-    for (const option of destOptions) {
-      const sameId = option.value !== "" && option.value === srcId
-      const incompatibleKind = isIncomeExpense(srcKind) && isIncomeExpense(option.dataset.kind)
-      option.disabled = sameId || incompatibleKind
-      if (resetInvalidFields && option.disabled && option.selected) {
-        this.destAccountTarget.selectedIndex = 0
+        this.counterpartyAccountTarget.selectedIndex = 0
       }
     }
   }
 
+  // Currency follows the anchor (the balance-sheet side that owns the balance).
   updateCurrency() {
-    if (!this.hasDestAccountTarget || !this.hasCurrencyTarget) return
+    if (!this.hasCurrencyTarget) return
 
-    const select = this.destAccountTarget
-    const option = select.options[select.selectedIndex]
-    const currency = option ? option.dataset.currency || "" : ""
-    this.currencyTarget.textContent = currency || "—"
+    const anchor = this.anchor()
+    this.currencyTarget.textContent = anchor.currency || "—"
   }
 
   updateTypeFromSelectedAccounts() {
-    if (!this.hasSrcAccountTarget || !this.hasDestAccountTarget) return
+    if (!this.hasCounterpartyAccountTarget) return
 
-    const { kind: srcKind } = this.selectedAccount(this.srcAccountTarget)
-    const { kind: destKind } = this.selectedAccount(this.destAccountTarget)
+    const anchor = this.anchor()
+    const counterparty = this.selectedAccount(this.counterpartyAccountTarget)
+    const direction = this.directionValue()
+
+    // Resolve src/dest from anchor + direction, then run the same kind-pair
+    // mapping the server-side helper uses.
+    let srcKind, destKind
+    if (direction === "in") {
+      srcKind = counterparty.kind
+      destKind = anchor.kind
+    } else {
+      srcKind = anchor.kind
+      destKind = counterparty.kind
+    }
 
     const isBalanceSheet = (kind) => !!kind && kind !== "expense" && kind !== "revenue"
 
@@ -88,6 +86,34 @@ export default class extends Controller {
     }
 
     this.updateTypeTarget(type)
+  }
+
+  // Anchor target is either a select (unfiltered view) or a hidden input
+  // (account-scoped view). For the hidden case we read kind/currency from
+  // data attributes on the input so the controller has the same metadata.
+  anchor() {
+    if (!this.hasAnchorAccountTarget) return { id: undefined, kind: undefined, currency: undefined }
+
+    const target = this.anchorAccountTarget
+    if (target.tagName === "SELECT") {
+      return this.selectedAccount(target)
+    }
+    return {
+      id: target.value,
+      kind: target.dataset.kind || undefined,
+      currency: target.dataset.currency || undefined
+    }
+  }
+
+  // Direction is inferred from the amount field's sign: a leading "-" means
+  // outflow; positive (with or without "+") means inflow; blank defaults to
+  // outflow to match the controller's fallback.
+  directionValue() {
+    if (!this.hasAmountTarget) return "out"
+    const value = this.amountTarget.value.trim()
+    if (value === "") return "out"
+    if (value.startsWith("-")) return "out"
+    return "in"
   }
 
   selectedAccount(select) {

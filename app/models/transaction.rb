@@ -20,6 +20,10 @@ class Transaction < ApplicationRecord
   belongs_to :merged_into, class_name: "Transaction", optional: true
   has_many :merged_sources, class_name: "Transaction", foreign_key: "merged_into_id", dependent: :destroy
 
+  # Virtual form attributes — see TransactionsController#translate_form_params,
+  # which converts them into src/dest before save.
+  attr_accessor :anchor_account_id, :counterparty_account_id
+
   before_validation :assign_currency_from_dest_account, unless: :opening_balance?
   before_validation :assign_cleared_at_from_cleared, unless: :opening_balance?
 
@@ -80,6 +84,28 @@ class Transaction < ApplicationRecord
   def opening_balance_target_account
     return nil unless opening_balance?
     [ src_account, dest_account ].find { |a| a&.real? }
+  end
+
+  # The "anchor" is the side a human reads from: the balance-sheet account
+  # (asset / liability / equity). Validation guarantees at least one side is
+  # balance-sheet. For asset↔asset transfers, src wins.
+  def anchor_account
+    return nil if src_account.nil? && dest_account.nil?
+    return src_account if src_account&.balance_sheet?
+    dest_account
+  end
+
+  def counterparty_account
+    anchor = anchor_account
+    return nil if anchor.nil?
+    anchor == src_account ? dest_account : src_account
+  end
+
+  # Signed amount from `account`'s perspective: negative when account is the
+  # source (money leaving), positive when account is the destination.
+  def signed_amount_minor_for(account)
+    return nil if account.nil?
+    account.id == src_account_id ? -amount_minor.to_i : amount_minor.to_i
   end
 
   private

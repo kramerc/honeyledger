@@ -3,15 +3,18 @@
     <%= render partial: 'form', locals: {
       transaction: @new_transaction,
       accounts: @accounts,
-      categories: @categories
+      categories: @categories,
+      account: @account
     } %>
   <% end %>
 <% end %>
 
 <% if @last_transaction %>
-  <%= turbo_stream.before dom_id(@last_transaction), @transaction %>
+  <%= turbo_stream.before dom_id(@last_transaction) do %>
+    <%= render partial: 'transaction', locals: { transaction: @transaction, account: @account } %>
+  <% end %>
 <% else %>
   <%= turbo_stream.prepend :transactions do %>
-    <%= render @transaction %>
+    <%= render partial: 'transaction', locals: { transaction: @transaction, account: @account } %>
   <% end %>
 <% end %>
