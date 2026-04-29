@@ -41,51 +41,73 @@ class AccountTest < ActiveSupport::TestCase
     end
   end
 
-  test "opening_balance_for handles RecordNotUnique" do
-    Account.stub :find_or_create_by!, ->(_) { raise ActiveRecord::RecordNotUnique } do
-      Account.stub(:find_by, @account) do
-        assert_no_difference("Account.count") do
-          assert_equal @account, Account.opening_balance_for(user: users(:one), kind: :revenue)
-        end
+  test "opening_balance_for returns existing account when stored name differs in case" do
+    user = users(:one)
+    existing = Account.create!(user: user, kind: :revenue, name: "opening balance", virtual: true)
+
+    assert_no_difference("Account.count") do
+      assert_equal existing, Account.opening_balance_for(user: user, kind: :revenue)
+    end
+  end
+
+  test "opening_balance_for handles RecordNotUnique race" do
+    user = users(:one)
+    Account.stub :create!, ->(*, **) {
+      Account.insert!({ user_id: user.id, kind: Account.kinds[:revenue], name: "Opening Balance", virtual: true, created_at: Time.current, updated_at: Time.current })
+      raise ActiveRecord::RecordNotUnique
+    } do
+      result = Account.opening_balance_for(user: user, kind: :revenue)
+      assert_equal "Opening Balance", result.name
+      assert result.virtual
+      assert_equal "revenue", result.kind
+    end
+  end
+
+  test "opening_balance_for raises RecordNotUnique when no record can be re-found" do
+    Account.stub :create!, ->(*, **) { raise ActiveRecord::RecordNotUnique } do
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        Account.opening_balance_for(user: users(:one), kind: :revenue)
       end
     end
   end
 
-  test "opening_balance_for raises RecordNotUnique when both find and create fail" do
-    Account.stub :find_or_create_by!, ->(_) { raise ActiveRecord::RecordNotUnique } do
-      Account.stub(:find_by, nil) do
+  test "find_or_create_for_import returns existing account when description case differs from stored name" do
+    user = users(:one)
+    currency = currencies(:usd)
+    existing = user.accounts.create!(name: "Coffee Shop", kind: :expense, currency: currency)
+
+    assert_no_difference("Account.count") do
+      assert_equal existing, Account.find_or_create_for_import(user: user, description: "COFFEE SHOP", kind: :expense, currency: currency)
+    end
+  end
+
+  test "find_or_create_for_import handles RecordNotUnique race" do
+    user = users(:one)
+    currency = currencies(:usd)
+    description = "RaceConditionMerchant"
+
+    accounts_proxy = user.accounts
+    accounts_proxy.stub :create!, ->(*, **) {
+      Account.insert!({ user_id: user.id, kind: Account.kinds[:expense], name: description, currency_id: currency.id, balance_minor: 0, virtual: false, created_at: Time.current, updated_at: Time.current })
+      raise ActiveRecord::RecordNotUnique
+    } do
+      user.stub :accounts, accounts_proxy do
+        result = Account.find_or_create_for_import(user: user, description: description, kind: :expense, currency: currency)
+        assert_equal description, result.name
+        assert_equal "expense", result.kind
+      end
+    end
+  end
+
+  test "find_or_create_for_import raises RecordNotUnique when no record can be re-found" do
+    user = users(:one)
+    currency = currencies(:usd)
+
+    accounts_proxy = user.accounts
+    accounts_proxy.stub :create!, ->(*, **) { raise ActiveRecord::RecordNotUnique } do
+      user.stub :accounts, accounts_proxy do
         assert_raises(ActiveRecord::RecordNotUnique) do
-          Account.opening_balance_for(user: users(:one), kind: :revenue)
-        end
-      end
-    end
-  end
-
-  test "find_or_create_for_import handles RecordNotUnique" do
-    user = users(:one)
-    currency = currencies(:usd)
-
-    accounts_proxy = user.accounts
-    accounts_proxy.stub :find_or_create_by!, ->(_) { raise ActiveRecord::RecordNotUnique } do
-      accounts_proxy.stub :find_by, @account do
-        user.stub :accounts, accounts_proxy do
-          assert_equal @account, Account.find_or_create_for_import(user: user, description: "Test", kind: :expense, currency: currency)
-        end
-      end
-    end
-  end
-
-  test "find_or_create_for_import raises RecordNotUnique when both find and create fail" do
-    user = users(:one)
-    currency = currencies(:usd)
-
-    accounts_proxy = user.accounts
-    accounts_proxy.stub :find_or_create_by!, ->(_) { raise ActiveRecord::RecordNotUnique } do
-      accounts_proxy.stub :find_by, nil do
-        user.stub :accounts, accounts_proxy do
-          assert_raises(ActiveRecord::RecordNotUnique) do
-            Account.find_or_create_for_import(user: user, description: "Test", kind: :expense, currency: currency)
-          end
+          Account.find_or_create_for_import(user: user, description: "NeverExistedAccount", kind: :expense, currency: currency)
         end
       end
     end
