@@ -47,7 +47,7 @@ class AccountsTest < ApplicationSystemTestCase
 
     find(link_id).hover
     within(link_id) do
-      find(".account__edit-pencil", visible: :all).click
+      find(".account__edit-pencil").click
     end
 
     assert_current_path edit_account_path(account)
