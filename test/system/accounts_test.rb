@@ -39,6 +39,20 @@ class AccountsTest < ApplicationSystemTestCase
     end
   end
 
+  test "the sidebar pencil navigates to the account edit page" do
+    account = accounts(:asset_account)
+    link_id = "##{ActionView::RecordIdentifier.dom_id(account, :sidebar_link)}"
+
+    visit transactions_path
+
+    find(link_id).hover
+    within(link_id) do
+      find(".account__edit-pencil", visible: :all).click
+    end
+
+    assert_current_path edit_account_path(account)
+  end
+
   test "destroying an account removes it from the sidebar live" do
     account = Account.create!(
       user: @user,

@@ -186,6 +186,34 @@ header h1 {
 .account__balance--positive { color: var(--color-positive); }
 .account__balance--negative { color: var(--color-negative); }
 
+.account__edit-pencil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  padding: 2px;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 3px;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.sidebar nav ul li a:hover .account__edit-pencil,
+.account__edit-pencil:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.account__edit-pencil:hover {
+  background-color: var(--honey-pale);
+}
+
 .sidebar-resizer {
   width: 4px;
   cursor: col-resize;
