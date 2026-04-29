@@ -28,9 +28,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
             amount_minor: sft.amount_minor.abs,
             currency_id: ledger_account.currency_id,
             transacted_at: sft.transacted_at || sft.posted || Time.current,
-            description: sft.description,
-            sourceable_type: "Simplefin::Transaction",
-            aggregator_account_class: Simplefin::Account
+            description: sft.description
           )
 
           if orphan

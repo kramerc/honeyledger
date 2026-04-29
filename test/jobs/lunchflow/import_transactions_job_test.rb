@@ -359,6 +359,75 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal reissued_lunchflow_transaction, original_ledger_transaction.sourceable
   end
 
+  test "adopts a stale Simplefin orphan with a longer description when importing a truncated Lunchflow merchant" do
+    full_description = "Recurring vendor charge with extended detail in the description"
+    truncated_description = full_description[0, 32]
+
+    bank_account = Account.create!(
+      user: @user, currency: @currency, name: "Cross-aggregator Checking", kind: :asset
+    )
+
+    stale_sf_account = Simplefin::Account.create!(
+      connection: simplefin_connections(:one),
+      remote_id: "acc_stale_for_lf",
+      name: "Old SF Checking",
+      currency: "USD",
+      balance: "1000.00"
+    )
+    stale_sf_transaction = Simplefin::Transaction.create!(
+      account: stale_sf_account,
+      remote_id: "txn_stale_full",
+      amount: "-20.00",
+      description: full_description,
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+    expense_account = Account.create!(
+      user: @user, currency: @currency, name: full_description, kind: :expense
+    )
+    original_ledger_transaction = Transaction.create!(
+      user: @user, src_account: bank_account, dest_account: expense_account,
+      amount_minor: 2000, currency: @currency, description: full_description,
+      transacted_at: 2.days.ago, sourceable: stale_sf_transaction, synced_at: 2.days.ago
+    )
+
+    # User now relinks to a fresh Lunch Flow account whose merchant text is the 32-char
+    # truncation of the SimpleFIN description we already imported.
+    new_lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 8888,
+      name: "Cross-aggregator Checking",
+      institution_name: "Test Bank",
+      provider: "finicity",
+      currency: "USD",
+      status: "ACTIVE",
+      balance: "1000.00"
+    )
+    bank_account.update!(sourceable: new_lf_account)
+    new_lf_transaction = Lunchflow::Transaction.create!(
+      account: new_lf_account,
+      remote_id: "txn_lf_truncated",
+      amount: "-20.00",
+      currency: "USD",
+      description: "",
+      merchant: truncated_description,
+      pending: false,
+      date: 2.days.ago.to_date
+    )
+
+    assert_no_difference -> {
+      Transaction.unmerged.where("src_account_id = :id OR dest_account_id = :id", id: bank_account.id).count
+    } do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: new_lf_account.id)
+    end
+
+    original_ledger_transaction.reload
+    assert_equal new_lf_transaction, original_ledger_transaction.sourceable
+    assert_equal expense_account, original_ledger_transaction.dest_account
+    assert_equal full_description, original_ledger_transaction.description, "user-facing description should be preserved on the adopted row"
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
