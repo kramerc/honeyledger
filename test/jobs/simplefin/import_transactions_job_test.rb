@@ -116,6 +116,31 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal expense_account, transaction2.dest_account
   end
 
+  test "imports succeed when description differs only in case from existing expense account" do
+    sf_account, _ = create_linked_simplefin_account
+
+    existing_expense = Account.create!(user: @user, currency: @currency, name: "Sample Merchant", kind: :expense)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_case_collision",
+      amount: "-12.50",
+      description: "SAMPLE MERCHANT",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: sf_transaction)
+    assert_equal existing_expense, transaction.dest_account
+  end
+
   test "updates existing transaction when SimpleFIN transaction is updated" do
     sf_account, _ = create_linked_simplefin_account
 

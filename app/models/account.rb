@@ -43,19 +43,30 @@ class Account < ApplicationRecord
       return rule.account if rule
     end
 
-    attributes = { name: description, kind: kind }
-    user.accounts.find_or_create_by!(attributes) do |account|
-      account.currency = currency
-    end
+    scope = user.accounts.where(kind: kind).where("LOWER(name) = LOWER(?)", description)
+    existing = scope.first
+    return existing if existing
+
+    user.accounts.create!(name: description, kind: kind, currency: currency)
   rescue ActiveRecord::RecordNotUnique
-    user.accounts.find_by(attributes) || raise
+    scope.first || raise
+  rescue ActiveRecord::RecordInvalid => e
+    raise unless e.record.errors.of_kind?(:name, :taken)
+    scope.first || raise
   end
 
   def self.opening_balance_for(user:, kind:)
-    attributes = { user: user, kind: kind, name: "Opening Balance", virtual: true }
-    Account.find_or_create_by!(attributes)
+    scope = Account.where(user: user, kind: kind, virtual: true)
+                   .where("LOWER(name) = LOWER(?)", "Opening Balance")
+    existing = scope.first
+    return existing if existing
+
+    Account.create!(user: user, kind: kind, name: "Opening Balance", virtual: true)
   rescue ActiveRecord::RecordNotUnique
-    Account.find_by(attributes) || raise
+    scope.first || raise
+  rescue ActiveRecord::RecordInvalid => e
+    raise unless e.record.errors.of_kind?(:name, :taken)
+    scope.first || raise
   end
 
   def balance_sheet?

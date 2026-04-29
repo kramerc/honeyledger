@@ -104,6 +104,32 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil transaction.cleared_at
   end
 
+  test "imports succeed when merchant differs only in case from existing expense account" do
+    lf_account, _ = create_linked_lunchflow_account
+
+    existing_expense = Account.create!(user: @user, currency: @currency, name: "Sample Merchant", kind: :expense)
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_case_collision",
+      amount: "-12.50",
+      currency: "USD",
+      description: "POS DEBIT 555",
+      merchant: "SAMPLE MERCHANT",
+      pending: false,
+      date: 1.day.ago.to_date
+    )
+
+    assert_difference "Transaction.count", 1 do
+      assert_no_difference "Account.count" do
+        Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+      end
+    end
+
+    transaction = Transaction.find_by(sourceable: lf_transaction)
+    assert_equal existing_expense, transaction.dest_account
+  end
+
   test "uses account rule to route expense transaction" do
     lf_account, _ = create_linked_lunchflow_account
 
