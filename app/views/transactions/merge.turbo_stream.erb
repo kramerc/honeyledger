@@ -3,9 +3,11 @@
 <% end %>
 
 <% if @last_transaction %>
-  <%= turbo_stream.before dom_id(@last_transaction), @merged_transaction %>
+  <%= turbo_stream.before dom_id(@last_transaction) do %>
+    <%= render partial: 'transaction', locals: { transaction: @merged_transaction, account: @account } %>
+  <% end %>
 <% else %>
   <%= turbo_stream.prepend :transactions do %>
-    <%= render @merged_transaction %>
+    <%= render partial: 'transaction', locals: { transaction: @merged_transaction, account: @account } %>
   <% end %>
 <% end %>

@@ -12,14 +12,16 @@
 </div>
 
 <div data-controller="transactions--merge" data-transactions--merge-merge-url-value="<%= merge_transactions_path %>">
-  <div class="transactions">
-    <div class="row header">
+  <div class="transactions<%= " transactions--scoped" if @account %>">
+    <div class="row header<%= " row--scoped" if @account %>">
       <div></div>
       <div>Date</div>
       <div>Type</div>
       <div>Description</div>
-      <div>From</div>
-      <div>To</div>
+      <% unless @account %>
+        <div>Account</div>
+      <% end %>
+      <div>Counterparty</div>
       <div>Amount</div>
       <div>Currency</div>
       <div>Category</div>
@@ -31,14 +33,15 @@
       <%= render partial: 'form', locals: {
         transaction: @new_transaction,
         accounts: @accounts,
-        categories: @categories
+        categories: @categories,
+        account: @account
       } %>
     <% end %>
 
     <%= turbo_frame_tag :transactions do %>
-      <%= render @transactions %>
+      <%= render partial: 'transaction', collection: @transactions, as: :transaction, locals: { account: @account } %>
     <% end %>
   </div>
 
-  <%= render "merge_bar", categories: @categories %>
+  <%= render "merge_bar", categories: @categories, account: @account %>
 </div>

@@ -20,6 +20,9 @@
     <p class="merge-confirmation__preview"></p>
 
     <%= form_with url: merge_transactions_path, method: :post, data: { action: "turbo:submit-end->transactions--merge#cancel" } do |f| %>
+      <% if local_assigns[:account] %>
+        <input type="hidden" name="account_id" value="<%= account.id %>">
+      <% end %>
       <input type="hidden" name="transaction_ids[]" value="" data-slot="a">
       <input type="hidden" name="transaction_ids[]" value="" data-slot="b">
 
