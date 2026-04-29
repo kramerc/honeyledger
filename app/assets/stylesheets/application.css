@@ -241,12 +241,20 @@ header h1 {
   box-shadow: 0 0 0 2px var(--bg-error);
 }
 
+.sidebar nav ul li a:has(.account__rename-error) {
+  position: relative;
+}
+
 .account__rename-error {
-  display: block;
-  flex-basis: 100%;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
   font-size: 0.7rem;
   color: var(--color-negative);
-  padding: 2px 4px 0;
+  background: var(--cream);
+  padding: 2px 10px 4px;
+  z-index: 1;
 }
 
 .sidebar-resizer {

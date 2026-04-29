@@ -101,7 +101,8 @@ class AccountsTest < ApplicationSystemTestCase
   test "fixing an invalid inline rename clears the error and saves" do
     account = accounts(:asset_account)
     Account.create!(user: @user, currency: account.currency, name: "Conflict Name", kind: account.kind)
-    link_id = "##{ActionView::RecordIdentifier.dom_id(account, :sidebar_link)}"
+    link_dom_id = ActionView::RecordIdentifier.dom_id(account, :sidebar_link)
+    link_id = "##{link_dom_id}"
 
     visit transactions_path
 
@@ -112,26 +113,24 @@ class AccountsTest < ApplicationSystemTestCase
       input.set("Conflict Name")
       input.send_keys(:return)
       assert_selector ".account__rename-error"
+    end
 
-      # CI's chromedriver can mark the input stale mid-set due to the response-
-      # triggered DOM swap from the first submit. Retry with a fresh find each
-      # time until set completes.
-      3.times do
-        begin
-          find(".account__rename-input").set("Fresh Valid Name")
-          break
-        rescue Selenium::WebDriver::Error::StaleElementReferenceError
-          sleep 0.1
-        end
-      end
+    # Submit the corrected value by calling the Stimulus controller's submit()
+    # directly. Driving the second submit through Capybara would have to clear
+    # the input and re-send the new value + Enter, but the response-triggered
+    # DOM swap from the first submit races those steps in CI (set's internal
+    # click + clear can land on a stale element, leaving the previous value
+    # in place and producing a corrupt save like "Conflict NameFresh Valid
+    # Name"). Calling submit() directly sets the value once and exercises the
+    # exact code path the user hits when pressing Enter.
+    page.execute_script(<<~JS, link_dom_id, "Fresh Valid Name")
+      const wrapper = document.getElementById(arguments[0])
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(wrapper, "inline-rename")
+      controller.inputTarget.value = arguments[1]
+      controller.submit()
+    JS
 
-      begin
-        find(".account__rename-input").send_keys(:return)
-      rescue Selenium::WebDriver::Error::StaleElementReferenceError
-        # Enter was sent successfully; element became stale because the success
-        # response triggered an immediate re-render. Action took effect.
-      end
-
+    within(link_id) do
       assert_no_selector ".account__rename-error"
       assert_text "Fresh Valid Name"
     end
