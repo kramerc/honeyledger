@@ -113,7 +113,18 @@ class AccountsTest < ApplicationSystemTestCase
       input.send_keys(:return)
       assert_selector ".account__rename-error"
 
-      find(".account__rename-input").set("Fresh Valid Name")
+      # CI's chromedriver can mark the input stale mid-set due to the response-
+      # triggered DOM swap from the first submit. Retry with a fresh find each
+      # time until set completes.
+      3.times do
+        begin
+          find(".account__rename-input").set("Fresh Valid Name")
+          break
+        rescue Selenium::WebDriver::Error::StaleElementReferenceError
+          sleep 0.1
+        end
+      end
+
       begin
         find(".account__rename-input").send_keys(:return)
       rescue Selenium::WebDriver::Error::StaleElementReferenceError
