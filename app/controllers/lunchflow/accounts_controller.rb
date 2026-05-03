@@ -16,7 +16,7 @@ class Lunchflow::AccountsController < ApplicationController
       return
     end
 
-    if ledger_account.sourceable.present? && ledger_account.sourceable != @lunchflow_account
+    if ledger_account.account_sources.where.not(sourceable: @lunchflow_account).exists?
       redirect_to integrations_path, alert: "Account is already linked to another integration."
       return
     end
@@ -26,20 +26,13 @@ class Lunchflow::AccountsController < ApplicationController
       return
     end
 
-    if ledger_account.update(sourceable: @lunchflow_account)
-      redirect_to integrations_path, notice: "Lunch Flow account linked successfully."
-    else
-      redirect_to integrations_path, alert: "Failed to link Lunch Flow account: #{ledger_account.errors.full_messages.to_sentence}"
-    end
+    AccountSource::Attach.call(account: ledger_account, sourceable: @lunchflow_account)
+    redirect_to integrations_path, notice: "Lunch Flow account linked successfully."
   end
 
   def unlink
-    ledger_account = @lunchflow_account.ledger_account
-    if ledger_account&.update(sourceable: nil)
-      redirect_to integrations_path, notice: "Lunch Flow account unlinked successfully."
-    else
-      redirect_to integrations_path, alert: "Failed to unlink Lunch Flow account."
-    end
+    @lunchflow_account.account_sources.destroy_all
+    redirect_to integrations_path, notice: "Lunch Flow account unlinked successfully."
   end
 
   private

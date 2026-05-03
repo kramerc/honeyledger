@@ -314,7 +314,7 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
 
   test "does not enqueue import jobs for unlinked accounts after refresh" do
     # Unlink all accounts first
-    Account.where(sourceable_type: "Simplefin::Account").update_all(sourceable_id: nil, sourceable_type: nil)
+    AccountSource.where(sourceable_type: "Simplefin::Account").destroy_all
 
     mock_client = Minitest::Mock.new
 

@@ -180,7 +180,7 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
   end
 
   test "does not enqueue import jobs for unlinked accounts after refresh" do
-    Account.where(sourceable_type: "Lunchflow::Account").update_all(sourceable_id: nil, sourceable_type: nil)
+    AccountSource.where(sourceable_type: "Lunchflow::Account").destroy_all
 
     mock_client = Minitest::Mock.new
 

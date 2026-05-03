@@ -6,7 +6,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     @currency = currencies(:usd)
 
     # Clear any aggregator transactions that would be imported from fixtures (linked via Account.sourceable)
-    linked_lf_ids = Account.where(sourceable_type: "Lunchflow::Account").where.not(sourceable_id: nil).pluck(:sourceable_id)
+    linked_lf_ids = AccountSource.where(sourceable_type: "Lunchflow::Account").pluck(:sourceable_id)
     Lunchflow::Transaction.where(account_id: linked_lf_ids).destroy_all
   end
 
@@ -28,7 +28,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert_not_nil transaction
     assert_equal @user, transaction.user
     assert_equal lf_bank_account, transaction.src_account
@@ -57,7 +57,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert_not_nil transaction
     assert_equal @user, transaction.user
     assert_equal lf_bank_account, transaction.dest_account
@@ -82,8 +82,43 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
 
     Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert_equal "Whole Foods", transaction.description
+  end
+
+  test "updates existing transaction when Lunch Flow transaction is updated" do
+    lf_account, _ = create_linked_lunchflow_account
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_update",
+      amount: "-75.00",
+      currency: "USD",
+      description: "Original Description",
+      merchant: "Original Merchant",
+      pending: false,
+      date: 1.day.ago.to_date
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = lf_transaction.ledger_transactions.first
+    original_synced_at = transaction.synced_at
+
+    travel 2.seconds
+
+    lf_transaction.update!(
+      amount: "-85.00",
+      synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    transaction.reload
+    assert_equal 8500, transaction.amount_minor
+    assert transaction.synced_at > original_synced_at
   end
 
   test "pending transaction has nil cleared_at" do
@@ -101,7 +136,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
 
     Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert_nil transaction.cleared_at
   end
 
@@ -127,7 +162,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert_equal existing_expense, transaction.dest_account
   end
 
@@ -153,7 +188,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert_equal grocery_account, transaction.dest_account
   end
 
@@ -215,7 +250,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     )
 
     Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
 
     Transaction::Exclude.new(transaction, user: @user).call
     original_synced_at = transaction.reload.synced_at
@@ -250,7 +285,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
-    transaction = Transaction.find_by(sourceable: lf_transaction)
+    transaction = lf_transaction.ledger_transactions.first
     assert transaction.excluded?
   end
 
@@ -354,9 +389,9 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     )
 
     Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: original_lunchflow_account.id)
-    original_ledger_transaction = Transaction.find_by!(sourceable: original_lunchflow_transaction)
+    original_ledger_transaction = original_lunchflow_transaction.ledger_transactions.first!
 
-    ledger_account.update!(sourceable: nil)
+    ledger_account.account_sources.destroy_all
 
     reissued_lunchflow_account = Lunchflow::Account.create!(
       connection: original_lunchflow_account.connection,
@@ -376,16 +411,14 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       date: original_lunchflow_transaction.date
     )
 
-    ledger_account.update!(sourceable: reissued_lunchflow_account)
+    ledger_account.account_sources.create!(sourceable: reissued_lunchflow_account)
 
     assert_no_difference -> { Transaction.unmerged.where("src_account_id = :id OR dest_account_id = :id", id: ledger_account.id).count } do
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: reissued_lunchflow_account.id)
     end
 
     original_ledger_transaction.reload
-    assert_equal reissued_lunchflow_transaction, original_ledger_transaction.sourceable
-    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), reissued_lunchflow_transaction,
-      "the join table should pick up the new source so PR 2's append-only readers see it"
+    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), reissued_lunchflow_transaction
   end
 
   test "adopts a stale Simplefin orphan with a longer description when importing a truncated Lunchflow merchant" do
@@ -415,7 +448,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     expense_account = Account.create!(
       user: @user, currency: @currency, name: full_description, kind: :expense
     )
-    original_ledger_transaction = Transaction.create!(
+    original_ledger_transaction = create_sourced_transaction(
       user: @user, src_account: bank_account, dest_account: expense_account,
       amount_minor: 2000, currency: @currency, description: full_description,
       transacted_at: 2.days.ago, sourceable: stale_sf_transaction, synced_at: 2.days.ago
@@ -433,7 +466,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       status: "ACTIVE",
       balance: "1000.00"
     )
-    bank_account.update!(sourceable: new_lf_account)
+    bank_account.account_sources.create!(sourceable: new_lf_account)
     new_lf_transaction = Lunchflow::Transaction.create!(
       account: new_lf_account,
       remote_id: "txn_lf_truncated",
@@ -452,7 +485,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     end
 
     original_ledger_transaction.reload
-    assert_equal new_lf_transaction, original_ledger_transaction.sourceable
+    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), new_lf_transaction
     assert_equal expense_account, original_ledger_transaction.dest_account
     assert_equal full_description, original_ledger_transaction.description, "user-facing description should be preserved on the adopted row"
   end
@@ -472,9 +505,9 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
         user: @user,
         currency: @currency,
         name: "Linked #{name}",
-        kind: :asset,
-        sourceable: lf_account
+        kind: :asset
       )
+      AccountSource.create!(account: lf_bank_account, sourceable: lf_account)
 
       [ lf_account, lf_bank_account ]
     end

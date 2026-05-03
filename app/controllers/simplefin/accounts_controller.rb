@@ -10,14 +10,13 @@ class Simplefin::AccountsController < ApplicationController
       return
     end
 
-    # Verify the account belongs to the current user
     ledger_account = current_user.accounts.find_by(id: ledger_account_id)
     unless ledger_account
       redirect_to integrations_path, alert: "Account not found."
       return
     end
 
-    if ledger_account.sourceable.present? && ledger_account.sourceable != @simplefin_account
+    if ledger_account.account_sources.where.not(sourceable: @simplefin_account).exists?
       redirect_to integrations_path, alert: "Account is already linked to another integration."
       return
     end
@@ -27,20 +26,13 @@ class Simplefin::AccountsController < ApplicationController
       return
     end
 
-    if ledger_account.update(sourceable: @simplefin_account)
-      redirect_to integrations_path, notice: "SimpleFIN account linked successfully."
-    else
-      redirect_to integrations_path, alert: "Failed to link SimpleFIN account: #{ledger_account.errors.full_messages.to_sentence}"
-    end
+    AccountSource::Attach.call(account: ledger_account, sourceable: @simplefin_account)
+    redirect_to integrations_path, notice: "SimpleFIN account linked successfully."
   end
 
   def unlink
-    ledger_account = @simplefin_account.ledger_account
-    if ledger_account&.update(sourceable: nil)
-      redirect_to integrations_path, notice: "SimpleFIN account unlinked successfully."
-    else
-      redirect_to integrations_path, alert: "Failed to unlink SimpleFIN account."
-    end
+    @simplefin_account.account_sources.destroy_all
+    redirect_to integrations_path, notice: "SimpleFIN account unlinked successfully."
   end
 
   private

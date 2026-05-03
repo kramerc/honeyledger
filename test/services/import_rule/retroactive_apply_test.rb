@@ -16,7 +16,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
       transacted_at: 1.day.ago,
       posted: 1.day.ago
     )
-    @imported_transaction = Transaction.create!(
+    @imported_transaction = create_sourced_transaction(
       user: @user,
       src_account: @bank_account,
       dest_account: @original_expense,
@@ -104,7 +104,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     revenue_account = Account.create!(user: @user, name: "Old Revenue", kind: :revenue, currency: @currency)
     new_revenue = Account.create!(user: @user, name: "Grocery Refund", kind: :revenue, currency: @currency)
 
-    revenue_transaction = Transaction.create!(
+    revenue_transaction = create_sourced_transaction(
       user: @user,
       src_account: revenue_account,
       dest_account: @bank_account,
@@ -165,7 +165,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     revenue_account = Account.create!(user: @user, name: "Old Salary", kind: :revenue, currency: @currency)
     new_revenue = Account.create!(user: @user, name: "Salary", kind: :revenue, currency: @currency)
 
-    revenue_transaction = Transaction.create!(
+    revenue_transaction = create_sourced_transaction(
       user: @user,
       src_account: revenue_account,
       dest_account: @bank_account,
@@ -273,7 +273,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
     bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
 
-    transfer_out = Transaction.create!(
+    transfer_out = create_sourced_transaction(
       user: @user, src_account: @bank_account, dest_account: @original_expense,
       amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
@@ -281,7 +281,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
 
     # The other side of the transfer (from savings import)
     revenue = Account.create!(user: @user, name: "Transfer In", kind: :revenue, currency: @currency)
-    other_side = Transaction.create!(
+    other_side = create_sourced_transaction(
       user: @user, src_account: revenue, dest_account: savings,
       amount_minor: 5000, currency: @currency, description: "TRANSFER FROM CHECKING",
       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_two)
@@ -300,7 +300,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
     bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
 
-    transfer_out = Transaction.create!(
+    transfer_out = create_sourced_transaction(
       user: @user, src_account: @bank_account, dest_account: @original_expense,
       amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
@@ -318,14 +318,14 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
     ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
 
-    transfer_out = Transaction.create!(
+    transfer_out = create_sourced_transaction(
       user: @user, src_account: @bank_account, dest_account: @original_expense,
       amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
     )
 
     revenue = Account.create!(user: @user, name: "Transfer In", kind: :revenue, currency: @currency)
-    other_side = Transaction.create!(
+    other_side = create_sourced_transaction(
       user: @user, src_account: revenue, dest_account: savings,
       amount_minor: 5000, currency: @currency, description: "TRANSFER FROM CHECKING",
       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_two)
@@ -354,7 +354,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
     ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
 
-    transfer_out = Transaction.create!(
+    transfer_out = create_sourced_transaction(
       user: @user, src_account: @bank_account, dest_account: @original_expense,
       amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)

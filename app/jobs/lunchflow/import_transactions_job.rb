@@ -2,9 +2,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
   queue_as :default
 
   def perform(lunchflow_account_id:)
-    linked_account_ids = Account.where(sourceable_type: "Lunchflow::Account")
-      .where.not(sourceable_id: nil)
-      .pluck(:sourceable_id)
+    linked_account_ids = AccountSource.where(sourceable_type: "Lunchflow::Account").pluck(:sourceable_id)
 
     return if linked_account_ids.empty?
 
@@ -12,30 +10,41 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       .where(account_id: linked_account_ids)
       .where(account_id: lunchflow_account_id)
       .includes(account: { connection: :user })
-      .left_joins(:ledger_transaction)
+      .left_joins(:ledger_transactions)
       .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
     Transaction.collecting_sidebar_broadcasts do
       transactions.find_each do |lft|
         user = lft.account.connection.user
-        ledger_account = lft.account.ledger_account
+        ledger_account = lft.account.ledger_accounts.first
+        next if ledger_account.nil?
+
         description = lft.merchant.presence || lft.description
 
-        transaction = Transaction.find_or_initialize_by(sourceable: lft)
+        existing_source = TransactionSource.find_by(sourceable: lft)
 
-        if transaction.new_record?
-          orphan = Transaction::AdoptOrphan.call(
-            ledger_account: ledger_account,
-            amount_minor: lft.amount_minor.abs,
-            currency_id: ledger_account.currency_id,
-            transacted_at: lft.date || Time.current,
-            description: description
-          )
+        if existing_source
+          ledger_transaction = existing_source.ledger_transaction
+          canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
 
-          if orphan
-            orphan.update!(sourceable: lft, synced_at: Time.current)
-            next
-          end
+          # Re-sync only when this source is the first writer of the ledger transaction.
+          # Secondary sources never overwrite canonical fields.
+          next unless canonical_source.id == existing_source.id
+
+          transaction = ledger_transaction
+        elsif (match = Transaction::Reconcile.call(
+          ledger_account: ledger_account,
+          amount_minor: lft.amount_minor.abs,
+          currency_id: ledger_account.currency_id,
+          transacted_at: lft.date || Time.current,
+          description: description,
+          incoming_source: lft
+        ))
+          TransactionSource::Attach.call(transaction: match, sourceable: lft)
+          match.update!(synced_at: Time.current)
+          next
+        else
+          transaction = Transaction.new
         end
 
         amount_bd = BigDecimal(lft.amount)
@@ -68,6 +77,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         transaction.cleared_at = lft.pending ? nil : lft.date
         transaction.synced_at = Time.current
         transaction.save!
+        TransactionSource::Attach.call(transaction: transaction, sourceable: lft)
 
         if rule&.exclude?
           Transaction::Exclude.new(transaction, user: user).call

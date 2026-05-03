@@ -59,11 +59,11 @@ class Lunchflow::AccountTest < ActiveSupport::TestCase
     assert_equal expected_amount, result[:amount]
   end
 
-  test "after_update callback on Account enqueues import when sourceable changes" do
+  test "creating an account_source enqueues an import" do
     account = accounts(:one)
 
     assert_enqueued_with(job: Lunchflow::ImportTransactionsJob, args: [ { lunchflow_account_id: @unlinked_lunchflow_account.id } ]) do
-      account.update!(sourceable: @unlinked_lunchflow_account)
+      AccountSource.create!(account: account, sourceable: @unlinked_lunchflow_account)
     end
   end
 end

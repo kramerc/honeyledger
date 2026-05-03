@@ -6,7 +6,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     @currency = currencies(:usd)
 
     # Clear any aggregator transactions that would be imported from fixtures (linked via Account.sourceable)
-    linked_sf_ids = Account.where(sourceable_type: "Simplefin::Account").where.not(sourceable_id: nil).pluck(:sourceable_id)
+    linked_sf_ids = AccountSource.where(sourceable_type: "Simplefin::Account").pluck(:sourceable_id)
     Simplefin::Transaction.where(account_id: linked_sf_ids).destroy_all
   end
 
@@ -29,7 +29,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_not_nil transaction
     assert_equal @user, transaction.user
     assert_equal bank_account, transaction.src_account
@@ -63,7 +63,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_not_nil transaction
     assert_equal @user, transaction.user
     assert_equal bank_account, transaction.dest_account
@@ -110,8 +110,8 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction1 = Transaction.find_by(sourceable: sf_transaction1)
-    transaction2 = Transaction.find_by(sourceable: sf_transaction2)
+    transaction1 = sf_transaction1.ledger_transactions.first
+    transaction2 = sf_transaction2.ledger_transactions.first
 
     assert_equal expense_account, transaction1.dest_account
     assert_equal expense_account, transaction2.dest_account
@@ -138,7 +138,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal existing_expense, transaction.dest_account
   end
 
@@ -157,7 +157,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
 
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     original_synced_at = transaction.synced_at
 
     travel 2.seconds
@@ -219,7 +219,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_not_nil transaction
     assert_not_nil transaction.transacted_at
     assert_nil transaction.cleared_at
@@ -254,7 +254,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
     end
 
-    assert_not_nil Transaction.find_by(sourceable: sf_transaction_new)
+    assert_not_nil sf_transaction_new.ledger_transactions.first
   end
 
   test "uses account rule to route expense transaction" do
@@ -279,7 +279,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal grocery_account, transaction.dest_account
   end
 
@@ -305,7 +305,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal salary_account, transaction.src_account
   end
 
@@ -331,7 +331,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal expense_account, transaction.src_account
     assert_equal bank_account, transaction.dest_account
   end
@@ -358,7 +358,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal bank_account, transaction.src_account
     assert_equal savings_account, transaction.dest_account
   end
@@ -385,7 +385,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal credit_card, transaction.src_account
     assert_equal bank_account, transaction.dest_account
   end
@@ -412,7 +412,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal bank_account, transaction.src_account
     assert_equal salary_account, transaction.dest_account
   end
@@ -438,7 +438,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
 
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal specific_account, transaction.dest_account
   end
 
@@ -483,7 +483,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal bank_a, merged.src_account
     assert_equal bank_b, merged.dest_account
     assert_equal 50000, merged.amount_minor
-    assert_nil merged.sourceable # Merge result has no sourceable
+    assert_empty merged.transaction_sources # Merge result has no source rows
   end
 
   test "skips excluded transactions during reimport" do
@@ -501,7 +501,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
 
     # First import
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_not_nil transaction
 
     # Exclude it
@@ -540,7 +540,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert transaction.excluded?
   end
 
@@ -558,14 +558,14 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     )
 
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: original_simplefin_account.id)
-    original_ledger_transaction = Transaction.find_by!(sourceable: original_simplefin_transaction)
+    original_ledger_transaction = original_simplefin_transaction.ledger_transactions.first!
     coffee_account = original_ledger_transaction.dest_account
 
     # Simulate the institution being disconnected and reconnected on simplefin.org:
     # - Original Simplefin::Account stays in DB but is unlinked from the ledger account.
     # - A brand-new Simplefin::Account row appears under the same connection with a new
     #   remote_id, plus a new Simplefin::Transaction row for the same real-world transaction.
-    ledger_account.update!(sourceable: nil)
+    ledger_account.account_sources.destroy_all
 
     reissued_simplefin_account = Simplefin::Account.create!(
       connection: original_simplefin_account.connection,
@@ -585,21 +585,19 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       pending: false
     )
 
-    ledger_account.update!(sourceable: reissued_simplefin_account)
+    ledger_account.account_sources.create!(sourceable: reissued_simplefin_account)
 
     assert_no_difference -> { Transaction.unmerged.where("src_account_id = :id OR dest_account_id = :id", id: ledger_account.id).count } do
       Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: reissued_simplefin_account.id)
     end
 
     original_ledger_transaction.reload
-    assert_equal reissued_simplefin_transaction, original_ledger_transaction.sourceable
-    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), reissued_simplefin_transaction,
-      "the join table should pick up the new source so PR 2's append-only readers see it"
+    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), reissued_simplefin_transaction
     assert_equal coffee_account, original_ledger_transaction.dest_account
-    assert_nil Transaction.where(sourceable: reissued_simplefin_transaction).where.not(id: original_ledger_transaction.id).first
+    assert_nil reissued_simplefin_transaction.ledger_transactions.where.not(id: original_ledger_transaction.id).first
   end
 
-  test "does not adopt a same-amount-same-day transaction whose sourceable is on a still-linked aggregator account" do
+  test "does not adopt a same-amount-same-day transaction whose source is on a still-linked aggregator account" do
     sf_account_a, ledger_a = create_linked_simplefin_account(remote_id: "acc_concurrent_a", name: "Concurrent A")
     sf_account_b, ledger_b = create_linked_simplefin_account(remote_id: "acc_concurrent_b", name: "Concurrent B")
 
@@ -631,7 +629,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_b.id)
 
     # The new import lands on ledger_b as expected, leaving ledger_a's transaction untouched.
-    new_ledger_transaction = Transaction.find_by(sourceable: sf_transaction_b)
+    new_ledger_transaction = sf_transaction_b.ledger_transactions.first
     assert_not_nil new_ledger_transaction
     assert_includes [ new_ledger_transaction.src_account, new_ledger_transaction.dest_account ], ledger_b
     assert_equal transactions_on_a_before, Transaction.where("src_account_id = :id OR dest_account_id = :id", id: ledger_a.id).count
@@ -658,7 +656,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       end
     end
 
-    transaction = Transaction.find_by(sourceable: sf_transaction)
+    transaction = sf_transaction.ledger_transactions.first
     assert_equal "Random Store", transaction.dest_account.name
   end
 
@@ -778,7 +776,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     expense_account = Account.create!(
       user: @user, currency: @currency, name: truncated_description, kind: :expense
     )
-    original_ledger_transaction = Transaction.create!(
+    original_ledger_transaction = create_sourced_transaction(
       user: @user, src_account: bank_account, dest_account: expense_account,
       amount_minor: 50000, currency: @currency, description: truncated_description,
       transacted_at: 2.days.ago, sourceable: stale_lf_transaction, synced_at: 2.days.ago
@@ -794,7 +792,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       currency: "USD",
       balance: "1000.00"
     )
-    bank_account.update!(sourceable: new_sf_account)
+    bank_account.account_sources.create!(sourceable: new_sf_account)
     new_sf_transaction = Simplefin::Transaction.create!(
       account: new_sf_account,
       remote_id: "txn_full_desc",
@@ -812,9 +810,60 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     end
 
     original_ledger_transaction.reload
-    assert_equal new_sf_transaction, original_ledger_transaction.sourceable
+    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), new_sf_transaction
     assert_equal expense_account, original_ledger_transaction.dest_account
     assert_equal truncated_description, original_ledger_transaction.description, "user-facing description should be preserved on the adopted row"
+  end
+
+  test "appends a SimpleFIN source to a ledger transaction already canonical from Lunch Flow without overwriting fields" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_cross", name: "Cross Aggregator")
+
+    lunchflow_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 7777,
+      name: "Cross Aggregator",
+      institution_name: "Test Bank",
+      provider: "finicity",
+      currency: "USD",
+      status: "ACTIVE",
+      balance: "1000.00"
+    )
+    bank_account.account_sources.create!(sourceable: lunchflow_account)
+    canonical_lf_transaction = Lunchflow::Transaction.create!(
+      account: lunchflow_account,
+      remote_id: "lf_canonical",
+      amount: "-42.00",
+      currency: "USD",
+      description: "Original LF description",
+      merchant: "Original LF Merchant",
+      pending: false,
+      date: 2.days.ago.to_date
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lunchflow_account.id)
+    canonical_ledger_transaction = canonical_lf_transaction.ledger_transactions.first!
+
+    # SimpleFIN later imports the same real-world transaction with a different
+    # description. Reconcile should attach SimpleFIN as a secondary source and
+    # leave the canonical fields owned by Lunch Flow untouched.
+    secondary_sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "sf_secondary",
+      amount: "-42.00",
+      description: "Original LF Merchant — extra detail",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+
+    assert_no_difference "Transaction.count" do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    canonical_ledger_transaction.reload
+    sources = canonical_ledger_transaction.transaction_sources.map(&:sourceable)
+    assert_includes sources, canonical_lf_transaction
+    assert_includes sources, secondary_sf_transaction
+    assert_equal "Original LF Merchant", canonical_ledger_transaction.description, "first writer's description must remain canonical"
   end
 
   private
@@ -832,9 +881,9 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
         user: @user,
         currency: @currency,
         name: "Linked #{name}",
-        kind: :asset,
-        sourceable: sf_account
+        kind: :asset
       )
+      AccountSource.create!(account: bank_account, sourceable: sf_account)
 
       [ sf_account, bank_account ]
     end

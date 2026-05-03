@@ -84,14 +84,15 @@ class ImportRule::RetroactiveApply
 
     def candidate_transactions
       @user.transactions
-        .where.not(sourceable_type: nil)
+        .joins(:transaction_sources)
         .where(merged_into_id: nil, excluded_at: nil, split: false, opening_balance: false, parent_transaction_id: nil)
         .includes(:src_account, :dest_account)
+        .distinct
     end
 
     def identify_counterpart(transaction)
-      src_linked = transaction.src_account.sourceable_id.present?
-      dest_linked = transaction.dest_account.sourceable_id.present?
+      src_linked = transaction.src_account.account_sources.exists?
+      dest_linked = transaction.dest_account.account_sources.exists?
 
       if src_linked && !dest_linked
         [ :expense, transaction.dest_account ]

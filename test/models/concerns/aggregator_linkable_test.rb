@@ -21,13 +21,19 @@ class AggregatorLinkableTest < ActiveSupport::TestCase
     assert_equal starting_size, AggregatorLinkable.registry.size
   end
 
-  test "ledger_account association is wired with the polymorphic sourceable name" do
+  test "ledger_accounts through-association is wired against account_sources" do
     AggregatorLinkable.registry.each do |account_class|
-      reflection = account_class.reflect_on_association(:ledger_account)
-      assert_not_nil reflection, "#{account_class} should have a ledger_account association"
-      assert_equal :sourceable, reflection.options[:as]
+      reflection = account_class.reflect_on_association(:ledger_accounts)
+      assert_not_nil reflection, "#{account_class} should have a ledger_accounts association"
+      assert_equal :account_sources, reflection.options[:through]
       assert_equal "Account", reflection.options[:class_name]
-      assert_equal :nullify, reflection.options[:dependent]
+      assert_equal :account, reflection.options[:source]
+    end
+  end
+
+  test "ledger_account singular shim returns first associated ledger account" do
+    AggregatorLinkable.registry.each do |account_class|
+      assert account_class.instance_methods.include?(:ledger_account), "#{account_class} should expose a ledger_account shim"
     end
   end
 

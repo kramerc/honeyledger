@@ -132,9 +132,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to account_url(Account.last)
-    assert_equal simplefin_account, Account.last.sourceable
-    assert_includes simplefin_account.ledger_accounts, Account.last,
-      "the join table should pick up the imported account so PR 2's readers see it"
+    assert_includes Account.last.account_sources.map(&:sourceable), simplefin_account
   end
 
   test "should redirect on create with a SimpleFIN account but no connection" do

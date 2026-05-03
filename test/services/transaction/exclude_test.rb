@@ -7,7 +7,7 @@ class Transaction::ExcludeTest < ActiveSupport::TestCase
     @bank = accounts(:linked_asset)
     @expense = Account.create!(user: @user, name: "Exclude Expense", kind: :expense, currency: @currency)
 
-    @transaction = Transaction.create!(
+    @transaction = create_sourced_transaction(
       user: @user,
       src_account: @bank,
       dest_account: @expense,
