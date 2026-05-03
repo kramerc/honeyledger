@@ -18,6 +18,7 @@ class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to integrations_url
     unlinked_account.reload
     assert_equal sf_account, unlinked_account.sourceable
+    assert_includes sf_account.ledger_accounts, unlinked_account
   end
 
   test "should enqueue ImportTransactionsJob when account is linked" do
@@ -37,6 +38,7 @@ class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to integrations_url
     @simplefin_account.reload
     assert_nil @simplefin_account.ledger_account
+    assert_empty @simplefin_account.ledger_accounts
   end
 
   test "should reject link when ledger_account_id is blank" do

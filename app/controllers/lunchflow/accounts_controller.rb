@@ -27,6 +27,7 @@ class Lunchflow::AccountsController < ApplicationController
     end
 
     if ledger_account.update(sourceable: @lunchflow_account)
+      AccountSource::Attach.call(account: ledger_account, sourceable: @lunchflow_account)
       redirect_to integrations_path, notice: "Lunch Flow account linked successfully."
     else
       redirect_to integrations_path, alert: "Failed to link Lunch Flow account: #{ledger_account.errors.full_messages.to_sentence}"
@@ -36,6 +37,7 @@ class Lunchflow::AccountsController < ApplicationController
   def unlink
     ledger_account = @lunchflow_account.ledger_account
     if ledger_account&.update(sourceable: nil)
+      @lunchflow_account.account_sources.where(account_id: ledger_account.id).destroy_all
       redirect_to integrations_path, notice: "Lunch Flow account unlinked successfully."
     else
       redirect_to integrations_path, alert: "Failed to unlink Lunch Flow account."

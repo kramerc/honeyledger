@@ -10,9 +10,20 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_27_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_03_160739) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "account_sources", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "sourceable_id", null: false
+    t.string "sourceable_type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "sourceable_type", "sourceable_id"], name: "index_account_sources_on_account_and_sourceable", unique: true
+    t.index ["account_id"], name: "index_account_sources_on_account_id"
+    t.index ["sourceable_type", "sourceable_id"], name: "index_account_sources_on_sourceable", unique: true
+  end
 
   create_table "accounts", force: :cascade do |t|
     t.bigint "balance_minor"
@@ -157,6 +168,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_27_000002) do
     t.index ["synced_at"], name: "index_simplefin_transactions_on_synced_at"
   end
 
+  create_table "transaction_sources", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "sourceable_id", null: false
+    t.string "sourceable_type", null: false
+    t.bigint "transaction_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["sourceable_type", "sourceable_id"], name: "index_transaction_sources_on_sourceable", unique: true
+    t.index ["transaction_id", "sourceable_type", "sourceable_id"], name: "index_transaction_sources_on_transaction_and_sourceable", unique: true
+    t.index ["transaction_id"], name: "index_transaction_sources_on_transaction_id"
+  end
+
   create_table "transactions", force: :cascade do |t|
     t.integer "amount_minor", default: 0, null: false
     t.bigint "category_id"
@@ -212,6 +234,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_27_000002) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "account_sources", "accounts"
   add_foreign_key "accounts", "currencies"
   add_foreign_key "accounts", "users"
   add_foreign_key "categories", "users"
@@ -223,6 +246,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_27_000002) do
   add_foreign_key "simplefin_accounts", "simplefin_connections", column: "connection_id"
   add_foreign_key "simplefin_connections", "users"
   add_foreign_key "simplefin_transactions", "simplefin_accounts", column: "account_id"
+  add_foreign_key "transaction_sources", "transactions"
   add_foreign_key "transactions", "accounts", column: "dest_account_id"
   add_foreign_key "transactions", "accounts", column: "src_account_id"
   add_foreign_key "transactions", "categories"

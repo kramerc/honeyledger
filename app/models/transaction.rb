@@ -5,6 +5,7 @@ class Transaction < ApplicationRecord
 
   belongs_to :user
   belongs_to :sourceable, polymorphic: true, optional: true
+  has_many :transaction_sources, dependent: :destroy
 
   belongs_to :category, optional: true
 

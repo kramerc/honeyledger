@@ -18,6 +18,7 @@ class Account < ApplicationRecord
 
   has_many :import_rules, dependent: :destroy
   belongs_to :sourceable, polymorphic: true, optional: true
+  has_many :account_sources, dependent: :destroy
   after_save_commit :enqueue_source_import, if: :should_enqueue_source_import?
 
   after_create_commit  :broadcast_sidebar_insert, if: :real?

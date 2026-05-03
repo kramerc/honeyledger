@@ -1,0 +1,11 @@
+# Mirrors the `sourceable:` entries on accounts.yml for fixture-loaded data.
+# Production data is kept in sync by the dual-write paths in the link
+# controllers and AccountsController#create.
+
+linked_asset_simplefin:
+  account: linked_asset
+  sourceable: linked_one (Simplefin::Account)
+
+lunchflow_linked_asset_lunchflow:
+  account: lunchflow_linked_asset
+  sourceable: linked_one (Lunchflow::Account)

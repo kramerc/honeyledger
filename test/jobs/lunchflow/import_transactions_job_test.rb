@@ -36,6 +36,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal "expense", transaction.dest_account.kind
     assert_equal 5000, transaction.amount_minor
     assert_not_nil transaction.cleared_at
+    assert_includes lf_transaction.ledger_transactions, transaction
   end
 
   test "imports revenue transaction (positive amount)" do

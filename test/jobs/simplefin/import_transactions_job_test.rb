@@ -41,6 +41,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_not_nil transaction.transacted_at
     assert_not_nil transaction.cleared_at
     assert_not_nil transaction.synced_at
+    assert_includes sf_transaction.ledger_transactions, transaction
   end
 
   test "imports revenue transaction (positive amount)" do
