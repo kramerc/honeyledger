@@ -2,12 +2,29 @@ module AggregatorLinkable
   extend ActiveSupport::Concern
 
   included do
-    has_one :ledger_account, class_name: "Account", as: :sourceable, dependent: :nullify
     has_many :account_sources, as: :sourceable, dependent: :destroy
     has_many :ledger_accounts, class_name: "Account", through: :account_sources, source: :account
     belongs_to :connection
 
     AggregatorLinkable.register(self)
+  end
+
+  # Singular accessor for callers that pre-date the M:M move. Aggregator accounts
+  # are still single-linked at the controller level, so this is unambiguous in
+  # practice; multi-link UI lands in a follow-up.
+  def ledger_account
+    ledger_accounts.first
+  end
+
+  # Use `any?` so callers that preloaded `:ledger_accounts` (e.g. the
+  # integrations page) hit the loaded collection instead of issuing a
+  # SELECT 1 per aggregator account.
+  def linked?
+    ledger_accounts.any?
+  end
+
+  def unlinked?
+    !linked?
   end
 
   class_methods do

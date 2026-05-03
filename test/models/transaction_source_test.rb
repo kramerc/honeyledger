@@ -6,7 +6,7 @@ class TransactionSourceTest < ActiveSupport::TestCase
     @currency = currencies(:usd)
     @ledger_account = accounts(:linked_asset)
     @counterpart = accounts(:expense_account)
-    @simplefin_account = @ledger_account.sourceable
+    @simplefin_account = @ledger_account.account_sources.first.sourceable
     @simplefin_transaction = Simplefin::Transaction.create!(
       account: @simplefin_account,
       remote_id: "ts_test_1",

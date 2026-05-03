@@ -6,14 +6,6 @@ class Simplefin::Account < ApplicationRecord
 
   has_many :transactions, dependent: :destroy
 
-  def linked?
-    ledger_account.present?
-  end
-
-  def unlinked?
-    ledger_account.blank?
-  end
-
   def current?(threshold = connection&.refreshed_at)
     return false if last_seen_at.nil?
     return false if threshold.nil?

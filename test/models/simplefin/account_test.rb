@@ -81,15 +81,15 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
     assert_equal oldest_date.beginning_of_day, result[:transacted_at]
   end
 
-  test "after_update callback on Account enqueues import when sourceable changes" do
+  test "creating an account_source enqueues an import" do
     account = accounts(:one)
 
     assert_enqueued_with(job: Simplefin::ImportTransactionsJob, args: [ { simplefin_account_id: @unlinked_simplefin_account.id } ]) do
-      account.update!(sourceable: @unlinked_simplefin_account)
+      AccountSource.create!(account: account, sourceable: @unlinked_simplefin_account)
     end
   end
 
-  test "after_update callback on Account does not enqueue import when sourceable does not change" do
+  test "updating an account does not enqueue import when no source change" do
     linked_account = accounts(:linked_asset)
 
     assert_no_enqueued_jobs(only: Simplefin::ImportTransactionsJob) do

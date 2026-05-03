@@ -36,10 +36,22 @@ class AccountsController < ApplicationController
   # POST /accounts or /accounts.json
   def create
     @account = current_user.accounts.build(account_params)
-    @account.sourceable = @simplefin_account || @lunchflow_account
+    sourceable = @simplefin_account || @lunchflow_account
+
+    saved =
+      begin
+        Account.transaction do
+          @account.save.tap do |ok|
+            AccountSource::Attach.call(account: @account, sourceable: sourceable) if ok && sourceable
+          end
+        end
+      rescue AccountSource::Attach::MismatchedAccount
+        @account.errors.add(:base, "is already linked to another integration")
+        false
+      end
 
     respond_to do |format|
-      if @account.save
+      if saved
         format.html { redirect_to @account, notice: "Account was successfully created." }
         format.json { render :show, status: :created, location: @account }
       else

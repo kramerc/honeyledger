@@ -157,7 +157,7 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     old_expense = Account.create!(user: @user, currency: currencies(:usd), name: "Old Category", kind: :expense)
     new_expense = Account.create!(user: @user, currency: currencies(:usd), name: "Apply Target", kind: :expense)
 
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user,
       src_account: bank,
       dest_account: old_expense,

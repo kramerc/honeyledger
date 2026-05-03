@@ -1,6 +1,6 @@
 require "test_helper"
 
-class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
+class Transaction::ReconcileTest < ActiveSupport::TestCase
   setup do
     @user = users(:one)
     @currency = currencies(:usd)
@@ -15,7 +15,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       balance: "1000.00"
     )
 
-    @live_simplefin_account = @ledger_account.sourceable
+    @live_simplefin_account = @ledger_account.account_sources.first.sourceable
   end
 
   test "returns the single matching orphan whose sourceable is on an unlinked aggregator account" do
@@ -27,13 +27,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    orphan = Transaction.create!(
+    orphan = create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 5000, currency: @currency, description: "Coffee Shop",
       transacted_at: 2.days.ago, sourceable: orphan_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -51,7 +51,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -74,7 +74,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 1.day.ago.beginning_of_day + 5.hours
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -86,7 +86,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
   end
 
   test "returns nil when no candidates match" do
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -106,13 +106,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 5000, currency: @currency, description: "Coffee Shop",
       transacted_at: 2.days.ago, sourceable: live_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -131,7 +131,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -152,7 +152,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago, opening_balance: true
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -180,7 +180,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     merger = Transaction::Merge.new(expense_orphan, revenue_orphan, user: @user)
     assert merger.call, merger.errors.inspect
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -205,7 +205,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago, parent_transaction_id: parent.id
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -224,7 +224,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       fx_amount_minor: 4500, fx_currency: currencies(:eur)
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -243,7 +243,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: target_day
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -261,7 +261,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: Time.zone.parse("2026-04-23 23:30:00")
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -299,13 +299,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     other_user_expense = Account.create!(
       user: other_user, currency: other_user_currency, name: "Other User Coffee", kind: :expense
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: other_user, src_account: other_user_account, dest_account: other_user_expense,
       amount_minor: 5000, currency: other_user_currency, description: "Coffee Shop",
       transacted_at: 2.days.ago, sourceable: other_user_stale_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -338,13 +338,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       pending: false,
       date: 2.days.ago.to_date
     )
-    orphan = Transaction.create!(
+    orphan = create_sourced_transaction(
       user: @user, src_account: lunchflow_account, dest_account: @counterpart,
       amount_minor: 5000, currency: @currency, description: "Coffee Shop",
       transacted_at: 2.days.ago, sourceable: stale_lunchflow_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: lunchflow_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -367,13 +367,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    orphan = Transaction.create!(
+    orphan = create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 50000, currency: @currency, description: full_description,
       transacted_at: 2.days.ago, sourceable: stale_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 50000,
       currency_id: @currency.id,
@@ -409,13 +409,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       pending: false,
       date: 2.days.ago.to_date
     )
-    orphan = Transaction.create!(
+    orphan = create_sourced_transaction(
       user: @user, src_account: lunchflow_account, dest_account: @counterpart,
       amount_minor: 2000, currency: @currency, description: truncated_description,
       transacted_at: 2.days.ago, sourceable: stale_lunchflow_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: lunchflow_account,
       amount_minor: 2000,
       currency_id: @currency.id,
@@ -447,18 +447,18 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 1899, currency: @currency, description: preauth_description,
       transacted_at: 2.days.ago, sourceable: preauth_simplefin_transaction
     )
-    posted_orphan = Transaction.create!(
+    posted_orphan = create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 1899, currency: @currency, description: posted_description,
       transacted_at: 2.days.ago, sourceable: posted_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 1899,
       currency_id: @currency.id,
@@ -476,7 +476,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -494,7 +494,7 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -520,18 +520,18 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       amount: "-500.00", description: full_b,
       transacted_at: 2.days.ago, posted: 2.days.ago
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 50000, currency: @currency, description: full_a,
       transacted_at: 2.days.ago, sourceable: stale_a
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 50000, currency: @currency, description: full_b,
       transacted_at: 2.days.ago, sourceable: stale_b
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 50000,
       currency_id: @currency.id,
@@ -554,13 +554,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    orphan = Transaction.create!(
+    orphan = create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 50000, currency: @currency, description: short_description,
       transacted_at: 2.days.ago, sourceable: stale_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 50000,
       currency_id: @currency.id,
@@ -601,13 +601,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     other_user_expense = Account.create!(
       user: other_user, currency: other_user_currency, name: "Other User Coffee", kind: :expense
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: other_user, src_account: other_user_account, dest_account: other_user_expense,
       amount_minor: 5000, currency: other_user_currency, description: "Coffee Shop",
       transacted_at: 2.days.ago, sourceable: other_user_stale_lf_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 5000,
       currency_id: @currency.id,
@@ -632,13 +632,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 1234, currency: @currency, description: "",
       transacted_at: 2.days.ago, sourceable: blank_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 1234,
       currency_id: @currency.id,
@@ -666,13 +666,13 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago,
       posted: 2.days.ago
     )
-    Transaction.create!(
+    create_sourced_transaction(
       user: @user, src_account: @ledger_account, dest_account: @counterpart,
       amount_minor: 1234, currency: @currency, description: orphan_description,
       transacted_at: 2.days.ago, sourceable: stale_simplefin_transaction
     )
 
-    candidate = Transaction::AdoptOrphan.call(
+    candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
       amount_minor: 1234,
       currency_id: @currency.id,
@@ -681,5 +681,42 @@ class Transaction::AdoptOrphanTest < ActiveSupport::TestCase
     )
 
     assert_nil candidate
+  end
+
+  test "skips transactions that have any live source" do
+    # Live source: matches via direct sft → ledger lookup, not Reconcile.
+    live_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @live_simplefin_account,
+      remote_id: "live_with_extra",
+      amount: "-50.00",
+      description: "Coffee Shop",
+      transacted_at: 2.days.ago,
+      posted: 2.days.ago
+    )
+    # A ledger transaction with two sources: one stale, one live.
+    stale_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account,
+      remote_id: "stale_with_live_sibling",
+      amount: "-50.00",
+      description: "Coffee Shop",
+      transacted_at: 2.days.ago,
+      posted: 2.days.ago
+    )
+    ledger_transaction = create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 5000, currency: @currency, description: "Coffee Shop",
+      transacted_at: 2.days.ago, sourceable: stale_simplefin_transaction
+    )
+    TransactionSource.create!(ledger_transaction: ledger_transaction, sourceable: live_simplefin_transaction)
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "Coffee Shop"
+    )
+
+    assert_nil candidate, "ledger transactions with any live source must not be reconciliation candidates"
   end
 end
