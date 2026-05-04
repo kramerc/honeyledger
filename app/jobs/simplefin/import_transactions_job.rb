@@ -33,7 +33,6 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
 
           if orphan
             orphan.update!(sourceable: sft, synced_at: Time.current)
-            TransactionSource::Attach.call(transaction: orphan, sourceable: sft)
             next
           end
         end
@@ -68,7 +67,6 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         transaction.cleared_at = sft.posted
         transaction.synced_at = Time.current
         transaction.save!
-        TransactionSource::Attach.call(transaction: transaction, sourceable: sft)
 
         if rule&.exclude?
           Transaction::Exclude.new(transaction, user: user).call

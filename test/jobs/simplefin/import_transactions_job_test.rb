@@ -593,6 +593,8 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
 
     original_ledger_transaction.reload
     assert_equal reissued_simplefin_transaction, original_ledger_transaction.sourceable
+    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), reissued_simplefin_transaction,
+      "the join table should pick up the new source so PR 2's append-only readers see it"
     assert_equal coffee_account, original_ledger_transaction.dest_account
     assert_nil Transaction.where(sourceable: reissued_simplefin_transaction).where.not(id: original_ledger_transaction.id).first
   end

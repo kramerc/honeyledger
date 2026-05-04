@@ -36,12 +36,10 @@ class AccountsController < ApplicationController
   # POST /accounts or /accounts.json
   def create
     @account = current_user.accounts.build(account_params)
-    sourceable = @simplefin_account || @lunchflow_account
-    @account.sourceable = sourceable
+    @account.sourceable = @simplefin_account || @lunchflow_account
 
     respond_to do |format|
       if @account.save
-        AccountSource::Attach.call(account: @account, sourceable: sourceable) if sourceable
         format.html { redirect_to @account, notice: "Account was successfully created." }
         format.json { render :show, status: :created, location: @account }
       else

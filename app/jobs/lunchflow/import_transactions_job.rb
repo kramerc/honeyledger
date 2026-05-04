@@ -34,7 +34,6 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
 
           if orphan
             orphan.update!(sourceable: lft, synced_at: Time.current)
-            TransactionSource::Attach.call(transaction: orphan, sourceable: lft)
             next
           end
         end
@@ -69,7 +68,6 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         transaction.cleared_at = lft.pending ? nil : lft.date
         transaction.synced_at = Time.current
         transaction.save!
-        TransactionSource::Attach.call(transaction: transaction, sourceable: lft)
 
         if rule&.exclude?
           Transaction::Exclude.new(transaction, user: user).call

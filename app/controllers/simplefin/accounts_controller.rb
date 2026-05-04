@@ -28,7 +28,6 @@ class Simplefin::AccountsController < ApplicationController
     end
 
     if ledger_account.update(sourceable: @simplefin_account)
-      AccountSource::Attach.call(account: ledger_account, sourceable: @simplefin_account)
       redirect_to integrations_path, notice: "SimpleFIN account linked successfully."
     else
       redirect_to integrations_path, alert: "Failed to link SimpleFIN account: #{ledger_account.errors.full_messages.to_sentence}"
@@ -38,7 +37,6 @@ class Simplefin::AccountsController < ApplicationController
   def unlink
     ledger_account = @simplefin_account.ledger_account
     if ledger_account&.update(sourceable: nil)
-      @simplefin_account.account_sources.where(account_id: ledger_account.id).destroy_all
       redirect_to integrations_path, notice: "SimpleFIN account unlinked successfully."
     else
       redirect_to integrations_path, alert: "Failed to unlink SimpleFIN account."
