@@ -18,6 +18,8 @@ class Account < ApplicationRecord
 
   has_many :import_rules, dependent: :destroy
   belongs_to :sourceable, polymorphic: true, optional: true
+  has_many :account_sources, dependent: :destroy
+  after_save :sync_account_source_join_row, if: :saved_sourceable_change?
   after_save_commit :enqueue_source_import, if: :should_enqueue_source_import?
 
   after_create_commit  :broadcast_sidebar_insert, if: :real?
@@ -174,9 +176,29 @@ class Account < ApplicationRecord
       end
     end
 
-    def should_enqueue_source_import?
-      return false unless sourceable_id?
+    def saved_sourceable_change?
       previously_new_record? || saved_change_to_sourceable_id? || saved_change_to_sourceable_type?
+    end
+
+    def should_enqueue_source_import?
+      sourceable_id? && saved_sourceable_change?
+    end
+
+    # Mirrors any sourceable= write through to the account_sources join table
+    # so the legacy belongs_to and the new M:M stay in lockstep no matter who
+    # invokes the assignment.
+    def sync_account_source_join_row
+      previous_type = saved_change_to_sourceable_type? ? sourceable_type_before_last_save : sourceable_type
+      previous_id = saved_change_to_sourceable_id? ? sourceable_id_before_last_save : sourceable_id
+
+      if previous_type.present? && previous_id.present? &&
+         (previous_type != sourceable_type || previous_id != sourceable_id)
+        account_sources.where(sourceable_type: previous_type, sourceable_id: previous_id).destroy_all
+      end
+
+      if sourceable.present?
+        AccountSource::Attach.call(account: self, sourceable: sourceable)
+      end
     end
 
     def enqueue_source_import

@@ -4,10 +4,18 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
   setup do
     @user = users(:one)
     @currency = currencies(:usd)
-    @bank_account = accounts(:linked_asset) # has sourceable (Simplefin::Account)
+    @bank_account = accounts(:linked_asset) # linked via fixture account_sources
     @original_expense = Account.create!(user: @user, name: "Old Groceries", kind: :expense, currency: @currency)
     @new_expense = Account.create!(user: @user, name: "Groceries", kind: :expense, currency: @currency)
 
+    @setup_simplefin_transaction = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one),
+      remote_id: "retro_setup_1",
+      amount: "-50.00",
+      description: "GROCERY STORE #123",
+      transacted_at: 1.day.ago,
+      posted: 1.day.ago
+    )
     @imported_transaction = Transaction.create!(
       user: @user,
       src_account: @bank_account,
@@ -16,7 +24,7 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
       currency: @currency,
       description: "GROCERY STORE #123",
       transacted_at: 1.day.ago,
-      sourceable: simplefin_transactions(:transaction_one)
+      sourceable: @setup_simplefin_transaction
     )
 
     @rule = ImportRule.create!(

@@ -18,6 +18,7 @@ class Lunchflow::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to integrations_url
     unlinked_account.reload
     assert_equal @lunchflow_account, unlinked_account.sourceable
+    assert_includes @lunchflow_account.ledger_accounts, unlinked_account
   end
 
   test "should enqueue ImportTransactionsJob when account is linked" do
@@ -37,6 +38,7 @@ class Lunchflow::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to integrations_url
     linked_lf_account.reload
     assert_nil linked_lf_account.ledger_account
+    assert_empty linked_lf_account.ledger_accounts
   end
 
   test "should reject link when ledger_account_id is blank" do

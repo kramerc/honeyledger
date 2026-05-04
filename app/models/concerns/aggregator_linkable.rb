@@ -3,6 +3,8 @@ module AggregatorLinkable
 
   included do
     has_one :ledger_account, class_name: "Account", as: :sourceable, dependent: :nullify
+    has_many :account_sources, as: :sourceable, dependent: :destroy
+    has_many :ledger_accounts, class_name: "Account", through: :account_sources, source: :account
     belongs_to :connection
 
     AggregatorLinkable.register(self)

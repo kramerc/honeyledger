@@ -1,0 +1,12 @@
+# Mirrors the `sourceable:` entries on accounts.yml for fixture-loaded data.
+# Production data is kept in sync by the after_save callback on Account
+# (sync_account_source_join_row) — fixtures load straight to SQL and bypass
+# that callback, hence the explicit rows here.
+
+linked_asset_simplefin:
+  account: linked_asset
+  sourceable: linked_one (Simplefin::Account)
+
+lunchflow_linked_asset_lunchflow:
+  account: lunchflow_linked_asset
+  sourceable: linked_one (Lunchflow::Account)

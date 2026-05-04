@@ -36,6 +36,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal "expense", transaction.dest_account.kind
     assert_equal 5000, transaction.amount_minor
     assert_not_nil transaction.cleared_at
+    assert_includes lf_transaction.ledger_transactions, transaction
   end
 
   test "imports revenue transaction (positive amount)" do
@@ -383,6 +384,8 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
 
     original_ledger_transaction.reload
     assert_equal reissued_lunchflow_transaction, original_ledger_transaction.sourceable
+    assert_includes original_ledger_transaction.transaction_sources.map(&:sourceable), reissued_lunchflow_transaction,
+      "the join table should pick up the new source so PR 2's append-only readers see it"
   end
 
   test "adopts a stale Simplefin orphan with a longer description when importing a truncated Lunchflow merchant" do

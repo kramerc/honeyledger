@@ -5,6 +5,8 @@ class Transaction < ApplicationRecord
 
   belongs_to :user
   belongs_to :sourceable, polymorphic: true, optional: true
+  has_many :transaction_sources, dependent: :destroy
+  after_save :sync_transaction_source_join_row, if: :saved_sourceable_change?
 
   belongs_to :category, optional: true
 
@@ -83,6 +85,27 @@ class Transaction < ApplicationRecord
   end
 
   private
+
+    def saved_sourceable_change?
+      previously_new_record? || saved_change_to_sourceable_id? || saved_change_to_sourceable_type?
+    end
+
+    # Mirrors any sourceable= write through to the transaction_sources join
+    # table so the legacy belongs_to and the new M:M stay in lockstep no matter
+    # who invokes the assignment.
+    def sync_transaction_source_join_row
+      previous_type = saved_change_to_sourceable_type? ? sourceable_type_before_last_save : sourceable_type
+      previous_id = saved_change_to_sourceable_id? ? sourceable_id_before_last_save : sourceable_id
+
+      if previous_type.present? && previous_id.present? &&
+         (previous_type != sourceable_type || previous_id != sourceable_id)
+        transaction_sources.where(sourceable_type: previous_type, sourceable_id: previous_id).destroy_all
+      end
+
+      if sourceable.present?
+        TransactionSource::Attach.call(transaction: self, sourceable: sourceable)
+      end
+    end
 
     def assign_currency_from_dest_account
       self.currency = dest_account.currency if dest_account.present? && !dest_account.virtual?
