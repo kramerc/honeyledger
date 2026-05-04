@@ -35,4 +35,18 @@ class TransactionSource::AttachTest < ActiveSupport::TestCase
       TransactionSource::Attach.call(transaction: @ledger_transaction, sourceable: @simplefin_transaction)
     end
   end
+
+  test "raises if the same sourceable is already attached to a different ledger transaction" do
+    TransactionSource::Attach.call(transaction: @ledger_transaction, sourceable: @simplefin_transaction)
+
+    other_ledger = Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 725, currency: @currency, description: "Attach test",
+      transacted_at: 1.day.ago
+    )
+
+    assert_raises(TransactionSource::Attach::MismatchedTransaction) do
+      TransactionSource::Attach.call(transaction: other_ledger, sourceable: @simplefin_transaction)
+    end
+  end
 end

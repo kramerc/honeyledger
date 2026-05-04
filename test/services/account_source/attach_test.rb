@@ -25,4 +25,14 @@ class AccountSource::AttachTest < ActiveSupport::TestCase
       AccountSource::Attach.call(account: @account, sourceable: @sourceable)
     end
   end
+
+  test "raises if the same sourceable is already attached to a different ledger account" do
+    AccountSource::Attach.call(account: @account, sourceable: @sourceable)
+
+    other_account = accounts(:liability_account)
+
+    assert_raises(AccountSource::Attach::MismatchedAccount) do
+      AccountSource::Attach.call(account: other_account, sourceable: @sourceable)
+    end
+  end
 end

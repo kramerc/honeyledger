@@ -735,4 +735,66 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal expected, targets
     refute_includes targets, ActionView::RecordIdentifier.dom_id(other_account, :sidebar_link)
   end
+
+  test "after_save callback removes the transaction_sources row when sourceable is cleared" do
+    sft = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one),
+      remote_id: "callback_clear",
+      amount: "-9.00",
+      description: "callback test",
+      transacted_at: 1.day.ago,
+      posted: 1.day.ago
+    )
+    txn = Transaction.create!(
+      user: users(:one),
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:expense_account),
+      amount_minor: 900,
+      currency: currencies(:usd),
+      description: "callback test",
+      transacted_at: 1.day.ago,
+      sourceable: sft
+    )
+    assert_includes sft.ledger_transactions, txn
+
+    txn.update!(sourceable: nil)
+
+    assert_empty txn.transaction_sources.reload
+    assert_empty sft.ledger_transactions.reload
+  end
+
+  test "after_save callback swaps the transaction_sources row when sourceable is reassigned" do
+    sft_a = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one),
+      remote_id: "callback_swap_a",
+      amount: "-9.00",
+      description: "callback test",
+      transacted_at: 1.day.ago,
+      posted: 1.day.ago
+    )
+    sft_b = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one),
+      remote_id: "callback_swap_b",
+      amount: "-9.00",
+      description: "callback test",
+      transacted_at: 1.day.ago,
+      posted: 1.day.ago
+    )
+    txn = Transaction.create!(
+      user: users(:one),
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:expense_account),
+      amount_minor: 900,
+      currency: currencies(:usd),
+      description: "callback test",
+      transacted_at: 1.day.ago,
+      sourceable: sft_a
+    )
+
+    txn.update!(sourceable: sft_b)
+
+    sources = txn.transaction_sources.reload.map(&:sourceable)
+    assert_equal [ sft_b ], sources
+    assert_empty sft_a.ledger_transactions.reload
+  end
 end
