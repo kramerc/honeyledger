@@ -29,6 +29,44 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "transaction with multiple sources shows a badge per aggregator" do
+    bank = accounts(:linked_asset)
+    expense = accounts(:expense_account)
+    AccountSource.create!(account: bank, sourceable: lunchflow_accounts(:unlinked_one))
+
+    txn = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      currency: currencies(:usd), description: "Multi-sourced txn",
+      amount_minor: 1234, transacted_at: 1.day.ago
+    )
+    sf_txn = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one),
+      remote_id: "ui_multi_sf",
+      amount: "-12.34",
+      description: "Multi-sourced txn",
+      transacted_at: 1.day.ago,
+      posted: 1.day.ago
+    )
+    lf_txn = Lunchflow::Transaction.create!(
+      account: lunchflow_accounts(:unlinked_one),
+      remote_id: "ui_multi_lf",
+      amount: "-12.34",
+      currency: "USD",
+      description: "Multi-sourced txn",
+      pending: false,
+      date: 1.day.ago.to_date
+    )
+    TransactionSource.create!(ledger_transaction: txn, sourceable: sf_txn)
+    TransactionSource.create!(ledger_transaction: txn, sourceable: lf_txn)
+
+    visit transactions_path
+
+    within "##{ActionView::RecordIdentifier.dom_id(txn)}" do
+      assert_selector ".source-badge", text: "SimpleFIN"
+      assert_selector ".source-badge", text: "Lunch Flow"
+    end
+  end
+
   test "sidebar active state survives a live update" do
     account = accounts(:asset_account)
     other = accounts(:expense_account)

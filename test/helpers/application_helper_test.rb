@@ -79,4 +79,20 @@ class ApplicationHelperTest < ActionView::TestCase
     result = nav_link_to("Logout", "/logout", data: { turbo_method: :delete })
     assert_match(/data-turbo-method="delete"/, result)
   end
+
+  # source_badge_label
+
+  test "source_badge_label labels SimpleFIN sources" do
+    assert_equal "SimpleFIN", source_badge_label(simplefin_accounts(:linked_one))
+  end
+
+  test "source_badge_label labels Lunch Flow sources" do
+    assert_equal "Lunch Flow", source_badge_label(lunchflow_accounts(:linked_one))
+  end
+
+  test "source_badge_label falls back to the class name for unknown sourceable types" do
+    # Currency isn't a registered aggregator type but stands in for any future
+    # source class (CSV/OFX, etc.) so the fallback can't silently render empty.
+    assert_equal "Currency", source_badge_label(currencies(:usd))
+  end
 end

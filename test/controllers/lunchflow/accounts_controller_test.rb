@@ -47,13 +47,14 @@ class Lunchflow::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Please select an account to link.", flash[:alert]
   end
 
-  test "should reject link when ledger account is already linked to another integration" do
-    already_linked_account = accounts(:linked_asset)
+  test "allows linking a ledger account that already has a different integration" do
+    multi_sourced = accounts(:linked_asset)
 
-    post link_lunchflow_account_url(@lunchflow_account), params: { lunchflow_account: { ledger_account_id: already_linked_account.id } }
-
+    assert_difference -> { multi_sourced.account_sources.count }, 1 do
+      post link_lunchflow_account_url(@lunchflow_account), params: { lunchflow_account: { ledger_account_id: multi_sourced.id } }
+    end
     assert_redirected_to integrations_url
-    assert_equal "Account is already linked to another integration.", flash[:alert]
+    assert_includes @lunchflow_account.ledger_accounts, multi_sourced
   end
 
   test "should reject link when lunchflow account is already linked to a different ledger account" do

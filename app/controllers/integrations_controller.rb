@@ -6,7 +6,7 @@ class IntegrationsController < ApplicationController
     @lunchflow_connection = current_user.lunchflow_connection
     @simplefin_accounts = visible_aggregator_accounts(@simplefin_connection)
     @lunchflow_accounts = visible_aggregator_accounts(@lunchflow_connection)
-    @linkable_accounts = current_user.accounts.linkable.unlinked.order(:name)
+    @linkable_accounts = current_user.accounts.linkable.order(:name)
   end
 
   private

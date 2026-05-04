@@ -1,4 +1,16 @@
 <!-- Show -->
+<%# Resolve the transaction_sources collection once with sourceable preloaded.
+    Reuse the proxy only if BOTH transaction_sources and each sourceable are
+    already loaded (TransactionsController#index covers this via
+    `includes(transaction_sources: :sourceable)`). Otherwise materialize an
+    array via `.includes(:sourceable)` so neither the .any? check nor the
+    badge helper triggers an N+1 — including the case where a caller
+    preloaded transaction_sources alone without :sourceable. %>
+<% sources = if transaction.transaction_sources.loaded? && transaction.transaction_sources.all? { |s| s.association(:sourceable).loaded? }
+              transaction.transaction_sources
+            else
+              transaction.transaction_sources.includes(:sourceable).to_a
+            end %>
 <%= turbo_frame_tag transaction do %>
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
        data-merge-amount-minor="<%= transaction.amount_minor %>"
@@ -32,7 +44,12 @@
           <a href="#" class="merged-badge" data-action="transactions--row#toggleMergedDetails">Merged</a>
         <% end %>
       </div>
-      <div data-label="Description"><%= transaction.description %></div>
+      <div data-label="Description">
+        <%= transaction.description %>
+        <% if sources.any? %>
+          <%= transaction_source_badges(sources) %>
+        <% end %>
+      </div>
       <div data-label="From"><%= transaction.src_account&.name %></div>
       <div data-label="To"><%= transaction.dest_account&.name %></div>
       <div data-label="Amount" class="numeric"><%= transaction_amount_with_currency(transaction) %></div>
@@ -48,7 +65,7 @@
         <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
         <% if transaction.excluded? %>
           <%= link_to "Restore", unexclude_transaction_path(transaction), data: { turbo_method: :post } %>
-        <% elsif transaction.transaction_sources.any? && !transaction.opening_balance? && !transaction.merged_sources.any? %>
+        <% elsif sources.any? && !transaction.opening_balance? && !transaction.merged_sources.any? %>
           <%= link_to "Exclude", exclude_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
         <% end %>
         <% if transaction.merged_sources.any? %>

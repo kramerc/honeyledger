@@ -1,5 +1,7 @@
 <%= render @account %>
 
+<%= render partial: "accounts/sources", locals: { account: @account } %>
+
 <div>
   <%= link_to "Edit this account", edit_account_path(@account) %> |
   <%= link_to "Back to accounts", accounts_path %>
