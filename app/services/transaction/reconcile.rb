@@ -1,14 +1,15 @@
-class Transaction::AdoptOrphan
+class Transaction::Reconcile
   def self.call(**kwargs)
     new(**kwargs).call
   end
 
-  def initialize(ledger_account:, amount_minor:, currency_id:, transacted_at:, description:)
+  def initialize(ledger_account:, amount_minor:, currency_id:, transacted_at:, description:, incoming_source: nil)
     @ledger_account = ledger_account
     @amount_minor = amount_minor
     @currency_id = currency_id
     @transacted_at = transacted_at
     @description = description
+    @incoming_source_class = incoming_source&.class
   end
 
   def call
@@ -32,29 +33,71 @@ class Transaction::AdoptOrphan
         .where(orphan_with_description_clause)
     end
 
-    # Manual-entry orphans (sourceable_id IS NULL) require an exact case-insensitive
-    # description match — preserves #117 safety so a user's manual placeholder cannot
-    # be scooped up by an unrelated long aggregator description that happens to share
-    # a short prefix.
+    # Manual-entry orphans (no transaction_sources rows) require an exact
+    # case-insensitive description match — preserves #117 safety so a user's
+    # manual placeholder cannot be scooped up by an unrelated long aggregator
+    # description that happens to share a short prefix.
     #
-    # Stale-aggregator orphans (sourceable points into any aggregator's stale-account
-    # transaction set) use a bidirectional case-insensitive prefix match — covers the
-    # cross-aggregator truncation case (e.g. Lunch Flow's 32-char merchant truncation
-    # of a longer SimpleFIN description).
+    # Aggregator-sourced orphans (some transaction_sources rows) use a
+    # bidirectional case-insensitive prefix match — covers the cross-aggregator
+    # truncation case (e.g. Lunch Flow's 32-char merchant truncation of a
+    # longer SimpleFIN description). Candidates are excluded if they already
+    # have a *live* source of the same aggregator type as the incoming source,
+    # since the incoming sft would represent a separate real-world event.
     def orphan_with_description_clause
       table = Transaction.arel_table
+      ts_table = TransactionSource.arel_table
 
-      manual_entry = table[:sourceable_id].eq(nil)
+      has_any_source = Arel::Nodes::Exists.new(
+        ts_table.project(1).where(ts_table[:transaction_id].eq(table[:id]))
+      )
+
+      manual_entry = Arel::Nodes::Not.new(has_any_source)
         .and(case_insensitive_eq(table[:description], @description))
 
-      aggregator_clauses = AggregatorLinkable.registry.map do |account_class|
-        table[:sourceable_type].eq(account_class.transaction_class.name)
-          .and(table[:sourceable_id].in(stale_transactions_for(account_class).arel))
-      end
-      stale_aggregator = aggregator_clauses.reduce(:or)
-        &.and(prefix_match(table[:description], @description))
+      live_collision = live_collision_subquery(ts_table)
+      aggregator = has_any_source
+        .and(Arel::Nodes::Not.new(live_collision))
+        .and(prefix_match(table[:description], @description))
 
-      stale_aggregator ? manual_entry.or(stale_aggregator) : manual_entry
+      manual_entry.or(aggregator)
+    end
+
+    # The candidate is disqualified if it already carries a *live* source. When the
+    # caller supplies an incoming source, only same-aggregator-type collisions
+    # disqualify (so cross-aggregator append is permitted). With no incoming
+    # source, any live source disqualifies — that's the conservative fallback the
+    # original AdoptOrphan applied.
+    def live_collision_subquery(ts_table)
+      live_pairs_clauses = AggregatorLinkable.registry.filter_map do |account_class|
+        next if @incoming_source_class && account_class != incoming_account_class
+
+        ts_table[:sourceable_type].eq(account_class.transaction_class.name)
+          .and(ts_table[:sourceable_id].in(live_transactions_for(account_class).arel))
+      end
+      return Arel.sql("FALSE") if live_pairs_clauses.empty?
+
+      Arel::Nodes::Exists.new(
+        ts_table.project(1)
+          .where(ts_table[:transaction_id].eq(Transaction.arel_table[:id]))
+          .where(live_pairs_clauses.reduce(:or))
+      )
+    end
+
+    def incoming_account_class
+      @incoming_account_class ||= @incoming_source_class&.reflect_on_association(:account)&.klass
+    end
+
+    def live_transactions_for(account_class)
+      account_class.transaction_class
+        .where(account_id: live_accounts_for(account_class).select(:id))
+        .select(:id)
+    end
+
+    def live_accounts_for(account_class)
+      account_class
+        .joins(:account_sources)
+        .where(connection_id: connections_for(account_class).select(:id))
     end
 
     def case_insensitive_eq(column, value)
@@ -99,18 +142,6 @@ class Transaction::AdoptOrphan
 
     def lower_quoted(value)
       Arel::Nodes::NamedFunction.new("LOWER", [ Arel::Nodes::Quoted.new(value) ])
-    end
-
-    def stale_transactions_for(account_class)
-      account_class.transaction_class
-        .where(account_id: stale_accounts_for(account_class).select(:id))
-        .select(:id)
-    end
-
-    def stale_accounts_for(account_class)
-      account_class
-        .where.missing(:ledger_account)
-        .where(connection_id: connections_for(account_class).select(:id))
     end
 
     def connections_for(account_class)

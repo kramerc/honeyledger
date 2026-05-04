@@ -10,7 +10,7 @@ class TransactionsController < ApplicationController
     @show_excluded = params[:show_excluded] == "1"
     scope = current_user.transactions.unmerged
     scope = scope.unexcluded unless @show_excluded
-    @transactions = scope.includes(:category, :src_account, :dest_account, :currency, :fx_currency, merged_sources: [ :src_account, :dest_account ]).order(transacted_at: :desc, created_at: :desc)
+    @transactions = scope.includes(:category, :src_account, :dest_account, :currency, :fx_currency, transaction_sources: :sourceable, merged_sources: [ :src_account, :dest_account ]).order(transacted_at: :desc, created_at: :desc)
     account_id = params.fetch(:account_id, nil)
     if account_id.present?
       @account = current_user.accounts.find(account_id)

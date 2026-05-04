@@ -132,9 +132,22 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to account_url(Account.last)
-    assert_equal simplefin_account, Account.last.sourceable
-    assert_includes simplefin_account.ledger_accounts, Account.last,
-      "the join table should pick up the imported account so PR 2's readers see it"
+    assert_includes Account.last.account_sources.map(&:sourceable), simplefin_account
+  end
+
+  test "rolls back account creation when AccountSource::Attach hits a concurrent-link race" do
+    simplefin_account = simplefin_accounts(:unlinked_one)
+
+    assert_no_difference("Account.count") do
+      AccountSource::Attach.stub :call, ->(*) { raise AccountSource::Attach::MismatchedAccount, "race" } do
+        post accounts_url, params: {
+          account: { name: "Race Account", kind: "asset", currency_id: @account.currency_id },
+          simplefin_account_id: simplefin_account.id
+        }
+      end
+    end
+
+    assert_response :unprocessable_entity
   end
 
   test "should redirect on create with a SimpleFIN account but no connection" do

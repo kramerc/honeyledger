@@ -2,40 +2,61 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
   queue_as :default
 
   def perform(lunchflow_account_id:)
-    linked_account_ids = Account.where(sourceable_type: "Lunchflow::Account")
-      .where.not(sourceable_id: nil)
-      .pluck(:sourceable_id)
-
-    return if linked_account_ids.empty?
+    return unless AccountSource.exists?(sourceable_type: "Lunchflow::Account", sourceable_id: lunchflow_account_id)
 
     transactions = Lunchflow::Transaction
-      .where(account_id: linked_account_ids)
       .where(account_id: lunchflow_account_id)
       .includes(account: { connection: :user })
-      .left_joins(:ledger_transaction)
+      .left_joins(:ledger_transactions)
       .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
     Transaction.collecting_sidebar_broadcasts do
       transactions.find_each do |lft|
         user = lft.account.connection.user
-        ledger_account = lft.account.ledger_account
+        ledger_account = lft.account.ledger_accounts.first
+        next if ledger_account.nil?
+
         description = lft.merchant.presence || lft.description
 
-        transaction = Transaction.find_or_initialize_by(sourceable: lft)
+        existing_source = TransactionSource.find_by(sourceable: lft)
 
-        if transaction.new_record?
-          orphan = Transaction::AdoptOrphan.call(
-            ledger_account: ledger_account,
-            amount_minor: lft.amount_minor.abs,
-            currency_id: ledger_account.currency_id,
-            transacted_at: lft.date || Time.current,
-            description: description
-          )
+        if existing_source
+          ledger_transaction = existing_source.ledger_transaction
+          canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
 
-          if orphan
-            orphan.update!(sourceable: lft, synced_at: Time.current)
+          # Re-sync only when this source is the first writer of the ledger transaction.
+          # Secondary sources never overwrite canonical fields, but we still bump the
+          # ledger transaction's synced_at so the outer query's
+          # `lft.synced_at > ledger.synced_at` filter stops re-matching this row
+          # until the canonical source's data actually advances again.
+          unless canonical_source.id == existing_source.id
+            ledger_transaction.update!(synced_at: Time.current)
             next
           end
+
+          transaction = ledger_transaction
+        elsif (match = Transaction::Reconcile.call(
+          ledger_account: ledger_account,
+          amount_minor: lft.amount_minor.abs,
+          currency_id: ledger_account.currency_id,
+          transacted_at: lft.date || Time.current,
+          description: description,
+          incoming_source: lft
+        ))
+          # Same concurrent-attach guard as the new-creation branch below — if a
+          # parallel job attaches this source between Reconcile returning and our
+          # insert, the AR transaction rolls back and we move on.
+          begin
+            Transaction.transaction do
+              TransactionSource::Attach.call(transaction: match, sourceable: lft)
+              match.update!(synced_at: Time.current)
+            end
+          rescue TransactionSource::Attach::MismatchedTransaction
+            # Another import handled this source; skip this iteration.
+          end
+          next
+        else
+          transaction = Transaction.new
         end
 
         amount_bd = BigDecimal(lft.amount)
@@ -67,7 +88,17 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         transaction.transacted_at = lft.date || Time.current
         transaction.cleared_at = lft.pending ? nil : lft.date
         transaction.synced_at = Time.current
-        transaction.save!
+        # Wrap save+attach so a concurrent import that creates the source row
+        # first rolls back this iteration cleanly instead of leaving an
+        # orphaned ledger transaction with no source.
+        begin
+          Transaction.transaction do
+            transaction.save!
+            TransactionSource::Attach.call(transaction: transaction, sourceable: lft)
+          end
+        rescue TransactionSource::Attach::MismatchedTransaction
+          next
+        end
 
         if rule&.exclude?
           Transaction::Exclude.new(transaction, user: user).call

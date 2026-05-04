@@ -17,7 +17,6 @@ class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to integrations_url
     unlinked_account.reload
-    assert_equal sf_account, unlinked_account.sourceable
     assert_includes sf_account.ledger_accounts, unlinked_account
   end
 
@@ -76,25 +75,15 @@ class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "SimpleFIN account is already linked to another account.", flash[:alert]
   end
 
-  test "should show error when link update fails" do
+  test "rescues a concurrent-link race and surfaces the already-linked alert" do
+    sf_account = simplefin_accounts(:unlinked_one)
     unlinked_account = accounts(:unlinked_liability)
 
-    Account.stub_any_instance :update, false do
-      post link_simplefin_account_url(simplefin_accounts(:unlinked_one)), params: { simplefin_account: { ledger_account_id: unlinked_account.id } }
-
-      assert_redirected_to integrations_url
-      assert_match(/Failed to link SimpleFIN account/, flash[:alert])
+    AccountSource::Attach.stub :call, ->(*) { raise AccountSource::Attach::MismatchedAccount, "race" } do
+      post link_simplefin_account_url(sf_account), params: { simplefin_account: { ledger_account_id: unlinked_account.id } }
     end
-  end
 
-  test "should show error when unlink fails" do
-    assert_not_nil @simplefin_account.ledger_account
-
-    Account.stub_any_instance :update, false do
-      delete unlink_simplefin_account_url(@simplefin_account)
-
-      assert_redirected_to integrations_url
-      assert_match(/Failed to unlink SimpleFIN account/, flash[:alert])
-    end
+    assert_redirected_to integrations_url
+    assert_equal "SimpleFIN account is already linked to another account.", flash[:alert]
   end
 end

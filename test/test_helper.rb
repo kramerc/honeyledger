@@ -26,6 +26,13 @@ module ActiveSupport
 
     include Turbo::Broadcastable::TestHelper
 
-    # Add more helper methods to be used by all tests here...
+    # Build a ledger Transaction and attach an aggregator transaction as its source
+    # in one step. Pass the aggregator transaction as `sourceable:` and the rest of
+    # the Transaction attributes as keyword args.
+    def create_sourced_transaction(sourceable:, **attrs)
+      Transaction.create!(**attrs).tap do |txn|
+        TransactionSource.create!(ledger_transaction: txn, sourceable: sourceable)
+      end
+    end
   end
 end

@@ -350,7 +350,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     bank = accounts(:linked_asset)
     expense = Account.create!(user: @user, name: "Exclude Ctrl Expense", kind: :expense, currency: currency)
 
-    imported = Transaction.create!(
+    imported = create_sourced_transaction(
       user: @user, src_account: bank, dest_account: expense,
       amount_minor: 500, currency: currency, description: "Exclude me",
       transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
@@ -368,7 +368,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     bank = accounts(:linked_asset)
     expense = Account.create!(user: @user, name: "Unexclude Ctrl Expense", kind: :expense, currency: currency)
 
-    imported = Transaction.create!(
+    imported = create_sourced_transaction(
       user: @user, src_account: bank, dest_account: expense,
       amount_minor: 500, currency: currency, description: "Restore me",
       transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_two)
@@ -457,7 +457,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     bank = accounts(:linked_asset)
     expense = Account.create!(user: @user, name: "Bad Referer Expense", kind: :expense, currency: currency)
 
-    imported = Transaction.create!(
+    imported = create_sourced_transaction(
       user: @user, src_account: bank, dest_account: expense,
       amount_minor: 500, currency: currency, description: "Bad referer",
       transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
@@ -476,7 +476,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     bank = accounts(:linked_asset)
     expense = Account.create!(user: @user, name: "Replace Exclude Expense", kind: :expense, currency: currency)
 
-    imported = Transaction.create!(
+    imported = create_sourced_transaction(
       user: @user, src_account: bank, dest_account: expense,
       amount_minor: 500, currency: currency, description: "Replace in place",
       transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)
@@ -496,7 +496,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     bank = accounts(:linked_asset)
     expense = Account.create!(user: @user, name: "Double Exclude Expense", kind: :expense, currency: currency)
 
-    imported = Transaction.create!(
+    imported = create_sourced_transaction(
       user: @user, src_account: bank, dest_account: expense,
       amount_minor: 500, currency: currency, description: "Already excluded",
       transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_one)

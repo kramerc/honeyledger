@@ -15,7 +15,7 @@ class IntegrationsController < ApplicationController
       return [] if connection.nil?
 
       threshold = connection.refreshed_at
-      connection.accounts.includes(:ledger_account).select do |aggregator_account|
+      connection.accounts.includes(:ledger_accounts).select do |aggregator_account|
         aggregator_account.linked? || aggregator_account.current?(threshold)
       end
     end

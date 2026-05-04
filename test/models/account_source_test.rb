@@ -1,12 +1,12 @@
 require "test_helper"
 
 class AccountSourceTest < ActiveSupport::TestCase
-  test "fixture rows mirror the legacy sourceable association" do
+  test "fixture rows match the expected aggregator account" do
     legacy = accounts(:linked_asset)
     join = legacy.account_sources.first
 
     assert_not_nil join
-    assert_equal legacy.sourceable, join.sourceable
+    assert_equal simplefin_accounts(:linked_one), join.sourceable
   end
 
   test "DB unique index on (sourceable_type, sourceable_id) blocks a second row" do
