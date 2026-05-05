@@ -72,6 +72,59 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "re-syncs scalars on the canonical ledger transaction when csv_transaction synced_at advances" do
+    csv_import = create_csv_import
+    csv_transaction = csv_import.transactions.create!(
+      row_index: 0,
+      transacted_at: 1.day.ago,
+      description: "Coffee Shop",
+      amount_minor: -475,
+      synced_at: 2.days.ago
+    )
+
+    Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    ledger_transaction = csv_transaction.ledger_transactions.first
+    assert_equal 475, ledger_transaction.amount_minor
+
+    # The user re-uploads / re-parses with a corrected amount; the synced_at on
+    # the csv_transaction advances past the ledger transaction's synced_at.
+    csv_transaction.update!(amount_minor: -500, synced_at: Time.current)
+    Csv::ImportTransactionsJob.perform_now(csv_import.id)
+
+    ledger_transaction.reload
+    assert_equal 500, ledger_transaction.amount_minor
+  end
+
+  test "secondary csv source skips canonical re-sync but still bumps ledger synced_at" do
+    csv_import = create_csv_import
+    csv_transaction = csv_import.transactions.create!(
+      row_index: 0,
+      transacted_at: 1.day.ago,
+      description: "Coffee Shop",
+      amount_minor: -475,
+      synced_at: 2.days.ago
+    )
+
+    Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    ledger_transaction = csv_transaction.ledger_transactions.first
+
+    # Attach a *second* csv source representing the same transaction. The
+    # canonical (older) source remains, so the second source must not overwrite
+    # canonical scalars when its synced_at advances.
+    secondary = csv_import.transactions.create!(
+      row_index: 1,
+      transacted_at: 1.day.ago,
+      description: "Coffee Shop",
+      amount_minor: -999,
+      synced_at: Time.current
+    )
+    TransactionSource.create!(ledger_transaction: ledger_transaction, sourceable: secondary)
+
+    Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    ledger_transaction.reload
+    assert_equal 475, ledger_transaction.amount_minor
+  end
+
   test "applies an import rule that routes to a non-balance-sheet account" do
     csv_import = create_csv_import
     rule_account = Account.create!(user: @user, currency: @currency, name: "Groceries", kind: :expense)
@@ -150,6 +203,24 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
   test "no-ops when the import does not exist" do
     assert_nothing_raised do
       Csv::ImportTransactionsJob.perform_now(0)
+    end
+  end
+
+  test "skips a row cleanly when TransactionSource::Attach raises MismatchedTransaction during create" do
+    csv_import = create_csv_import
+    csv_import.transactions.create!(
+      row_index: 0,
+      transacted_at: 1.day.ago,
+      description: "Coffee Shop",
+      amount_minor: -475,
+      synced_at: Time.current
+    )
+
+    raise_mismatch = ->(*) { raise TransactionSource::Attach::MismatchedTransaction, "concurrent attach" }
+    TransactionSource::Attach.stub(:call, raise_mismatch) do
+      assert_no_difference "Transaction.count" do
+        Csv::ImportTransactionsJob.perform_now(csv_import.id)
+      end
     end
   end
 

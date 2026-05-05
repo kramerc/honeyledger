@@ -159,6 +159,80 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "GET new renders the upload form" do
+    get new_account_csv_import_url(@account)
+    assert_response :success
+  end
+
+  test "PATCH update re-renders show with errors when validation fails" do
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+    csv_import.file.purge
+
+    patch account_csv_import_url(@account, csv_import), params: {
+      csv_import: { column_mappings: { date_column: "Date", amount_mode: "signed", amount_column: "Amount" } }
+    }
+    assert_response :unprocessable_entity
+  end
+
+  test "GET show with debit_credit mappings renders the mapped preview" do
+    csv_import = build_csv_import(
+      state: "mapped",
+      column_mappings: {
+        "date_column" => "Date",
+        "amount_mode" => "debit_credit",
+        "debit_column" => "Debit",
+        "credit_column" => "Credit",
+        "description_columns" => [ "Description" ]
+      },
+      content: "Date,Description,Debit,Credit\n2026-01-15,Coffee,4.75,\n"
+    )
+    csv_import.save!
+
+    get account_csv_import_url(@account, csv_import)
+    assert_response :success
+  end
+
+  test "GET show with an unknown amount_mode renders without a parsed preview" do
+    csv_import = build_csv_import(
+      state: "mapped",
+      column_mappings: { "date_column" => "Date", "amount_mode" => "garbage" }
+    )
+    csv_import.save!
+
+    get account_csv_import_url(@account, csv_import)
+    assert_response :success
+    assert_no_match "Mapped preview", response.body
+  end
+
+  test "GET show falls back to an empty raw preview when raw parsing raises a malformed CSV error" do
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+
+    Csv::Parser.stub(:raw_preview, ->(*) { raise ::CSV::MalformedCSVError.new("Unquoted fields", 1) }) do
+      get account_csv_import_url(@account, csv_import)
+    end
+    assert_response :success
+  end
+
+  test "GET show surfaces parser RowError as a preview error message" do
+    csv_import = build_csv_import(
+      state: "mapped",
+      column_mappings: {
+        "date_column" => "Date",
+        "amount_mode" => "signed",
+        "amount_column" => "Amount",
+        "description_columns" => [ "Description" ]
+      },
+      content: "Date,Description,Amount\nnot a date,Coffee,-1.00\n"
+    )
+    csv_import.save!
+
+    get account_csv_import_url(@account, csv_import)
+    assert_response :success
+    assert_match "Preview error", response.body
+  end
+
   test "GET show pre-checks saved description_columns checkboxes" do
     csv_import = build_csv_import(
       state: "mapped",

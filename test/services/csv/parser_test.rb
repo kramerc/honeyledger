@@ -197,6 +197,22 @@ class Csv::ParserTest < ActiveSupport::TestCase
     assert_raises(Csv::Parser::Error) { parser.each_row.to_a }
   end
 
+  test "raises when amount_mode is unknown" do
+    parser = Csv::Parser.new(
+      io: StringIO.new("Date,Description,Amount\n"),
+      mappings: { date_column: "Date", amount_mode: "bogus", amount_column: "Amount" },
+      currency: @usd
+    )
+    error = assert_raises(Csv::Parser::Error) { parser.each_row.to_a }
+    assert_match(/amount_mode must be one of/, error.message)
+  end
+
+  test "raises a RowError when an amount column value is not a number" do
+    content = "Date,Description,Amount\n2026-01-15,Coffee,abc\n"
+    error = assert_raises(Csv::Parser::RowError) { parse(content, mappings: signed_mappings, currency: @usd) }
+    assert_match(/could not parse/, error.message)
+  end
+
   private
 
     def parse(content, mappings:, currency:)

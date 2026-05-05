@@ -83,6 +83,20 @@ class Csv::ParseJobTest < ActiveJob::TestCase
     end
   end
 
+  test "marks the import as failed and re-raises on an unexpected error" do
+    csv_import = build_csv_import_with_file("Date,Description,Amount\n2026-01-15,Coffee,-1.00\n")
+
+    Csv::Parser.stub_any_instance(:each_row, ->(*) { raise StandardError, "boom" }) do
+      assert_raises(StandardError) do
+        Csv::ParseJob.perform_now(csv_import.id)
+      end
+    end
+
+    csv_import.reload
+    assert_equal "failed", csv_import.state
+    assert_match(/boom/, csv_import.error)
+  end
+
   private
 
     def signed_mappings
