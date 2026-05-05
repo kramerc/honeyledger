@@ -27,6 +27,20 @@ class Csv::ImportTransactionsJob < ApplicationJob
             next
           end
 
+          # If the user re-parsed with a different sign (e.g. they toggled
+          # invert_amount), the absolute amount is the same but src/dest need
+          # to flip so the ledger account balances move in the correct
+          # direction. Swap the existing src/dest in place — the counterpart
+          # account stays the same; its kind may now read awkwardly relative
+          # to the direction, but the balance-sheet side is correct and the
+          # user can re-categorize from the transactions UI.
+          ledger_account_was_src = ledger_transaction.src_account_id == ledger_account.id
+          should_be_src = csv_transaction.amount_minor.negative?
+          if ledger_account_was_src != should_be_src
+            ledger_transaction.src_account, ledger_transaction.dest_account =
+              ledger_transaction.dest_account, ledger_transaction.src_account
+          end
+
           ledger_transaction.update!(
             amount_minor: csv_transaction.amount_minor.abs,
             transacted_at: csv_transaction.transacted_at,

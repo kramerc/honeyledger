@@ -206,6 +206,40 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "imports two distinct rows from the same CSV that share amount/day/description" do
+    csv_import = create_csv_import
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    csv_import.transactions.create!(row_index: 0, transacted_at: same_at, description: "Coffee", amount_minor: -475, synced_at: Time.current)
+    csv_import.transactions.create!(row_index: 1, transacted_at: same_at, description: "Coffee", amount_minor: -475, synced_at: Time.current)
+
+    assert_difference "Transaction.count", 2 do
+      Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    end
+  end
+
+  test "swaps src/dest on re-import when the sign flips (e.g. user toggled invert_amount)" do
+    csv_import = create_csv_import
+    csv_transaction = csv_import.transactions.create!(
+      row_index: 0,
+      transacted_at: 1.day.ago,
+      description: "Coffee Shop",
+      amount_minor: -475,
+      synced_at: 2.days.ago
+    )
+
+    Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    ledger_transaction = csv_transaction.ledger_transactions.first
+    assert_equal @bank_account, ledger_transaction.src_account, "ledger_account starts as src for negative amount"
+
+    # User toggles invert_amount; sign flips, synced_at advances.
+    csv_transaction.update!(amount_minor: 475, synced_at: Time.current)
+    Csv::ImportTransactionsJob.perform_now(csv_import.id)
+
+    ledger_transaction.reload
+    assert_equal @bank_account, ledger_transaction.dest_account, "ledger_account moves to dest after sign flip"
+    assert_equal 475, ledger_transaction.amount_minor
+  end
+
   test "skips a row cleanly when TransactionSource::Attach raises MismatchedTransaction during create" do
     csv_import = create_csv_import
     csv_import.transactions.create!(

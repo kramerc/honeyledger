@@ -242,13 +242,14 @@ class Csv::Parser
       cleaned = value.to_s.strip
 
       if format.present?
-        formats_to_try = [ format ]
-        # If the user supplied a date+time format separated by whitespace but
-        # this column only carries the date (e.g. PayPal exports split Date and
-        # Time across columns), also try the leading date-only segment so the
-        # mapping still works without forcing the user to drop the time tokens.
-        formats_to_try << format.split(/\s+/).first if format.match?(/\s/)
-        formats_to_try.uniq.compact.each do |fmt|
+        # Try the user-supplied format, then progressively shorter prefixes by
+        # dropping trailing whitespace-separated segments. This covers two real
+        # cases for files that split date/time/timezone across columns: a row
+        # whose timezone cell is blank (try without trailing %Z), and a row
+        # whose time and timezone cells are both blank (try date-only).
+        segments = format.split(/\s+/).reject(&:empty?)
+        formats_to_try = segments.size.downto(1).map { |n| segments.first(n).join(" ") }
+        formats_to_try.each do |fmt|
           begin
             return ::DateTime.strptime(cleaned, fmt).to_time
           rescue ::Date::Error

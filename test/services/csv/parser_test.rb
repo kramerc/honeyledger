@@ -129,6 +129,25 @@ class Csv::ParserTest < ActiveSupport::TestCase
     assert_equal Time.utc(2026, 4, 13, 18, 0, 0), rows.first.transacted_at.utc
   end
 
+  test "tolerates a blank timezone cell mid-import by dropping the %Z token" do
+    content = <<~CSV
+      Date,Time,TimeZone,Description,Amount
+      04/13/2026,11:00:00,PDT,Coffee,-4.75
+      04/14/2026,12:00:00,,Refund,5.00
+    CSV
+    mappings = signed_mappings.merge(
+      date_format: "%m/%d/%Y %H:%M:%S",
+      time_column: "Time",
+      timezone_column: "TimeZone"
+    )
+    rows = parse(content, mappings: mappings, currency: @usd)
+    # First row has TZ → 11:00 PDT == 18:00 UTC.
+    assert_equal Time.utc(2026, 4, 13, 18, 0, 0), rows[0].transacted_at.utc
+    # Second row has no TZ; we want to keep the time and parse without %Z.
+    # Stored time-of-day is 12:00:00 in whatever zone DateTime defaults to.
+    assert_equal 12, rows[1].transacted_at.hour
+  end
+
   test "respects a user-supplied %Z token without auto-appending one" do
     content = "Date,TimeZone,Description,Amount\n04/13/2026,PST,Coffee,-4.75\n"
     mappings = signed_mappings.merge(

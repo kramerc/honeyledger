@@ -6,7 +6,11 @@ class Csv::ParseJob < ApplicationJob
     return if import.nil?
     return unless import.file.attached?
 
-    produced_indices = []
+    # Stamp every row produced by this run with the same parse_started_at, then
+    # drop rows that weren't touched (synced_at < parse_started_at or NULL).
+    # Avoids accumulating row_indices in memory for large files and uses the
+    # synced_at index instead of an unbounded NOT IN (...).
+    parse_started_at = Time.current
     import.file.open do |io|
       parser = Csv::Parser.new(io: io, mappings: import.column_mappings, currency: import.account.currency)
       parser.each_row do |parsed|
@@ -19,10 +23,9 @@ class Csv::ParseJob < ApplicationJob
           description: parsed.description,
           amount_minor: parsed.amount_minor,
           raw: parsed.raw,
-          synced_at: Time.current
+          synced_at: parse_started_at
         )
         record.save!
-        produced_indices << parsed.row_index
       end
     end
 
@@ -31,7 +34,7 @@ class Csv::ParseJob < ApplicationJob
     # `dependent: :destroy` on transaction_sources cleans up the join row; any
     # ledger transactions previously sourced from these rows simply lose their
     # CSV source and remain as ordinary ledger transactions.
-    import.transactions.where.not(row_index: produced_indices).destroy_all
+    import.transactions.where("synced_at IS NULL OR synced_at < ?", parse_started_at).destroy_all
 
     import.update!(state: "parsed", parsed_at: Time.current, error: nil)
     # Always enqueue the import job — it no-ops when there are no rows but
