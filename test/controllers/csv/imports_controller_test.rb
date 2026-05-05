@@ -90,6 +90,23 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ "DEBIT", "ACH_DEBIT" ], csv_import.column_mappings["debit_values"]
   end
 
+  test "PATCH update casts invert_amount to a boolean" do
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+
+    patch account_csv_import_url(@account, csv_import), params: {
+      csv_import: { column_mappings: { date_column: "Date", amount_mode: "signed", amount_column: "Amount", invert_amount: "1" } }
+    }
+    csv_import.reload
+    assert_equal true, csv_import.column_mappings["invert_amount"]
+
+    patch account_csv_import_url(@account, csv_import), params: {
+      csv_import: { column_mappings: { date_column: "Date", amount_mode: "signed", amount_column: "Amount", invert_amount: "0" } }
+    }
+    csv_import.reload
+    assert_equal false, csv_import.column_mappings["invert_amount"]
+  end
+
   test "PATCH update tolerates a request body with no column_mappings" do
     csv_import = build_csv_import(state: "pending")
     csv_import.save!

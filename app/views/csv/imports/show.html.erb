@@ -151,6 +151,14 @@
           <%= mapping_form.text_field :debit_values, value: Array(mappings[:debit_values]).join(", "), placeholder: "DEBIT, ACH_DEBIT" %>
         </p>
       </div>
+
+      <p>
+        <label>
+          <%= mapping_form.check_box :invert_amount, { checked: ActiveModel::Type::Boolean.new.cast(mappings[:invert_amount]) }, "1", "0" %>
+          Invert sign
+        </label><br>
+        <small>Check this if the file uses the bank-statement convention where a credit card purchase is positive and a payment is negative. Flipping it back makes the importer treat purchases as expenses and payments as incoming transfers.</small>
+      </p>
     </fieldset>
 
     <p>

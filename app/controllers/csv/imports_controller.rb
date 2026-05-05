@@ -87,6 +87,7 @@ class Csv::ImportsController < ApplicationController
       raw["description_columns"] = Array(raw["description_columns"]).reject(&:blank?)
       raw["debit_values"] = split_csv_list(raw["debit_values"]) if raw.key?("debit_values")
       raw["skip_rows"] = raw["skip_rows"].to_i if raw["skip_rows"].present?
+      raw["invert_amount"] = ActiveModel::Type::Boolean.new.cast(raw["invert_amount"]) if raw.key?("invert_amount")
       raw
     end
 

@@ -213,6 +213,32 @@ class Csv::ParserTest < ActiveSupport::TestCase
     assert_match(/could not parse/, error.message)
   end
 
+  test "invert_amount flips the parsed sign" do
+    content = <<~CSV
+      Date,Description,Amount
+      2026-01-15,PURCHASE,4.75
+      2026-01-16,PAYMENT,-100.00
+    CSV
+    rows = parse(content, mappings: signed_mappings.merge(invert_amount: true), currency: @usd)
+    # +4.75 -> expense (-475), -100.00 -> revenue/payment (+10000)
+    assert_equal(-475, rows[0].amount_minor)
+    assert_equal 10000, rows[1].amount_minor
+  end
+
+  test "invert_amount accepts truthy strings" do
+    content = "Date,Description,Amount\n2026-01-15,PURCHASE,4.75\n"
+    [ "1", "true", "on", true ].each do |truthy|
+      rows = parse(content, mappings: signed_mappings.merge(invert_amount: truthy), currency: @usd)
+      assert_equal(-475, rows.first.amount_minor, "expected #{truthy.inspect} to count as truthy")
+    end
+  end
+
+  test "invert_amount=false leaves the sign alone" do
+    content = "Date,Description,Amount\n2026-01-15,PURCHASE,4.75\n"
+    rows = parse(content, mappings: signed_mappings.merge(invert_amount: false), currency: @usd)
+    assert_equal 475, rows.first.amount_minor
+  end
+
   private
 
     def parse(content, mappings:, currency:)

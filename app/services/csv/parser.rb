@@ -70,6 +70,7 @@ class Csv::Parser
 
       raw_hash = csv_row.to_h
       amount_decimal = parse_amount(csv_row, index)
+      amount_decimal = -amount_decimal if invert_amount?
       transacted_at = parse_date(
         compose_datetime(csv_row, @mappings[:date_column], @mappings[:time_column], @mappings[:timezone_column]),
         format: effective_date_format,
@@ -128,6 +129,14 @@ class Csv::Parser
 
     def posted_at_column
       @mappings[:posted_at_column]
+    end
+
+    # Whether to flip the sign of the parsed amount before computing
+    # amount_minor. Used for credit card / liability CSVs whose statement
+    # convention reports purchases as positive and payments as negative,
+    # opposite of the asset-style convention the import logic assumes.
+    def invert_amount?
+      ActiveModel::Type::Boolean.new.cast(@mappings[:invert_amount])
     end
 
     # Combines the value at `date_column` with the values at `time_column` and
