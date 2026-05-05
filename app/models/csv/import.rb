@@ -8,9 +8,9 @@ class Csv::Import < ApplicationRecord
   has_one_attached :file
 
   validates :state, inclusion: { in: STATES }
+  validates :file, presence: true
   validate :account_belongs_to_user
   validate :account_is_real
-  validate :file_attached
   validate :file_within_size_limit, if: -> { file.attached? }
 
   STATES.each do |state_name|
@@ -43,10 +43,6 @@ class Csv::Import < ApplicationRecord
     def account_is_real
       return if account.blank?
       errors.add(:account, "must be a real (non-virtual) account") if account.virtual?
-    end
-
-    def file_attached
-      errors.add(:file, "must be attached") unless file.attached?
     end
 
     def file_within_size_limit

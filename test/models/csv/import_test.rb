@@ -9,7 +9,7 @@ class Csv::ImportTest < ActiveSupport::TestCase
   test "is invalid when no file is attached" do
     csv_import = Csv::Import.new(user: @user, account: @account, state: "pending")
     assert_not csv_import.valid?
-    assert_includes csv_import.errors[:file], "must be attached"
+    assert_includes csv_import.errors[:file], "can't be blank"
   end
 
   test "is invalid when the attached file exceeds MAX_FILE_BYTES" do
