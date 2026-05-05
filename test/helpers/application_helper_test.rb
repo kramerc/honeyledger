@@ -79,4 +79,49 @@ class ApplicationHelperTest < ActionView::TestCase
     result = nav_link_to("Logout", "/logout", data: { turbo_method: :delete })
     assert_match(/data-turbo-method="delete"/, result)
   end
+
+  # source_badge_label
+
+  test "source_badge_label labels SimpleFIN sources" do
+    assert_equal "SimpleFIN", source_badge_label(simplefin_accounts(:linked_one))
+  end
+
+  test "source_badge_label labels Lunch Flow sources" do
+    assert_equal "Lunch Flow", source_badge_label(lunchflow_accounts(:linked_one))
+  end
+
+  test "source_badge_label falls back to the class name for unknown sourceable types" do
+    # Currency isn't a registered aggregator type but stands in for any future
+    # source class (CSV/OFX, etc.) so the fallback can't silently render empty.
+    assert_equal "Currency", source_badge_label(currencies(:usd))
+  end
+
+  # source_badge_modifier
+
+  test "source_badge_modifier returns the SimpleFIN modifier class" do
+    assert_equal "source-badge--simplefin", source_badge_modifier(simplefin_accounts(:linked_one))
+  end
+
+  test "source_badge_modifier returns the Lunch Flow modifier class" do
+    assert_equal "source-badge--lunchflow", source_badge_modifier(lunchflow_accounts(:linked_one))
+  end
+
+  test "source_badge_modifier returns nil for unknown sourceable types" do
+    assert_nil source_badge_modifier(currencies(:usd))
+  end
+
+  # transaction_source_badges
+
+  test "transaction_source_badges renders one styled span per source with aggregator modifiers" do
+    fake_source = Struct.new(:sourceable)
+    sources = [
+      fake_source.new(simplefin_accounts(:linked_one)),
+      fake_source.new(lunchflow_accounts(:linked_one))
+    ]
+
+    html = transaction_source_badges(sources)
+
+    assert_match(/<span class="source-badge source-badge--simplefin">SimpleFIN<\/span>/, html)
+    assert_match(/<span class="source-badge source-badge--lunchflow">Lunch Flow<\/span>/, html)
+  end
 end

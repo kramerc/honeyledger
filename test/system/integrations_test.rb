@@ -128,6 +128,21 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_text "Lunch Flow account unlinked successfully."
   end
 
+  test "linking a second integration to a ledger account that already has one succeeds" do
+    lf_account = lunchflow_accounts(:unlinked_one)
+    multi_sourced = accounts(:linked_asset) # already has SimpleFIN source via fixtures
+
+    visit integrations_path
+
+    within("tr", text: lf_account.name) do
+      select multi_sourced.name, from: "Account to link"
+      click_button "Link"
+    end
+
+    assert_text "Lunch Flow account linked successfully."
+    assert_includes lf_account.reload.ledger_accounts, multi_sourced
+  end
+
   test "hides stale unlinked aggregator accounts" do
     @user.simplefin_connection.update!(refreshed_at: Time.current)
     stale_simplefin = simplefin_accounts(:unlinked_one)

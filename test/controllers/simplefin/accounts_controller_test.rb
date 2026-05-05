@@ -56,13 +56,15 @@ class Simplefin::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Account not found.", flash[:alert]
   end
 
-  test "should reject link when ledger account is already linked to another integration" do
-    already_linked_account = accounts(:linked_asset)
+  test "allows linking a ledger account that already has a different integration" do
+    multi_sourced = accounts(:linked_asset)
+    sf_to_add = simplefin_accounts(:unlinked_one)
 
-    post link_simplefin_account_url(simplefin_accounts(:unlinked_one)), params: { simplefin_account: { ledger_account_id: already_linked_account.id } }
-
+    assert_difference -> { multi_sourced.account_sources.count }, 1 do
+      post link_simplefin_account_url(sf_to_add), params: { simplefin_account: { ledger_account_id: multi_sourced.id } }
+    end
     assert_redirected_to integrations_url
-    assert_equal "Account is already linked to another integration.", flash[:alert]
+    assert_includes sf_to_add.ledger_accounts, multi_sourced
   end
 
   test "should reject link when simplefin account is already linked to a different ledger account" do

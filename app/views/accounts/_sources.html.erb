@@ -1,0 +1,22 @@
+<% sources = account.account_sources.includes(:sourceable).to_a %>
+<div class="account-sources" data-testid="account-sources">
+  <strong>Sources:</strong>
+  <% if sources.any? %>
+    <ul>
+      <% sources.each do |account_source| %>
+        <% sourceable = account_source.sourceable %>
+        <li>
+          <%= source_badge_label(sourceable) %>: <%= sourceable.name %>
+          <% case sourceable %>
+          <% when Simplefin::Account %>
+            <%= button_to "Unlink", unlink_simplefin_account_path(sourceable), method: :delete, "aria-label": "Unlink SimpleFIN source #{sourceable.name}", data: { turbo_confirm: "Unlink this source?" } %>
+          <% when Lunchflow::Account %>
+            <%= button_to "Unlink", unlink_lunchflow_account_path(sourceable), method: :delete, "aria-label": "Unlink Lunch Flow source #{sourceable.name}", data: { turbo_confirm: "Unlink this source?" } %>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <span>No linked integrations</span>
+  <% end %>
+</div>

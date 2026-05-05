@@ -53,6 +53,32 @@ class AccountsTest < ApplicationSystemTestCase
     assert_current_path edit_account_path(account)
   end
 
+  test "account detail page lists every linked aggregator source" do
+    account = accounts(:linked_asset)
+    AccountSource.create!(account: account, sourceable: lunchflow_accounts(:unlinked_one))
+
+    visit account_path(account)
+
+    within('[data-testid="account-sources"]') do
+      assert_text "SimpleFIN"
+      assert_text "Lunch Flow"
+    end
+  end
+
+  test "unlinking from the account detail page returns to the account detail page" do
+    account = accounts(:linked_asset)
+    visit account_path(account)
+
+    within('[data-testid="account-sources"]') do
+      accept_confirm do
+        click_button "Unlink"
+      end
+    end
+
+    assert_current_path account_path(account)
+    assert_text "SimpleFIN account unlinked successfully."
+  end
+
   test "destroying an account removes it from the sidebar live" do
     account = Account.create!(
       user: @user,

@@ -16,11 +16,6 @@ class Simplefin::AccountsController < ApplicationController
       return
     end
 
-    if ledger_account.account_sources.where.not(sourceable: @simplefin_account).exists?
-      redirect_to integrations_path, alert: "Account is already linked to another integration."
-      return
-    end
-
     if @simplefin_account.linked? && @simplefin_account.ledger_account != ledger_account
       redirect_to integrations_path, alert: "SimpleFIN account is already linked to another account."
       return
@@ -34,7 +29,7 @@ class Simplefin::AccountsController < ApplicationController
 
   def unlink
     @simplefin_account.account_sources.destroy_all
-    redirect_to integrations_path, notice: "SimpleFIN account unlinked successfully."
+    redirect_back_or_to integrations_path, notice: "SimpleFIN account unlinked successfully."
   end
 
   private
