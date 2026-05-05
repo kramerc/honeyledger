@@ -252,7 +252,11 @@ class Csv::Parser
       begin
         ::DateTime.parse(cleaned).to_time
       rescue ::Date::Error, ArgumentError
-        raise RowError.new("could not parse #{field} #{value.inspect}", row_index: row_index)
+        raise RowError.new(
+          "could not parse #{field} #{value.inspect}; set a date format above " \
+          "(e.g. %m/%d/%y for M/D/YY, %m/%d/%Y for M/D/YYYY, or %Y-%m-%d for ISO)",
+          row_index: row_index
+        )
       end
     end
 
