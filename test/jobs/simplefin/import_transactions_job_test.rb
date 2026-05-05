@@ -178,6 +178,84 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert transaction.synced_at > original_synced_at
   end
 
+  test "canonical resync with drifted description does not create a new counterpart account" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_drift",
+      amount: "-50.00",
+      description: "Coffee Shop",
+      posted: 2.days.ago,
+      transacted_at: 2.days.ago,
+      pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    transaction = sf_transaction.ledger_transactions.first
+    original_dest_account_id = transaction.dest_account_id
+    original_description = transaction.description
+    original_synced_at = transaction.synced_at
+
+    travel 2.seconds
+
+    sf_transaction.update!(
+      description: "Coffee Shop - 100 Main St SOMECITY US - Card Ending In 0000",
+      synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      assert_no_difference "Account.count" do
+        Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+      end
+    end
+
+    transaction.reload
+    assert_equal bank_account, transaction.src_account
+    assert_equal original_dest_account_id, transaction.dest_account_id
+    assert_equal original_description, transaction.description
+    assert transaction.synced_at > original_synced_at
+  end
+
+  test "canonical resync with drifted description preserves balance-sheet rule target" do
+    sf_account, bank_account = create_linked_simplefin_account
+
+    savings_account = Account.create!(user: @user, currency: @currency, name: "Savings", kind: :asset)
+    ImportRule.create!(user: @user, account: savings_account, match_pattern: "TRANSFER TO SAVINGS", match_type: :contains)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account,
+      remote_id: "txn_drift_rule",
+      amount: "-500.00",
+      description: "TRANSFER TO SAVINGS",
+      posted: 1.day.ago,
+      transacted_at: 1.day.ago,
+      pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    transaction = sf_transaction.ledger_transactions.first
+    assert_equal bank_account, transaction.src_account
+    assert_equal savings_account, transaction.dest_account
+
+    travel 2.seconds
+
+    sf_transaction.update!(
+      description: "TRANSFER TO SAVINGS - REF 9999 - Card Ending In 0000",
+      synced_at: Time.current
+    )
+
+    assert_no_difference "Account.count" do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    transaction.reload
+    assert_equal savings_account, transaction.dest_account
+    assert_equal "TRANSFER TO SAVINGS", transaction.description
+  end
+
   test "skips transactions without linked account" do
     unlinked_sf_account = Simplefin::Account.create!(
       connection: simplefin_connections(:one),

@@ -32,7 +32,17 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
             next
           end
 
-          transaction = ledger_transaction
+          # Refresh source-driven scalars only. Counterpart account, description,
+          # and merge/exclude state were settled at first import (possibly adjusted
+          # by AutoMerge or by the user) and must not be re-derived on every resync —
+          # re-running counterpart creation here is what produced #137.
+          ledger_transaction.update!(
+            amount_minor: sft.amount_minor.abs,
+            transacted_at: sft.transacted_at || sft.posted || Time.current,
+            cleared_at: sft.posted,
+            synced_at: Time.current
+          )
+          next
         elsif (match = Transaction::Reconcile.call(
           ledger_account: ledger_account,
           amount_minor: sft.amount_minor.abs,
