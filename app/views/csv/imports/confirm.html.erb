@@ -1,0 +1,52 @@
+<% parsed_rows = (@preview && @preview[:parsed_rows]) || [] %>
+<% preview_error = @preview && @preview[:error] %>
+
+<h1>CSV Import — <%= @account.name %></h1>
+
+<p>
+  <%= link_to "← Back to Step 2 (mapping)", account_csv_import_path(@account, @csv_import) %>
+  ·
+  <%= link_to "Account transactions", account_transactions_path(@account) %>
+</p>
+
+<dl>
+  <dt>Status</dt><dd><%= @csv_import.state %></dd>
+  <dt>Account</dt><dd><%= @csv_import.account.name %></dd>
+  <dt>File</dt><dd><%= @csv_import.filename || "(missing)" %></dd>
+</dl>
+
+<% if @csv_import.error.present? %>
+  <p style="color: red"><strong>Error:</strong> <%= @csv_import.error %></p>
+<% end %>
+
+<% if preview_error %>
+  <p style="color: orange"><strong>Preview error:</strong> <%= preview_error %></p>
+<% end %>
+
+<h2>Step 3: Confirm and import</h2>
+
+<% if parsed_rows.any? %>
+  <p>Below is how the first <%= parsed_rows.size %> row<%= "s" if parsed_rows.size != 1 %> of your file will be imported with the saved mapping. If anything looks off, go back to Step 2 and adjust.</p>
+  <table>
+    <tr>
+      <th>Row #</th>
+      <th>Transacted at</th>
+      <th>Description</th>
+      <th>Amount</th>
+    </tr>
+    <% parsed_rows.each do |row| %>
+      <tr>
+        <td><%= row.row_index %></td>
+        <td><%= row.transacted_at.strftime("%Y-%m-%d") %></td>
+        <td><%= row.description %></td>
+        <td><%= number_with_precision(row.amount_minor.to_d / (10 ** @account.currency.decimal_places), precision: @account.currency.decimal_places) %></td>
+      </tr>
+    <% end %>
+  </table>
+<% else %>
+  <p>The mapping does not produce any rows yet. <%= link_to "Adjust the mapping", account_csv_import_path(@account, @csv_import) %>.</p>
+<% end %>
+
+<p style="margin-top: 1em">
+  <%= button_to "Parse and import these rows", parse_account_csv_import_path(@account, @csv_import), method: :post %>
+</p>

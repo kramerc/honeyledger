@@ -18,6 +18,7 @@ class Account < ApplicationRecord
 
   has_many :import_rules, dependent: :destroy
   has_many :account_sources, dependent: :destroy
+  has_many :csv_imports, class_name: "Csv::Import", dependent: :destroy
 
   after_create_commit  :broadcast_sidebar_insert, if: :real?
   after_update_commit  :broadcast_sidebar_change, if: :real?

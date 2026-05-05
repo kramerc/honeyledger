@@ -9,6 +9,9 @@
   <% else %>
     <%= link_to "Show excluded transactions", "#{base_path}?show_excluded=1" %>
   <% end %>
+  <% if @account&.real? %>
+    · <%= link_to "Import CSV", account_csv_imports_path(@account) %>
+  <% end %>
 </div>
 
 <div data-controller="transactions--merge" data-transactions--merge-merge-url-value="<%= merge_transactions_path %>">

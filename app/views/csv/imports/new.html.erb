@@ -1,0 +1,20 @@
+<h1>Upload CSV — <%= @account.name %></h1>
+
+<p><%= link_to "Back to imports", account_csv_imports_path(@account) %> · <%= link_to "Account transactions", account_transactions_path(@account) %></p>
+
+<%= form_with model: @csv_import, url: account_csv_imports_path(@account), html: { multipart: true } do |form| %>
+  <% if @csv_import.errors.any? %>
+    <ul style="color: red">
+      <% @csv_import.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <p>
+    <%= form.label :file, "CSV file" %><br>
+    <%= form.file_field :file, accept: ".csv,text/csv" %>
+  </p>
+
+  <p><%= form.submit "Upload" %></p>
+<% end %>

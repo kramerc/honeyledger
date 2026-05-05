@@ -3,6 +3,12 @@ Rails.application.routes.draw do
 
   resources :accounts do
     resources :transactions, only: %i[ index ]
+    resources :csv_imports, controller: "csv/imports", except: %i[ edit ] do
+      member do
+        get :confirm
+        post :parse
+      end
+    end
   end
   resources :import_rules, except: %i[ show ] do
     collection do
@@ -57,6 +63,11 @@ Rails.application.routes.draw do
         post :refresh
       end
     end
+  end
+
+  # User-wide index of CSV imports (per-account routes nested under accounts above)
+  namespace :csv do
+    resources :imports, only: %i[ index ]
   end
 
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html

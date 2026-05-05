@@ -1,0 +1,169 @@
+<% require "ostruct" %>
+<% mappings = @csv_import.column_mappings.with_indifferent_access %>
+<% headers = (@preview && @preview[:headers]) || [] %>
+<% raw_rows = (@preview && @preview[:raw_rows]) || [] %>
+<% can_confirm = !@csv_import.pending? && @csv_import.column_mappings.present? %>
+
+<h1>CSV Import — <%= @account.name %></h1>
+
+<p>
+  <%= link_to "Back to imports", account_csv_imports_path(@account) %>
+  ·
+  <%= link_to "Account transactions", account_transactions_path(@account) %>
+</p>
+
+<dl>
+  <dt>Status</dt><dd><%= @csv_import.state %></dd>
+  <dt>Account</dt><dd><%= @csv_import.account.name %></dd>
+  <dt>File</dt><dd><%= @csv_import.filename || "(missing)" %></dd>
+  <dt>Uploaded</dt><dd><%= @csv_import.created_at.strftime("%B %d, %Y %I:%M %p") %></dd>
+  <% if @csv_import.parsed_at %>
+    <dt>Parsed</dt><dd><%= @csv_import.parsed_at.strftime("%B %d, %Y %I:%M %p") %></dd>
+  <% end %>
+  <% if @csv_import.imported_at %>
+    <dt>Imported</dt><dd><%= @csv_import.imported_at.strftime("%B %d, %Y %I:%M %p") %></dd>
+  <% end %>
+</dl>
+
+<% if @csv_import.error.present? %>
+  <p style="color: red"><strong>Error:</strong> <%= @csv_import.error %></p>
+<% end %>
+
+<% if @preview&.dig(:error) %>
+  <p style="color: orange"><strong>Preview error:</strong> <%= @preview[:error] %></p>
+<% end %>
+
+<% if raw_rows.any? %>
+  <h2>Step 1: Inspect the file (first <%= raw_rows.size %> row<%= "s" if raw_rows.size != 1 %>)</h2>
+  <div style="overflow-x: auto">
+    <table>
+      <thead>
+        <tr>
+          <% headers.each do |header| %>
+            <th><%= header %></th>
+          <% end %>
+        </tr>
+      </thead>
+      <tbody>
+        <% raw_rows.each do |row| %>
+          <tr>
+            <% headers.each do |header| %>
+              <td><%= row[header] %></td>
+            <% end %>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+<% end %>
+
+<h2>Step 2: Map columns</h2>
+
+<%= form_with model: @csv_import, url: account_csv_import_path(@account, @csv_import), method: :patch do |form| %>
+  <%= form.fields_for :column_mappings, OpenStruct.new(mappings) do |mapping_form| %>
+    <% header_options = headers.compact.reject(&:empty?) %>
+
+    <p>
+      <%= mapping_form.label :date_column, "Date column" %><br>
+      <%= mapping_form.select :date_column, header_options, { include_blank: "—" }, selected: mappings[:date_column] %>
+    </p>
+
+    <p>
+      <%= mapping_form.label :time_column, "Time column (optional)" %><br>
+      <%= mapping_form.select :time_column, header_options, { include_blank: "—" }, selected: mappings[:time_column] %>
+      <small>Pick this if the file stores the time-of-day in its own column.</small>
+    </p>
+
+    <p>
+      <%= mapping_form.label :timezone_column, "Timezone column (optional)" %><br>
+      <%= mapping_form.select :timezone_column, header_options, { include_blank: "—" }, selected: mappings[:timezone_column] %>
+      <small>Pick this if the file stores a timezone abbreviation (e.g. <code>PDT</code>) in its own column.</small>
+    </p>
+
+    <p>
+      <%= mapping_form.label :date_format, "Date format (strftime)" %><br>
+      <%= mapping_form.text_field :date_format, value: mappings[:date_format], placeholder: "%m/%d/%Y" %>
+      <small>
+        The parser joins your Date, Time, and Timezone column values with single spaces and parses the result with this format. Match every part you mapped above:
+        <ul style="margin: 0.25em 0 0.25em 1.25em">
+          <li>Date column only → <code>%m/%d/%Y</code> or <code>%Y-%m-%d</code></li>
+          <li>Date + Time → <code>%m/%d/%Y %H:%M:%S</code></li>
+          <li>Date + Time + Timezone → <code>%m/%d/%Y %H:%M:%S</code> (we auto-append <code>%Z</code> when a timezone column is set)</li>
+        </ul>
+        Leave blank to try flexible parsing (only safe when no Time or Timezone column is mapped).
+      </small>
+    </p>
+
+    <fieldset>
+      <legend>Description column(s)</legend>
+      <% selected_description_columns = Array(mappings[:description_columns]) %>
+      <%= hidden_field_tag "csv_import[column_mappings][description_columns][]", "" %>
+      <% header_options.each do |header| %>
+        <% input_id = "csv_import_column_mappings_description_columns_#{header.parameterize}" %>
+        <label for="<%= input_id %>" style="display: block">
+          <%= check_box_tag "csv_import[column_mappings][description_columns][]",
+                            header,
+                            selected_description_columns.include?(header),
+                            id: input_id %>
+          <%= header %>
+        </label>
+      <% end %>
+      <small>Selected columns are concatenated with spaces.</small>
+    </fieldset>
+
+    <p>
+      <%= mapping_form.label :posted_at_column, "Posted-at column (optional)" %><br>
+      <%= mapping_form.select :posted_at_column, header_options, { include_blank: "—" }, selected: mappings[:posted_at_column] %>
+    </p>
+
+    <fieldset data-controller="csv-mapping" data-csv-mapping-mode-value="<%= mappings[:amount_mode] || "signed" %>">
+      <legend>Amount</legend>
+      <% Csv::Parser::AMOUNT_MODES.each do |mode| %>
+        <label>
+          <%= mapping_form.radio_button :amount_mode, mode, checked: mappings[:amount_mode] == mode || (mappings[:amount_mode].blank? && mode == "signed"), data: { action: "csv-mapping#change", csv_mapping_target: "radio" } %>
+          <%= mode.humanize %>
+        </label>
+      <% end %>
+
+      <div data-csv-mapping-target="signed">
+        <p>
+          <%= mapping_form.label :amount_column, "Amount column (signed: negative = expense)" %><br>
+          <%= mapping_form.select :amount_column, header_options, { include_blank: "—" }, selected: mappings[:amount_column] %>
+        </p>
+      </div>
+
+      <div data-csv-mapping-target="debitCredit">
+        <p>
+          <%= mapping_form.label :debit_column, "Debit column (money out)" %><br>
+          <%= mapping_form.select :debit_column, header_options, { include_blank: "—" }, selected: mappings[:debit_column] %>
+        </p>
+        <p>
+          <%= mapping_form.label :credit_column, "Credit column (money in)" %><br>
+          <%= mapping_form.select :credit_column, header_options, { include_blank: "—" }, selected: mappings[:credit_column] %>
+        </p>
+      </div>
+
+      <div data-csv-mapping-target="signIndicator">
+        <p>
+          <%= mapping_form.label :sign_column, "Sign indicator column" %><br>
+          <%= mapping_form.select :sign_column, header_options, { include_blank: "—" }, selected: mappings[:sign_column] %>
+        </p>
+        <p>
+          <%= mapping_form.label :debit_values, "Values that mean money out (comma-separated)" %><br>
+          <%= mapping_form.text_field :debit_values, value: Array(mappings[:debit_values]).join(", "), placeholder: "DEBIT, ACH_DEBIT" %>
+        </p>
+      </div>
+    </fieldset>
+
+    <p>
+      <%= mapping_form.label :skip_rows, "Skip the first N data rows" %><br>
+      <%= mapping_form.number_field :skip_rows, value: mappings[:skip_rows] || 0, min: 0 %>
+    </p>
+  <% end %>
+
+  <p><%= form.submit "Save mapping" %></p>
+<% end %>
+
+<% if can_confirm %>
+  <p>Mapping saved. <%= link_to "Continue to Step 3 →", confirm_account_csv_import_path(@account, @csv_import) %></p>
+<% end %>

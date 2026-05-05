@@ -519,6 +519,11 @@
   background-color: var(--cream);
 }
 
+.source-badge--csv {
+  color: var(--bark-medium);
+  background-color: var(--cream);
+}
+
 /* Merged details */
 .transactions .row > .merged-details {
   grid-column: 1 / -1;
