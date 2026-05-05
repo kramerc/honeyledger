@@ -47,9 +47,9 @@ class Csv::ImportsController < ApplicationController
   end
 
   def confirm
-    if @csv_import.pending? || @csv_import.column_mappings.blank?
+    unless @csv_import.mappings_complete?
       redirect_to account_csv_import_path(@account, @csv_import),
-                  alert: "Save a column mapping before confirming."
+                  alert: "Save a complete column mapping before confirming."
       return
     end
 
@@ -57,8 +57,9 @@ class Csv::ImportsController < ApplicationController
   end
 
   def parse
-    if @csv_import.column_mappings.blank? || @csv_import.pending?
-      redirect_to account_csv_import_path(@account, @csv_import), alert: "Save a column mapping before parsing."
+    unless @csv_import.mappings_complete?
+      redirect_to account_csv_import_path(@account, @csv_import),
+                  alert: "Save a complete column mapping before parsing."
       return
     end
 
@@ -99,9 +100,6 @@ class Csv::ImportsController < ApplicationController
     def build_preview
       return nil unless @csv_import.file.attached?
 
-      mappings = @csv_import.column_mappings.presence || {}
-      currency = @account.currency
-
       raw = begin
         @csv_import.file.open { |io| Csv::Parser.raw_preview(io, limit: 10) }
       rescue Csv::Parser::Error, ::CSV::MalformedCSVError, ActiveStorage::Error
@@ -110,9 +108,9 @@ class Csv::ImportsController < ApplicationController
 
       parsed_rows = []
       parse_error = nil
-      if mappings_complete?(mappings)
+      if @csv_import.mappings_complete?
         begin
-          parsed = @csv_import.file.open { |io| Csv::Parser.preview(io, mappings: mappings, currency: currency, limit: 10) }
+          parsed = @csv_import.file.open { |io| Csv::Parser.preview(io, mappings: @csv_import.column_mappings, currency: @account.currency, limit: 10) }
           parsed_rows = parsed[:rows]
         rescue Csv::Parser::Error, Csv::Parser::RowError => e
           parse_error = e.message
@@ -125,19 +123,5 @@ class Csv::ImportsController < ApplicationController
         parsed_rows: parsed_rows,
         error: parse_error
       }
-    end
-
-    def mappings_complete?(mappings)
-      return false if mappings.blank?
-      mappings = mappings.with_indifferent_access
-      return false if mappings[:date_column].blank? || mappings[:amount_mode].blank?
-      case mappings[:amount_mode]
-      when "signed", "sign_indicator"
-        mappings[:amount_column].present?
-      when "debit_credit"
-        mappings[:debit_column].present? && mappings[:credit_column].present?
-      else
-        false
-      end
     end
 end

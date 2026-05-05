@@ -167,6 +167,32 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "POST parse refuses to enqueue when the saved mapping is incomplete" do
+    csv_import = build_csv_import(
+      state: "mapped",
+      column_mappings: { "date_column" => "Date" } # missing amount_mode/columns
+    )
+    csv_import.save!
+
+    assert_no_enqueued_jobs only: Csv::ParseJob do
+      post parse_account_csv_import_url(@account, csv_import)
+    end
+    assert_redirected_to account_csv_import_url(@account, csv_import)
+    follow_redirect!
+    assert_match "Save a complete column mapping", response.body
+  end
+
+  test "GET confirm redirects to mapping when column_mappings are incomplete" do
+    csv_import = build_csv_import(
+      state: "mapped",
+      column_mappings: { "date_column" => "Date" } # missing amount_mode/columns
+    )
+    csv_import.save!
+
+    get confirm_account_csv_import_url(@account, csv_import)
+    assert_redirected_to account_csv_import_url(@account, csv_import)
+  end
+
   test "DELETE destroys the import" do
     csv_import = build_csv_import(state: "pending")
     csv_import.save!

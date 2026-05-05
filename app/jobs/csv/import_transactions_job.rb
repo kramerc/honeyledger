@@ -69,7 +69,14 @@ class Csv::ImportTransactionsJob < ApplicationJob
           transaction = Transaction.new
         end
 
-        rule = user.import_rules.for_description(csv_transaction.description).first
+        # Csv::Transaction#description is `""` when the user mapped no
+        # description column or the row's cells are blank. Account names
+        # can't be blank, and ImportRule matching against an empty string
+        # has no useful semantics, so fall back to a placeholder. Users can
+        # rename the resulting "(no description)" account afterwards.
+        description_for_import = csv_transaction.description.presence || "(no description)"
+
+        rule = user.import_rules.for_description(description_for_import).first
         rule_account = rule&.account
         bs_rule_account = rule_account if rule_account&.balance_sheet?
 
@@ -77,7 +84,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
         counterpart = if rule_account && !bs_rule_account
           rule_account
         else
-          Account.find_or_create_for_import(user: user, description: csv_transaction.description, kind: kind, currency: ledger_account.currency, skip_rules: true)
+          Account.find_or_create_for_import(user: user, description: description_for_import, kind: kind, currency: ledger_account.currency, skip_rules: true)
         end
 
         if csv_transaction.amount_minor.negative?
@@ -91,7 +98,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
         transaction.user = user
         transaction.src_account = transaction_src
         transaction.dest_account = transaction_dest
-        transaction.description = csv_transaction.description
+        transaction.description = description_for_import
         transaction.amount_minor = csv_transaction.amount_minor.abs
         transaction.currency = ledger_account.currency
         transaction.transacted_at = csv_transaction.transacted_at

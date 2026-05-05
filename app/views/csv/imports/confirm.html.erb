@@ -28,14 +28,14 @@
   <p>Below is how the first <%= parsed_rows.size %> row<%= "s" if parsed_rows.size != 1 %> of your file will be imported with the saved mapping. If anything looks off, go back to Step 2 and adjust.</p>
   <table>
     <tr>
-      <th>Row #</th>
+      <th>Data row</th>
       <th>Transacted at</th>
       <th>Description</th>
       <th>Amount</th>
     </tr>
     <% parsed_rows.each do |row| %>
       <tr>
-        <td><%= row.row_index %></td>
+        <td><%= row.row_index + 1 %></td>
         <td><%= row.transacted_at.strftime("%Y-%m-%d") %></td>
         <td><%= row.description %></td>
         <td><%= number_with_precision(row.amount_minor.to_d / (10 ** @account.currency.decimal_places), precision: @account.currency.decimal_places) %></td>
@@ -46,6 +46,8 @@
   <p>The mapping does not produce any rows yet. <%= link_to "Adjust the mapping", account_csv_import_path(@account, @csv_import) %>.</p>
 <% end %>
 
-<p style="margin-top: 1em">
-  <%= button_to "Parse and import these rows", parse_account_csv_import_path(@account, @csv_import), method: :post %>
-</p>
+<% if parsed_rows.any? %>
+  <p style="margin-top: 1em">
+    <%= button_to "Parse and import these rows", parse_account_csv_import_path(@account, @csv_import), method: :post %>
+  </p>
+<% end %>

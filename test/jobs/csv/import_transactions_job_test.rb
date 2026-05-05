@@ -206,6 +206,25 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "imports a row whose description is blank without crashing" do
+    csv_import = create_csv_import
+    csv_import.transactions.create!(
+      row_index: 0,
+      transacted_at: 1.day.ago,
+      description: "",
+      amount_minor: -475,
+      synced_at: Time.current
+    )
+
+    assert_difference "Transaction.count", 1 do
+      Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    end
+    transaction = Transaction.last
+    assert_equal "(no description)", transaction.description
+    assert_equal "(no description)", transaction.dest_account.name
+    assert_equal "imported", csv_import.reload.state
+  end
+
   test "imports two distinct rows from the same CSV that share amount/day/description" do
     csv_import = create_csv_import
     same_at = 1.day.ago.beginning_of_day + 12.hours

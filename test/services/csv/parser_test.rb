@@ -94,6 +94,10 @@ class Csv::ParserTest < ActiveSupport::TestCase
     content = "Date,Description,Amount\nnot a date,Coffee,-4.75\n"
     error = assert_raises(Csv::Parser::RowError) { parse(content, mappings: signed_mappings, currency: @usd) }
     assert_equal 0, error.row_index
+    # Surface the row in 1-based "data row" terms even though the internal
+    # index is 0-based, so users can locate the row in their CSV (header is
+    # line 1, so data row 1 is line 2).
+    assert_match(/data row 1:/, error.message)
   end
 
   test "falls back to date-only format when user-supplied format includes time tokens but column lacks them" do

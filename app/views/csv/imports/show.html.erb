@@ -1,7 +1,7 @@
 <% mappings = @csv_import.column_mappings.with_indifferent_access %>
 <% headers = (@preview && @preview[:headers]) || [] %>
 <% raw_rows = (@preview && @preview[:raw_rows]) || [] %>
-<% can_confirm = !@csv_import.pending? && @csv_import.column_mappings.present? %>
+<% can_confirm = @csv_import.mappings_complete? && !@csv_import.pending? %>
 
 <h1>CSV Import — <%= @account.name %></h1>
 

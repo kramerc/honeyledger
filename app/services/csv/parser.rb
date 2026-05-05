@@ -4,8 +4,11 @@ class Csv::Parser
   class Error < StandardError; end
   class RowError < Error
     attr_reader :row_index
+    # row_index is the zero-based index used internally; the displayed
+    # number is +1 so users can locate the offending row in their CSV
+    # (the header is line 1, so data row 1 is line 2).
     def initialize(message, row_index:)
-      super("row #{row_index}: #{message}")
+      super("data row #{row_index + 1}: #{message}")
       @row_index = row_index
     end
   end

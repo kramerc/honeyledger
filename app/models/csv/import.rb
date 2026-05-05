@@ -33,6 +33,24 @@ class Csv::Import < ApplicationRecord
     file.attached? ? file.filename.to_s : nil
   end
 
+  # Whether the saved column_mappings have every field the parser needs to
+  # process a row. Used to gate the confirm/parse step in the controller and
+  # the "Parse and import" button in the confirm view, so the user can't
+  # enqueue a parse that will fail at parse-time validation.
+  def mappings_complete?
+    return false if column_mappings.blank?
+    mapping = column_mappings.with_indifferent_access
+    return false if mapping[:date_column].blank? || mapping[:amount_mode].blank?
+    case mapping[:amount_mode]
+    when "signed", "sign_indicator"
+      mapping[:amount_column].present?
+    when "debit_credit"
+      mapping[:debit_column].present? && mapping[:credit_column].present?
+    else
+      false
+    end
+  end
+
   private
 
     def account_belongs_to_user
