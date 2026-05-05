@@ -35,7 +35,14 @@
                  data-transaction-id="<%= transaction.id %>">
         <% end %>
       </div>
-      <div data-label="Date"><%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %></div>
+      <div data-label="Date">
+        <%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %>
+        <% if sources.any? %>
+          <div class="source-badges">
+            <%= transaction_source_badges(sources) %>
+          </div>
+        <% end %>
+      </div>
       <div data-label="Type">
         <%= transaction_type_indicator(transaction) %>
         <% if transaction.excluded? %>
@@ -46,9 +53,6 @@
       </div>
       <div data-label="Description">
         <%= transaction.description %>
-        <% if sources.any? %>
-          <%= transaction_source_badges(sources) %>
-        <% end %>
       </div>
       <div data-label="From"><%= transaction.src_account&.name %></div>
       <div data-label="To"><%= transaction.dest_account&.name %></div>

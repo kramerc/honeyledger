@@ -106,6 +106,13 @@
   flex-wrap: wrap;
 }
 
+/* Date column: stack source badges below the date */
+.transactions .row > div:nth-child(2) {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
 .transactions .numeric {
   justify-content: flex-end;
   text-align: right;
@@ -483,6 +490,33 @@
 .merged-badge:hover {
   background-color: var(--honey-light);
   color: var(--honey-deeper);
+}
+
+/* Source badges */
+.source-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.source-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.source-badge--simplefin {
+  color: var(--honey-deeper);
+  background-color: var(--honey-pale);
+}
+
+.source-badge--lunchflow {
+  color: var(--bark-medium);
+  background-color: var(--cream);
 }
 
 /* Merged details */
