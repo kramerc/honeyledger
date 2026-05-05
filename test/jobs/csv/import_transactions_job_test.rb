@@ -156,6 +156,13 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
   private
 
     def create_csv_import
-      Csv::Import.create!(user: @user, account: @bank_account, state: "parsed")
+      csv_import = Csv::Import.new(user: @user, account: @bank_account, state: "parsed")
+      csv_import.file.attach(
+        io: StringIO.new("Date,Description,Amount\n"),
+        filename: "stub.csv",
+        content_type: "text/csv"
+      )
+      csv_import.save!
+      csv_import
     end
 end

@@ -45,6 +45,13 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to account_csv_import_url(@account, csv_import)
   end
 
+  test "POST create rejects an upload with no file" do
+    assert_no_difference "Csv::Import.count" do
+      post account_csv_imports_url(@account), params: { csv_import: { file: nil } }
+    end
+    assert_response :unprocessable_entity
+  end
+
   test "POST create defaults column_mappings to the most recent prior import for the account" do
     prior_mappings = {
       "date_column" => "Date",
@@ -52,7 +59,7 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
       "amount_column" => "Amount",
       "description_columns" => [ "Description" ]
     }
-    Csv::Import.create!(user: @user, account: @account, state: "imported", column_mappings: prior_mappings)
+    build_csv_import(state: "imported", column_mappings: prior_mappings).save!
 
     file = fixture_file_upload_csv("Date,Description,Amount\n2026-01-15,Coffee,-4.75\n")
     post account_csv_imports_url(@account), params: { csv_import: { file: file } }
@@ -62,7 +69,8 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "PATCH update saves the mapping and marks state as mapped" do
-    csv_import = Csv::Import.create!(user: @user, account: @account, state: "pending")
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
 
     patch account_csv_import_url(@account, csv_import), params: {
       csv_import: {
@@ -82,10 +90,20 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ "DEBIT", "ACH_DEBIT" ], csv_import.column_mappings["debit_values"]
   end
 
+  test "PATCH update tolerates a request body with no column_mappings" do
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+
+    patch account_csv_import_url(@account, csv_import), params: { csv_import: {} }
+    csv_import.reload
+    assert_equal "mapped", csv_import.state
+    # Default no-op mapping; the existing reject(&:blank?) normalizes the
+    # description_columns array to empty rather than dropping the key.
+    assert_equal({ "description_columns" => [] }, csv_import.column_mappings)
+  end
+
   test "GET confirm renders the parsed preview" do
-    csv_import = Csv::Import.create!(
-      user: @user,
-      account: @account,
+    csv_import = build_csv_import(
       state: "mapped",
       column_mappings: {
         "date_column" => "Date",
@@ -94,7 +112,7 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
         "description_columns" => [ "Description" ]
       }
     )
-    csv_import.file.attach(fixture_file_upload_csv("Date,Description,Amount\n2026-01-15,Coffee,-4.75\n"))
+    csv_import.save!
 
     get confirm_account_csv_import_url(@account, csv_import)
     assert_response :success
@@ -103,18 +121,19 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "GET confirm redirects to mapping when state is pending" do
-    csv_import = Csv::Import.create!(user: @user, account: @account, state: "pending")
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+
     get confirm_account_csv_import_url(@account, csv_import)
     assert_redirected_to account_csv_import_url(@account, csv_import)
   end
 
   test "POST parse enqueues ParseJob once a mapping is saved" do
-    csv_import = Csv::Import.create!(
-      user: @user,
-      account: @account,
+    csv_import = build_csv_import(
       state: "mapped",
       column_mappings: { "date_column" => "Date", "amount_mode" => "signed", "amount_column" => "Amount" }
     )
+    csv_import.save!
 
     assert_enqueued_with(job: Csv::ParseJob, args: [ csv_import.id ]) do
       post parse_account_csv_import_url(@account, csv_import)
@@ -123,35 +142,35 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "POST parse refuses to enqueue when the import is still pending" do
-    csv_import = Csv::Import.create!(user: @user, account: @account, state: "pending")
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+
     assert_no_enqueued_jobs only: Csv::ParseJob do
       post parse_account_csv_import_url(@account, csv_import)
     end
   end
 
   test "DELETE destroys the import" do
-    csv_import = Csv::Import.create!(user: @user, account: @account, state: "pending")
+    csv_import = build_csv_import(state: "pending")
+    csv_import.save!
+
     assert_difference "Csv::Import.count", -1 do
       delete account_csv_import_url(@account, csv_import)
     end
   end
 
   test "GET show pre-checks saved description_columns checkboxes" do
-    csv_import = Csv::Import.create!(
-      user: @user,
-      account: @account,
+    csv_import = build_csv_import(
       state: "mapped",
       column_mappings: {
         "date_column" => "Date",
         "amount_mode" => "signed",
         "amount_column" => "Amount",
         "description_columns" => [ "Description", "Memo" ]
-      }
+      },
+      content: "Date,Description,Memo,Amount\n2026-01-15,Coffee,Latte,-4.75\n"
     )
-    csv_import.file.attach(fixture_file_upload_csv(<<~CSV))
-      Date,Description,Memo,Amount
-      2026-01-15,Coffee,Latte,-4.75
-    CSV
+    csv_import.save!
 
     get account_csv_import_url(@account, csv_import)
     assert_response :success
@@ -164,5 +183,20 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
 
     def fixture_file_upload_csv(content)
       Rack::Test::UploadedFile.new(StringIO.new(content), "text/csv", original_filename: "test.csv")
+    end
+
+    def build_csv_import(state:, column_mappings: {}, content: "Date,Description,Amount\n2026-01-15,Coffee,-4.75\n")
+      csv_import = Csv::Import.new(
+        user: @user,
+        account: @account,
+        state: state,
+        column_mappings: column_mappings
+      )
+      csv_import.file.attach(
+        io: StringIO.new(content),
+        filename: "test.csv",
+        content_type: "text/csv"
+      )
+      csv_import
     end
 end

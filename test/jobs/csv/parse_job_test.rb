@@ -51,15 +51,36 @@ class Csv::ParseJobTest < ActiveJob::TestCase
   end
 
   test "no-ops when the import has no attached file" do
-    csv_import = Csv::Import.create!(
-      user: @user,
-      account: @bank_account,
-      state: "mapped",
-      column_mappings: signed_mappings
-    )
+    csv_import = build_csv_import_with_file("")
+    csv_import.file.purge
+    csv_import.reload
     Csv::ParseJob.perform_now(csv_import.id)
     csv_import.reload
     assert_equal "mapped", csv_import.state
+  end
+
+  test "drops csv_transactions whose row_index is no longer produced after a re-parse with skip_rows" do
+    csv_import = build_csv_import_with_file(<<~CSV)
+      Date,Description,Amount
+      2026-01-15,Coffee,-4.75
+      2026-01-16,Refund,12.00
+      2026-01-17,Other,-3.00
+    CSV
+
+    Csv::ParseJob.perform_now(csv_import.id)
+    assert_equal [ 0, 1, 2 ], csv_import.transactions.order(:row_index).pluck(:row_index)
+
+    csv_import.update!(column_mappings: csv_import.column_mappings.merge("skip_rows" => 2))
+    Csv::ParseJob.perform_now(csv_import.id)
+    assert_equal [ 2 ], csv_import.transactions.order(:row_index).pluck(:row_index)
+  end
+
+  test "still enqueues ImportTransactionsJob when no rows are produced" do
+    csv_import = build_csv_import_with_file("Date,Description,Amount\n")
+
+    assert_enqueued_with(job: Csv::ImportTransactionsJob, args: [ csv_import.id ]) do
+      Csv::ParseJob.perform_now(csv_import.id)
+    end
   end
 
   private
@@ -74,7 +95,7 @@ class Csv::ParseJobTest < ActiveJob::TestCase
     end
 
     def build_csv_import_with_file(content, mappings: signed_mappings)
-      csv_import = Csv::Import.create!(
+      csv_import = Csv::Import.new(
         user: @user,
         account: @bank_account,
         state: "mapped",
@@ -85,6 +106,7 @@ class Csv::ParseJobTest < ActiveJob::TestCase
         filename: "test.csv",
         content_type: "text/csv"
       )
+      csv_import.save!
       csv_import
     end
 end

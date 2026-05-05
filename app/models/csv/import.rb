@@ -1,5 +1,6 @@
 class Csv::Import < ApplicationRecord
   STATES = %w[ pending mapped parsed imported failed ].freeze
+  MAX_FILE_BYTES = 25.megabytes
 
   belongs_to :user
   belongs_to :account
@@ -9,6 +10,8 @@ class Csv::Import < ApplicationRecord
   validates :state, inclusion: { in: STATES }
   validate :account_belongs_to_user
   validate :account_is_real
+  validate :file_attached
+  validate :file_within_size_limit, if: -> { file.attached? }
 
   STATES.each do |state_name|
     define_method("#{state_name}?") { state == state_name }
@@ -40,5 +43,15 @@ class Csv::Import < ApplicationRecord
     def account_is_real
       return if account.blank?
       errors.add(:account, "must be a real (non-virtual) account") if account.virtual?
+    end
+
+    def file_attached
+      errors.add(:file, "must be attached") unless file.attached?
+    end
+
+    def file_within_size_limit
+      if file.byte_size > MAX_FILE_BYTES
+        errors.add(:file, "must be smaller than #{ActiveSupport::NumberHelper.number_to_human_size(MAX_FILE_BYTES)}")
+      end
     end
 end

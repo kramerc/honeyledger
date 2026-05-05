@@ -82,7 +82,8 @@ class Csv::ImportsController < ApplicationController
     end
 
     def mapping_params
-      raw = params.require(:csv_import).fetch(:column_mappings, {}).to_unsafe_h
+      mapping = params.dig(:csv_import, :column_mappings)
+      raw = mapping.respond_to?(:to_unsafe_h) ? mapping.to_unsafe_h : (mapping.is_a?(Hash) ? mapping.dup : {})
       raw["description_columns"] = Array(raw["description_columns"]).reject(&:blank?)
       raw["debit_values"] = split_csv_list(raw["debit_values"]) if raw.key?("debit_values")
       raw["skip_rows"] = raw["skip_rows"].to_i if raw["skip_rows"].present?
@@ -100,7 +101,11 @@ class Csv::ImportsController < ApplicationController
       mappings = @csv_import.column_mappings.presence || {}
       currency = @account.currency
 
-      raw = @csv_import.file.open { |io| Csv::Parser.raw_preview(io, limit: 10) } rescue { headers: [], rows: [] }
+      raw = begin
+        @csv_import.file.open { |io| Csv::Parser.raw_preview(io, limit: 10) }
+      rescue Csv::Parser::Error, ::CSV::MalformedCSVError, ActiveStorage::Error
+        { headers: [], rows: [] }
+      end
 
       parsed_rows = []
       parse_error = nil

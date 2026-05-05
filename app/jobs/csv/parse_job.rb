@@ -6,7 +6,7 @@ class Csv::ParseJob < ApplicationJob
     return if import.nil?
     return unless import.file.attached?
 
-    parsed_count = 0
+    produced_indices = []
     import.file.open do |io|
       parser = Csv::Parser.new(io: io, mappings: import.column_mappings, currency: import.account.currency)
       parser.each_row do |parsed|
@@ -22,12 +22,22 @@ class Csv::ParseJob < ApplicationJob
           synced_at: Time.current
         )
         record.save!
-        parsed_count += 1
+        produced_indices << parsed.row_index
       end
     end
 
+    # Drop csv_transactions whose row_index is no longer produced by the
+    # current mapping (e.g. user changed `skip_rows` after a previous parse).
+    # `dependent: :destroy` on transaction_sources cleans up the join row; any
+    # ledger transactions previously sourced from these rows simply lose their
+    # CSV source and remain as ordinary ledger transactions.
+    import.transactions.where.not(row_index: produced_indices).destroy_all
+
     import.update!(state: "parsed", parsed_at: Time.current, error: nil)
-    Csv::ImportTransactionsJob.perform_later(import.id) if parsed_count.positive?
+    # Always enqueue the import job — it no-ops when there are no rows but
+    # still transitions the import to "imported", so a 0-row parse doesn't
+    # leave the import permanently stuck in "parsed".
+    Csv::ImportTransactionsJob.perform_later(import.id)
   rescue Csv::Parser::Error => e
     import&.update!(state: "failed", error: e.message)
   rescue StandardError => e
