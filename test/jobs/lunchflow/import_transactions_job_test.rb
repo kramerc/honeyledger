@@ -121,6 +121,86 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert transaction.synced_at > original_synced_at
   end
 
+  test "canonical resync with drifted merchant does not create a new counterpart account" do
+    lf_account, lf_bank_account = create_linked_lunchflow_account
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_drift",
+      amount: "-50.00",
+      currency: "USD",
+      description: "POS PURCHASE",
+      merchant: "Coffee Shop",
+      pending: false,
+      date: 2.days.ago.to_date
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = lf_transaction.ledger_transactions.first
+    original_dest_account_id = transaction.dest_account_id
+    original_description = transaction.description
+    original_synced_at = transaction.synced_at
+
+    travel 2.seconds
+
+    lf_transaction.update!(
+      merchant: "Coffee Shop - 100 Main St SOMECITY US - Card Ending In 0000",
+      synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      assert_no_difference "Account.count" do
+        Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+      end
+    end
+
+    transaction.reload
+    assert_equal lf_bank_account, transaction.src_account
+    assert_equal original_dest_account_id, transaction.dest_account_id
+    assert_equal original_description, transaction.description
+    assert transaction.synced_at > original_synced_at
+  end
+
+  test "canonical resync with drifted merchant preserves balance-sheet rule target" do
+    lf_account, lf_bank_account = create_linked_lunchflow_account
+
+    savings_account = Account.create!(user: @user, currency: @currency, name: "Savings", kind: :asset)
+    ImportRule.create!(user: @user, account: savings_account, match_pattern: "TRANSFER TO SAVINGS", match_type: :contains)
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account,
+      remote_id: "lf_drift_rule",
+      amount: "-500.00",
+      currency: "USD",
+      description: "POS PURCHASE",
+      merchant: "TRANSFER TO SAVINGS",
+      pending: false,
+      date: 1.day.ago.to_date
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = lf_transaction.ledger_transactions.first
+    assert_equal lf_bank_account, transaction.src_account
+    assert_equal savings_account, transaction.dest_account
+
+    travel 2.seconds
+
+    lf_transaction.update!(
+      merchant: "TRANSFER TO SAVINGS - REF 9999 - Card Ending In 0000",
+      synced_at: Time.current
+    )
+
+    assert_no_difference "Account.count" do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    transaction.reload
+    assert_equal savings_account, transaction.dest_account
+    assert_equal "TRANSFER TO SAVINGS", transaction.description
+  end
+
   test "pending transaction has nil cleared_at" do
     lf_account, _ = create_linked_lunchflow_account
 
