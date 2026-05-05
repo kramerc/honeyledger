@@ -4,8 +4,7 @@
 
 <p>
   <% if scoped %>
-    <%= link_to "Upload a CSV", new_account_csv_import_path(@account) %>
-    ·
+    <%= link_to "Upload a CSV", new_account_csv_import_path(@account) %> |
     <%= link_to "Back to transactions", account_transactions_path(@account) %>
   <% else %>
     <%= link_to "Back to integrations", integrations_path %>
@@ -33,7 +32,6 @@
         <td><%= csv_import.state %><% if csv_import.error.present? %> — <span style="color: red"><%= csv_import.error %></span><% end %></td>
         <td style="display: flex; gap: 0.25em; align-items: center; white-space: nowrap">
           <%= link_to "Open", account_csv_import_path(csv_import.account, csv_import) %>
-          ·
           <%= button_to "Delete", account_csv_import_path(csv_import.account, csv_import), method: :delete, data: { turbo_confirm: "Delete this CSV import? Imported transactions remain on the ledger." } %>
         </td>
       </tr>

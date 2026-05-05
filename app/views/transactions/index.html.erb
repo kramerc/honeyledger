@@ -10,7 +10,7 @@
     <%= link_to "Show excluded transactions", "#{base_path}?show_excluded=1" %>
   <% end %>
   <% if @account&.real? %>
-    · <%= link_to "Import CSV", account_csv_imports_path(@account) %>
+    | <%= link_to "Import CSV", account_csv_imports_path(@account) %>
   <% end %>
 </div>
 
