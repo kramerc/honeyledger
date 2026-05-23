@@ -90,9 +90,14 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal "Lunch Flow", source_badge_label(lunchflow_accounts(:linked_one))
   end
 
+  test "source_badge_label labels CSV sources as CSV (not Csv::Transaction)" do
+    csv_transaction = Csv::Transaction.new
+    assert_equal "CSV", source_badge_label(csv_transaction)
+  end
+
   test "source_badge_label falls back to the class name for unknown sourceable types" do
     # Currency isn't a registered aggregator type but stands in for any future
-    # source class (CSV/OFX, etc.) so the fallback can't silently render empty.
+    # source class (OFX, etc.) so the fallback can't silently render empty.
     assert_equal "Currency", source_badge_label(currencies(:usd))
   end
 
@@ -104,6 +109,10 @@ class ApplicationHelperTest < ActionView::TestCase
 
   test "source_badge_modifier returns the Lunch Flow modifier class" do
     assert_equal "source-badge--lunchflow", source_badge_modifier(lunchflow_accounts(:linked_one))
+  end
+
+  test "source_badge_modifier returns the CSV modifier class" do
+    assert_equal "source-badge--csv", source_badge_modifier(Csv::Transaction.new)
   end
 
   test "source_badge_modifier returns nil for unknown sourceable types" do

@@ -9,6 +9,7 @@ class Transaction::Reconcile
     @currency_id = currency_id
     @transacted_at = transacted_at
     @description = description
+    @incoming_source = incoming_source
     @incoming_source_class = incoming_source&.class
   end
 
@@ -75,6 +76,20 @@ class Transaction::Reconcile
         ts_table[:sourceable_type].eq(account_class.transaction_class.name)
           .and(ts_table[:sourceable_id].in(live_transactions_for(account_class).arel))
       end
+
+      # Csv::Transaction isn't in AggregatorLinkable.registry (it has no
+      # connection-style aggregator account). Two distinct rows in the same
+      # Csv::Import are by definition different real-world events even when
+      # amount/date/description coincide, so candidates already sourced by a
+      # row from the same import must disqualify a CSV-incoming candidate from
+      # being adopted. Cross-import CSV-on-CSV adoption is still allowed (e.g.
+      # overlapping monthly statements).
+      if @incoming_source.is_a?(Csv::Transaction) && @incoming_source.import_id.present?
+        same_import_csv_ids = Csv::Transaction.where(import_id: @incoming_source.import_id).select(:id)
+        live_pairs_clauses << ts_table[:sourceable_type].eq("Csv::Transaction")
+          .and(ts_table[:sourceable_id].in(same_import_csv_ids.arel))
+      end
+
       return Arel.sql("FALSE") if live_pairs_clauses.empty?
 
       Arel::Nodes::Exists.new(

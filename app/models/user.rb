@@ -15,4 +15,6 @@ class User < ApplicationRecord
 
   has_one :lunchflow_connection, class_name: "Lunchflow::Connection", dependent: :destroy
   has_many :lunchflow_accounts, class_name: "Lunchflow::Account", through: :lunchflow_connection, source: :accounts
+
+  has_many :csv_imports, class_name: "Csv::Import", dependent: :destroy
 end

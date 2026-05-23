@@ -1,0 +1,42 @@
+<% scoped = @account.present? %>
+
+<h1>CSV Imports<%= " — #{@account.name}" if scoped %></h1>
+
+<p>
+  <% if scoped %>
+    <%= link_to "Upload a CSV", new_account_csv_import_path(@account) %> |
+    <%= link_to "Back to transactions", account_transactions_path(@account) %>
+  <% else %>
+    <%= link_to "Back to integrations", integrations_path %>
+  <% end %>
+</p>
+
+<% if @csv_imports.any? %>
+  <table>
+    <tr>
+      <th>Uploaded</th>
+      <% unless scoped %>
+        <th>Account</th>
+      <% end %>
+      <th>File</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+    <% @csv_imports.each do |csv_import| %>
+      <tr>
+        <td><%= csv_import.created_at.strftime("%B %d, %Y %I:%M %p") %></td>
+        <% unless scoped %>
+          <td><%= link_to csv_import.account.name, account_transactions_path(csv_import.account) %></td>
+        <% end %>
+        <td><%= csv_import.filename || "(missing)" %></td>
+        <td><%= csv_import.state %><% if csv_import.error.present? %> — <span style="color: red"><%= csv_import.error %></span><% end %></td>
+        <td style="white-space: nowrap">
+          <%= link_to "Open", account_csv_import_path(csv_import.account, csv_import) %> |
+          <%= link_to "Delete", account_csv_import_path(csv_import.account, csv_import), data: { turbo_method: :delete, turbo_confirm: "Delete this CSV import? Imported transactions remain on the ledger." } %>
+        </td>
+      </tr>
+    <% end %>
+  </table>
+<% else %>
+  <p>No CSV imports<%= " for this account" if scoped %>.</p>
+<% end %>

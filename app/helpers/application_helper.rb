@@ -8,6 +8,7 @@ module ApplicationHelper
     case sourceable
     when Simplefin::Account, Simplefin::Transaction then "SimpleFIN"
     when Lunchflow::Account, Lunchflow::Transaction then "Lunch Flow"
+    when Csv::Transaction then "CSV"
     else sourceable.class.name
     end
   end
@@ -16,6 +17,7 @@ module ApplicationHelper
     case sourceable
     when Simplefin::Account, Simplefin::Transaction then "source-badge--simplefin"
     when Lunchflow::Account, Lunchflow::Transaction then "source-badge--lunchflow"
+    when Csv::Transaction then "source-badge--csv"
     end
   end
 
