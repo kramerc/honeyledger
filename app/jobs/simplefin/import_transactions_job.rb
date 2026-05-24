@@ -16,6 +16,12 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         ledger_account = sft.account.ledger_accounts.first
         next if ledger_account.nil?
 
+        # Sign decides direction once per row: a negative amount is a charge
+        # (ledger account on src), non-negative is a refund/credit (ledger on
+        # dest). Reused below for both reconciliation and src/dest assignment.
+        amount_bd = BigDecimal(sft.amount)
+        ledger_side = amount_bd.negative? ? :src : :dest
+
         existing_source = TransactionSource.find_by(sourceable: sft)
 
         if existing_source
@@ -49,6 +55,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           currency_id: ledger_account.currency_id,
           transacted_at: sft.transacted_at || sft.posted || Time.current,
           description: sft.description,
+          ledger_side: ledger_side,
           incoming_source: sft
         ))
           # Same concurrent-attach guard as the new-creation branch below — if a
@@ -67,7 +74,6 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           transaction = Transaction.new
         end
 
-        amount_bd = BigDecimal(sft.amount)
         rule = user.import_rules.for_description(sft.description).first
         rule_account = rule&.account
         bs_rule_account = rule_account if rule_account&.balance_sheet?

@@ -192,6 +192,39 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_not_nil manual_transaction.synced_at
   end
 
+  test "reconciles an equal same-day charge/refund pair without creating duplicates (#159)" do
+    csv_import = create_csv_import
+    counterpart = Account.create!(user: @user, currency: @currency, name: "Coffee Shop", kind: :expense)
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+
+    charge = Transaction.create!(
+      user: @user, currency: @currency,
+      src_account: @bank_account, dest_account: counterpart,
+      description: "Coffee Shop", amount_minor: 475, transacted_at: same_at
+    )
+    refund = Transaction.create!(
+      user: @user, currency: @currency,
+      src_account: counterpart, dest_account: @bank_account,
+      description: "Coffee Shop", amount_minor: 475, transacted_at: same_at
+    )
+
+    # An overlapping re-import carries the same pair: a charge (negative) and a
+    # refund (positive). Each row must reconcile to the matching-direction
+    # orphan rather than ambiguously matching both and creating duplicates.
+    csv_import.transactions.create!(row_index: 0, transacted_at: same_at, description: "Coffee Shop", amount_minor: -475, synced_at: Time.current)
+    csv_import.transactions.create!(row_index: 1, transacted_at: same_at, description: "Coffee Shop", amount_minor: 475, synced_at: Time.current)
+
+    assert_no_difference "Transaction.count" do
+      Csv::ImportTransactionsJob.perform_now(csv_import.id)
+    end
+
+    assert_includes charge.reload.transaction_sources.map(&:sourceable_type), "Csv::Transaction"
+    assert_includes refund.reload.transaction_sources.map(&:sourceable_type), "Csv::Transaction"
+    assert_not_equal charge.transaction_sources.first.sourceable_id,
+      refund.transaction_sources.first.sourceable_id,
+      "charge and refund must reconcile to distinct CSV rows"
+  end
+
   test "no-ops when the import has no rows" do
     csv_import = create_csv_import
     assert_no_difference "Transaction.count" do

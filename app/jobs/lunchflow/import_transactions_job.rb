@@ -18,6 +18,12 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
 
         description = lft.merchant.presence || lft.description
 
+        # Sign decides direction once per row: a negative amount is a charge
+        # (ledger account on src), non-negative is a refund/credit (ledger on
+        # dest). Reused below for both reconciliation and src/dest assignment.
+        amount_bd = BigDecimal(lft.amount)
+        ledger_side = amount_bd.negative? ? :src : :dest
+
         existing_source = TransactionSource.find_by(sourceable: lft)
 
         if existing_source
@@ -51,6 +57,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           currency_id: ledger_account.currency_id,
           transacted_at: lft.date || Time.current,
           description: description,
+          ledger_side: ledger_side,
           incoming_source: lft
         ))
           # Same concurrent-attach guard as the new-creation branch below — if a
@@ -69,7 +76,6 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           transaction = Transaction.new
         end
 
-        amount_bd = BigDecimal(lft.amount)
         rule = user.import_rules.for_description(description).first
         rule_account = rule&.account
         bs_rule_account = rule_account if rule_account&.balance_sheet?

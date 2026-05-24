@@ -16,6 +16,12 @@ class Csv::ImportTransactionsJob < ApplicationJob
         user = csv_transaction.import.user
         ledger_account = csv_transaction.import.account
 
+        # Sign decides direction once per row: a negative amount is a charge
+        # (ledger account on src), non-negative is a refund/credit (ledger on
+        # dest). Reused for reconciliation, the re-sync swap, and src/dest
+        # assignment below.
+        ledger_side = csv_transaction.amount_minor.negative? ? :src : :dest
+
         existing_source = TransactionSource.find_by(sourceable: csv_transaction)
 
         if existing_source
@@ -35,7 +41,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
           # to the direction, but the balance-sheet side is correct and the
           # user can re-categorize from the transactions UI.
           ledger_account_was_src = ledger_transaction.src_account_id == ledger_account.id
-          should_be_src = csv_transaction.amount_minor.negative?
+          should_be_src = ledger_side == :src
           if ledger_account_was_src != should_be_src
             ledger_transaction.src_account, ledger_transaction.dest_account =
               ledger_transaction.dest_account, ledger_transaction.src_account
@@ -54,6 +60,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
           currency_id: ledger_account.currency_id,
           transacted_at: csv_transaction.transacted_at,
           description: csv_transaction.description,
+          ledger_side: ledger_side,
           incoming_source: csv_transaction
         ))
           begin
@@ -80,14 +87,14 @@ class Csv::ImportTransactionsJob < ApplicationJob
         rule_account = rule&.account
         bs_rule_account = rule_account if rule_account&.balance_sheet?
 
-        kind = csv_transaction.amount_minor.negative? ? :expense : :revenue
+        kind = ledger_side == :src ? :expense : :revenue
         counterpart = if rule_account && !bs_rule_account
           rule_account
         else
           Account.find_or_create_for_import(user: user, description: description_for_import, kind: kind, currency: ledger_account.currency, skip_rules: true)
         end
 
-        if csv_transaction.amount_minor.negative?
+        if ledger_side == :src
           transaction_src = ledger_account
           transaction_dest = counterpart
         else

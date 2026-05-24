@@ -1020,6 +1020,39 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "imports a charge without adopting an equal same-day refund orphan (#159)" do
+    sf_account, ledger_account = create_linked_simplefin_account
+    counterpart = Account.create!(user: @user, currency: @currency, name: "Coffee Shop", kind: :expense)
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+
+    charge_orphan = Transaction.create!(
+      user: @user, currency: @currency,
+      src_account: ledger_account, dest_account: counterpart,
+      description: "Coffee Shop", amount_minor: 5000, transacted_at: same_at
+    )
+    refund_orphan = Transaction.create!(
+      user: @user, currency: @currency,
+      src_account: counterpart, dest_account: ledger_account,
+      description: "Coffee Shop", amount_minor: 5000, transacted_at: same_at
+    )
+
+    # The incoming SimpleFIN row is a charge (ledger on src). It must adopt the
+    # matching-direction charge orphan only — the equal same-day refund must be
+    # left untouched and no duplicate created.
+    sf_charge = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "txn_charge",
+      amount: "-50.00", description: "Coffee Shop",
+      posted: same_at, transacted_at: same_at, pending: false
+    )
+
+    assert_no_difference "Transaction.count" do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    assert_includes charge_orphan.reload.transaction_sources.map(&:sourceable), sf_charge
+    assert_empty refund_orphan.reload.transaction_sources
+  end
+
   private
 
     def create_linked_simplefin_account(remote_id: "acc_test", name: "SF Test Checking")
