@@ -35,6 +35,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -53,6 +54,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -76,6 +78,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 1.day.ago,
@@ -85,9 +88,69 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     assert_nil candidate
   end
 
+  test "distinguishes an equal same-day charge/refund pair by direction (#159)" do
+    # A charge (ledger on src) and a refund (ledger on dest) of the same amount
+    # on the same day with the same description differ only in direction. Before
+    # the directional constraint, both matched either incoming row (size == 2 →
+    # nil) and a duplicate ledger transaction was created.
+    charge = Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 5000, currency: @currency, description: "Coffee Shop",
+      transacted_at: 2.days.ago
+    )
+    refund = Transaction.create!(
+      user: @user, src_account: @counterpart, dest_account: @ledger_account,
+      amount_minor: 5000, currency: @currency, description: "Coffee Shop",
+      transacted_at: 2.days.ago
+    )
+
+    incoming_charge = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "Coffee Shop",
+    )
+    incoming_refund = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :dest,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "Coffee Shop",
+    )
+
+    assert_equal charge, incoming_charge
+    assert_equal refund, incoming_refund
+  end
+
+  test "does not adopt an orphan on the opposite side from the incoming direction" do
+    # Only a refund orphan exists (ledger on dest). An incoming charge
+    # (ledger on src) must not adopt it — it should fall through to creating
+    # a new transaction rather than mis-attaching to the refund.
+    Transaction.create!(
+      user: @user, src_account: @counterpart, dest_account: @ledger_account,
+      amount_minor: 5000, currency: @currency, description: "Coffee Shop",
+      transacted_at: 2.days.ago
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "Coffee Shop",
+    )
+
+    assert_nil candidate
+  end
+
   test "returns nil when no candidates match" do
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 1.day.ago,
@@ -114,6 +177,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -133,6 +197,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -154,6 +219,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :dest,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -182,6 +248,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -207,6 +274,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -226,6 +294,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -245,6 +314,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: Time.zone.parse("2026-04-24 23:30:00"),
@@ -263,6 +333,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: Time.zone.parse("2026-04-24 00:30:00"),
@@ -307,6 +378,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -346,6 +418,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: lunchflow_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -375,6 +448,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 50000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -417,6 +491,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: lunchflow_account,
+      ledger_side: :src,
       amount_minor: 2000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -460,6 +535,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 1899,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -478,6 +554,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -496,6 +573,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -533,6 +611,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 50000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -562,6 +641,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 50000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -609,6 +689,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -640,6 +721,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 1234,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -674,6 +756,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 1234,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,
@@ -711,6 +794,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
+      ledger_side: :src,
       amount_minor: 5000,
       currency_id: @currency.id,
       transacted_at: 2.days.ago,

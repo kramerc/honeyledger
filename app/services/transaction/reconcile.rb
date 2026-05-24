@@ -3,12 +3,15 @@ class Transaction::Reconcile
     new(**kwargs).call
   end
 
-  def initialize(ledger_account:, amount_minor:, currency_id:, transacted_at:, description:, incoming_source: nil)
+  def initialize(ledger_account:, amount_minor:, currency_id:, transacted_at:, description:, ledger_side:, incoming_source: nil)
+    raise ArgumentError, "ledger_side must be :src or :dest" unless %i[src dest].include?(ledger_side)
+
     @ledger_account = ledger_account
     @amount_minor = amount_minor
     @currency_id = currency_id
     @transacted_at = transacted_at
     @description = description
+    @ledger_side = ledger_side
     @incoming_source = incoming_source
     @incoming_source_class = incoming_source&.class
   end
@@ -23,9 +26,16 @@ class Transaction::Reconcile
   private
 
     def candidate_query
+      # Direction-aware: an incoming charge (ledger on src) must only match a
+      # candidate with the ledger account on src, and a refund (ledger on dest)
+      # only matches a dest candidate. Without this, an equal same-day
+      # charge/refund pair shares amount/day/description and both match,
+      # yielding size == 2 → nil → a duplicate ledger transaction (#159).
+      account_column = @ledger_side == :src ? :src_account_id : :dest_account_id
+
       Transaction
         .where(user_id: @ledger_account.user_id)
-        .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: @ledger_account.id)
+        .where(account_column => @ledger_account.id)
         .where(amount_minor: @amount_minor, currency_id: @currency_id)
         .where(transacted_at: @transacted_at.beginning_of_day..@transacted_at.end_of_day)
         .where(opening_balance: false, split: false, parent_transaction_id: nil)

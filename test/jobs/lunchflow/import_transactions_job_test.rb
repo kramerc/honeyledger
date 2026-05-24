@@ -637,6 +637,41 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "imports a charge without adopting an equal same-day refund orphan (#159)" do
+    lf_account, ledger_account = create_linked_lunchflow_account
+    counterpart = Account.create!(user: @user, currency: @currency, name: "Coffee Shop", kind: :expense)
+    day = 1.day.ago.to_date
+    same_at = day.beginning_of_day + 12.hours
+
+    charge_orphan = Transaction.create!(
+      user: @user, currency: @currency,
+      src_account: ledger_account, dest_account: counterpart,
+      description: "Coffee Shop", amount_minor: 5000, transacted_at: same_at
+    )
+    refund_orphan = Transaction.create!(
+      user: @user, currency: @currency,
+      src_account: counterpart, dest_account: ledger_account,
+      description: "Coffee Shop", amount_minor: 5000, transacted_at: same_at
+    )
+
+    # The incoming Lunch Flow row is a charge (ledger on src). It must adopt the
+    # matching-direction charge orphan only — the equal same-day refund must be
+    # left untouched and no duplicate created.
+    lf_charge = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_charge",
+      amount: "-50.00", currency: "USD",
+      description: "Coffee Shop", merchant: nil,
+      pending: false, date: day
+    )
+
+    assert_no_difference "Transaction.count" do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    assert_includes charge_orphan.reload.transaction_sources.map(&:sourceable), lf_charge
+    assert_empty refund_orphan.reload.transaction_sources
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")
