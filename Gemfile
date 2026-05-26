@@ -39,6 +39,7 @@ gem "thruster", require: false
 
 # Use Active Storage variants [https://guides.rubyonrails.org/active_storage_overview.html#transforming-images]
 gem "image_processing", "~> 2.0"
+gem "ruby-vips" # Backend for image_processing
 
 # User authentication
 gem "devise", "~> 5.0.4"
