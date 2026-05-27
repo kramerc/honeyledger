@@ -41,4 +41,22 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
     get integrations_url
     assert_response :success
   end
+
+  test "simplefin link form groups linkable accounts by kind" do
+    get integrations_url
+
+    assert_select "form[action=?]", link_simplefin_account_path(simplefin_accounts(:unlinked_one)) do
+      assert_select "select[name=?] optgroup[label=?]", "simplefin_account[ledger_account_id]", "Asset"
+      assert_select "select[name=?] optgroup[label=?]", "simplefin_account[ledger_account_id]", "Liability"
+    end
+  end
+
+  test "lunchflow link form groups linkable accounts by kind" do
+    get integrations_url
+
+    assert_select "form[action=?]", link_lunchflow_account_path(lunchflow_accounts(:unlinked_one)) do
+      assert_select "select[name=?] optgroup[label=?]", "lunchflow_account[ledger_account_id]", "Asset"
+      assert_select "select[name=?] optgroup[label=?]", "lunchflow_account[ledger_account_id]", "Liability"
+    end
+  end
 end
