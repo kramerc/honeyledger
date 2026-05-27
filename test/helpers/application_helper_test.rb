@@ -133,4 +133,30 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_match(/<span class="source-badge source-badge--simplefin">SimpleFIN<\/span>/, html)
     assert_match(/<span class="source-badge source-badge--lunchflow">Lunch Flow<\/span>/, html)
   end
+
+  test "transaction_source_badges collapses sources sharing a label into one chip" do
+    fake_source = Struct.new(:sourceable)
+    sources = [
+      fake_source.new(Csv::Transaction.new),
+      fake_source.new(Csv::Transaction.new)
+    ]
+
+    html = transaction_source_badges(sources)
+
+    assert_equal 1, html.scan(/<span class="source-badge source-badge--csv">CSV<\/span>/).size
+  end
+
+  test "transaction_source_badges keeps distinct labels while collapsing repeats" do
+    fake_source = Struct.new(:sourceable)
+    sources = [
+      fake_source.new(Csv::Transaction.new),
+      fake_source.new(simplefin_accounts(:linked_one)),
+      fake_source.new(Csv::Transaction.new)
+    ]
+
+    html = transaction_source_badges(sources)
+
+    assert_equal 1, html.scan(/source-badge--csv">CSV<\/span>/).size
+    assert_equal 1, html.scan(/source-badge--simplefin">SimpleFIN<\/span>/).size
+  end
 end

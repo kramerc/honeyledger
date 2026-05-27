@@ -67,6 +67,39 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "transaction with several CSV sources shows a single CSV badge" do
+    bank = accounts(:asset_account)
+    expense = accounts(:expense_account)
+
+    txn = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      currency: currencies(:usd), description: "Overlapping import",
+      amount_minor: 8772, transacted_at: 1.day.ago
+    )
+
+    2.times do
+      csv_import = Csv::Import.new(user: @user, account: bank, state: "imported")
+      csv_import.file.attach(
+        io: StringIO.new("Date,Description,Amount\n"),
+        filename: "statement.csv",
+        content_type: "text/csv"
+      )
+      csv_import.save!
+      csv_transaction = Csv::Transaction.create!(
+        import: csv_import, row_index: 0,
+        transacted_at: 1.day.ago, amount_minor: -8772,
+        description: "Overlapping import"
+      )
+      TransactionSource.create!(ledger_transaction: txn, sourceable: csv_transaction)
+    end
+
+    visit transactions_path
+
+    within "##{ActionView::RecordIdentifier.dom_id(txn)}" do
+      assert_selector ".source-badge", text: "CSV", count: 1
+    end
+  end
+
   test "sidebar active state survives a live update" do
     account = accounts(:asset_account)
     other = accounts(:expense_account)
