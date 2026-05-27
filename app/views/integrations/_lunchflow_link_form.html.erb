@@ -2,7 +2,7 @@
   <%= form_with model: lf_account, url: link_lunchflow_account_path(lf_account), method: :post do |form| %>
     <%= form.label :ledger_account_id, "Account to link", class: "sr-only" %>
     <span>
-      <%= form.collection_select :ledger_account_id, linkable_accounts, :id, :name, prompt: "Not linked" %>
+      <%= form.select :ledger_account_id, grouped_account_options_for_select(linkable_accounts, Account.kinds.keys), { include_blank: "Not linked" } %>
     </span>
     <span>
       <%= form.submit "Link", "aria-label": "Link Lunch Flow account" %>
