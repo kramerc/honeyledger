@@ -42,12 +42,38 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_link "Import"
   end
 
+  test "SimpleFIN link form groups linkable accounts by kind" do
+    sf_account = simplefin_accounts(:unlinked_one)
+
+    visit integrations_path
+
+    within("tr", text: sf_account.name) do
+      within("select[name='simplefin_account[ledger_account_id]']") do
+        assert_selector "optgroup[label='Asset']", visible: :all
+        assert_selector "optgroup[label='Liability']", visible: :all
+      end
+    end
+  end
+
   test "displays Lunch Flow accounts with status" do
     visit integrations_path
 
     assert_text "Lunch Flow Accounts"
     assert_text "Test Bank Checking"
     assert_text "ACTIVE"
+  end
+
+  test "Lunch Flow link form groups linkable accounts by kind" do
+    lf_account = lunchflow_accounts(:unlinked_one)
+
+    visit integrations_path
+
+    within("tr", text: lf_account.name) do
+      within("select[name='lunchflow_account[ledger_account_id]']") do
+        assert_selector "optgroup[label='Asset']", visible: :all
+        assert_selector "optgroup[label='Liability']", visible: :all
+      end
+    end
   end
 
   test "displays Lunch Flow ERROR status with action link" do
