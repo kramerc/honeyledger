@@ -42,6 +42,34 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_link "Import"
   end
 
+  test "sorts SimpleFIN accounts by institution then account name" do
+    # Insertion order (linked, unlinked, reconciled) deliberately differs from the
+    # expected sorted order, and account names alone sort differently than the
+    # institution-first order, so this also proves institution is the primary key.
+    simplefin_accounts(:linked_one).update!(org: { "name" => "Summit Bank" }, name: "Alpha Account")
+    simplefin_accounts(:unlinked_one).update!(org: { "name" => "Summit Bank" }, name: "Beta Account")
+    simplefin_accounts(:reconciled_one).update!(org: { "name" => "Harbor Bank" }, name: "Zulu Account")
+
+    visit integrations_path
+
+    within find("table", text: "Organization") do
+      account_names = all("tr td:nth-child(2)").map { |cell| cell.text.strip }
+      assert_equal [ "Zulu Account", "Alpha Account", "Beta Account" ], account_names
+    end
+  end
+
+  test "sorts Lunch Flow accounts by institution then account name" do
+    lunchflow_accounts(:linked_one).update!(institution_name: "Aspen Bank", name: "Yankee Account")
+    lunchflow_accounts(:unlinked_one).update!(institution_name: "Zephyr Bank", name: "Alpha Account")
+
+    visit integrations_path
+
+    within find("table", text: "Institution") do
+      account_names = all("tr td:nth-child(2)").map { |cell| cell.text.strip }
+      assert_equal [ "Yankee Account", "Alpha Account" ], account_names
+    end
+  end
+
   test "SimpleFIN link form groups linkable accounts by kind" do
     sf_account = simplefin_accounts(:unlinked_one)
 

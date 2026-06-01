@@ -25,6 +25,18 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
     assert_not @linked_simplefin_account.unlinked?
   end
 
+  test "institution_name returns the org name" do
+    account = Simplefin::Account.new(org: { "name" => "Test Bank" })
+
+    assert_equal "Test Bank", account.institution_name
+  end
+
+  test "institution_name returns nil when org is absent" do
+    account = Simplefin::Account.new(org: nil)
+
+    assert_nil account.institution_name
+  end
+
   test "ledger_currency returns nil if app currency is not found" do
     simplefin_account = Simplefin::Account.new(currency: "unknown")
 
