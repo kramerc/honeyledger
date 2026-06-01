@@ -742,6 +742,28 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "action=\"replace\""
   end
 
+  test "bulk_unexclude reports an error for a transaction that is not excluded" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Restore Mixed Expense", kind: :expense, currency: currency)
+    excluded = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                          amount_minor: 100, currency: currency, description: "Excluded",
+                                          transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+    Transaction::Exclude.new(excluded, user: @user).call
+    # A transaction that was never excluded is rejected by Transaction::Unexclude.
+    not_excluded = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                              amount_minor: 200, currency: currency, description: "Not excluded",
+                                              transacted_at: 2.days.ago, sourceable: simplefin_transactions(:transaction_two))
+
+    post bulk_unexclude_transactions_url, params: {
+      transaction_ids: [ excluded.id, not_excluded.id ]
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert_not excluded.reload.excluded?
+    assert_includes response.body, "exclude_error"
+  end
+
   test "bulk_destroy broadcasts sidebar replaces for affected accounts" do
     currency = currencies(:usd)
     transaction = @user.transactions.create!(src_account: accounts(:asset_account), dest_account: accounts(:expense_account),
