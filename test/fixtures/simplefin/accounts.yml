@@ -3,7 +3,8 @@
 linked_one:
   connection: one
   remote_id: remote_id_1
-  org: Test Bank
+  org:
+    name: Test Bank
   name: Test Checking
   currency: USD
   balance: "1000.00"
@@ -14,7 +15,8 @@ linked_one:
 unlinked_one:
   connection: one
   remote_id: remote_id_2
-  org: Test Bank
+  org:
+    name: Test Bank
   name: Test Savings
   currency: USD
   balance: "5000.00"
@@ -25,7 +27,8 @@ unlinked_one:
 reconciled_one:
   connection: one
   remote_id: remote_id_3
-  org: Test Bank
+  org:
+    name: Test Bank
   name: Test Checking
   currency: USD
   balance: "50.00"
