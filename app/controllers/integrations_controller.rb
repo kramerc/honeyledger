@@ -17,6 +17,8 @@ class IntegrationsController < ApplicationController
       threshold = connection.refreshed_at
       connection.accounts.includes(:ledger_accounts).select do |aggregator_account|
         aggregator_account.linked? || aggregator_account.current?(threshold)
+      end.sort_by do |aggregator_account|
+        [ aggregator_account.institution_name.to_s.downcase, aggregator_account.name.to_s.downcase ]
       end
     end
 end

@@ -63,7 +63,7 @@
       </tr>
       <% @simplefin_accounts.each do |sf_account| %>
         <tr>
-          <td><%= sf_account.org&.[]("name") %></td>
+          <td><%= sf_account.institution_name %></td>
           <td>
             <%= sf_account.name %>
             <% unless sf_account.current?(@simplefin_connection.refreshed_at) %>

@@ -6,6 +6,12 @@ class Simplefin::Account < ApplicationRecord
 
   has_many :transactions, dependent: :destroy
 
+  # Institution name, surfaced from the SimpleFIN `org` JSON so callers can treat
+  # SimpleFIN and Lunch Flow accounts uniformly (Lunch Flow has this as a column).
+  def institution_name
+    org&.[]("name")
+  end
+
   def current?(threshold = connection&.refreshed_at)
     return false if last_seen_at.nil?
     return false if threshold.nil?
