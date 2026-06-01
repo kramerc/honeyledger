@@ -1,0 +1,117 @@
+<%# Selection action bar shown when one or more transactions are selected.
+    Delete works on any selection; Exclude and Restore enable only when every
+    selected row is eligible; Merge enables only for a valid two-row pair. %>
+<div class="selection-bar" data-transactions--selection-target="bar" hidden>
+  <span class="selection-bar__count" data-transactions--selection-target="count"></span>
+  <span class="selection-bar__message" data-transactions--selection-target="mergeMessage"></span>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--primary"
+          data-transactions--selection-target="mergeButton"
+          data-action="transactions--selection#showConfirmation"
+          disabled>
+    Merge into Transfer
+  </button>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+          data-transactions--selection-target="excludeButton"
+          data-action="transactions--selection#submitExclude"
+          disabled>
+    Exclude
+  </button>
+
+  <% if show_excluded %>
+    <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+            data-transactions--selection-target="restoreButton"
+            data-action="transactions--selection#submitRestore"
+            disabled>
+      Restore
+    </button>
+  <% end %>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--danger"
+          data-transactions--selection-target="deleteButton"
+          data-action="transactions--selection#confirmDelete">
+    Delete
+  </button>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+          data-action="transactions--selection#cancel">
+    Cancel
+  </button>
+</div>
+
+<%# Bulk action forms; the controller injects transaction_ids before submit. %>
+<%= form_with url: bulk_destroy_transactions_path, method: :delete,
+      data: { transactions__selection_target: "deleteForm",
+              action: "turbo:submit-end->transactions--selection#cancel" } do %>
+<% end %>
+
+<%= form_with url: bulk_exclude_transactions_path, method: :post,
+      data: { transactions__selection_target: "excludeForm",
+              action: "turbo:submit-end->transactions--selection#cancel" } do %>
+<% end %>
+
+<% if show_excluded %>
+  <%= form_with url: bulk_unexclude_transactions_path, method: :post,
+        data: { transactions__selection_target: "restoreForm",
+                action: "turbo:submit-end->transactions--selection#cancel" } do %>
+  <% end %>
+<% end %>
+
+<%# Merge confirmation panel %>
+<div class="selection-confirmation" data-transactions--selection-target="confirmation" hidden>
+  <div class="selection-confirmation__content">
+    <h3>Merge into Transfer</h3>
+    <p class="selection-confirmation__preview"></p>
+
+    <%= form_with url: merge_transactions_path, method: :post, data: { action: "turbo:submit-end->transactions--selection#cancel" } do %>
+      <input type="hidden" name="transaction_ids[]" value="" data-slot="a">
+      <input type="hidden" name="transaction_ids[]" value="" data-slot="b">
+
+      <div class="selection-confirmation__field">
+        <label for="merge_description">Description</label>
+        <input type="text" id="merge_description" name="description" value="">
+      </div>
+
+      <div class="selection-confirmation__field">
+        <label for="merge_transacted_at">Date</label>
+        <input type="datetime-local" id="merge_transacted_at" name="transacted_at" value="">
+      </div>
+
+      <div class="selection-confirmation__field">
+        <label for="merge_category_id">Category</label>
+        <select id="merge_category_id" name="category_id">
+          <option value="">None</option>
+          <% categories.each do |category| %>
+            <option value="<%= category.id %>"><%= category.name %></option>
+          <% end %>
+        </select>
+      </div>
+
+      <div class="selection-confirmation__actions">
+        <button type="submit" class="selection-bar__btn selection-bar__btn--primary">Confirm Merge</button>
+        <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+                data-action="transactions--selection#cancel">Cancel</button>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<%# Delete confirmation panel %>
+<div class="selection-confirmation" data-transactions--selection-target="deleteConfirmation" hidden>
+  <div class="selection-confirmation__content">
+    <h3>Delete selected transactions</h3>
+    <p class="selection-confirmation__preview"></p>
+    <p class="selection-confirmation__note">
+      This cannot be undone. Imported transactions may be recreated on the next refresh;
+      use Exclude instead to hide them permanently.
+    </p>
+
+    <div class="selection-confirmation__actions">
+      <button type="button" class="selection-bar__btn selection-bar__btn--danger"
+              data-action="transactions--selection#submitDelete">Confirm Delete</button>
+      <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+              data-action="transactions--selection#cancelDelete">Cancel</button>
+    </div>
+  </div>
+</div>

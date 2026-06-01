@@ -615,4 +615,191 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
       post unexclude_transaction_url(@transaction), as: :turbo_stream
     end
   end
+
+  # --- Bulk operations ------------------------------------------------------
+
+  test "bulk_destroy removes multiple transactions via turbo_stream" do
+    currency = currencies(:usd)
+    bank = accounts(:asset_account)
+    expense = accounts(:expense_account)
+    first = Transaction.create!(user: @user, src_account: bank, dest_account: expense,
+                                amount_minor: 100, currency: currency, description: "Bulk delete 1",
+                                transacted_at: 2.days.ago)
+    second = Transaction.create!(user: @user, src_account: bank, dest_account: expense,
+                                 amount_minor: 200, currency: currency, description: "Bulk delete 2",
+                                 transacted_at: 2.days.ago)
+
+    assert_difference("Transaction.count", -2) do
+      delete bulk_destroy_transactions_url, params: {
+        transaction_ids: [ first.id, second.id ]
+      }, as: :turbo_stream
+    end
+
+    assert_response :success
+    assert_includes response.body, "transaction_#{first.id}"
+    assert_includes response.body, "transaction_#{second.id}"
+  end
+
+  test "bulk_destroy ignores ids that do not belong to the current user" do
+    currency = currencies(:usd)
+    bank = accounts(:asset_account)
+    expense = accounts(:expense_account)
+    mine = Transaction.create!(user: @user, src_account: bank, dest_account: expense,
+                               amount_minor: 100, currency: currency, description: "Mine to delete",
+                               transacted_at: 2.days.ago)
+    others = transactions(:opening_balance_revenue) # belongs to users(:two)
+
+    assert_difference("Transaction.count", -1) do
+      delete bulk_destroy_transactions_url, params: {
+        transaction_ids: [ mine.id, others.id ]
+      }, as: :turbo_stream
+    end
+
+    assert_response :success
+    assert Transaction.exists?(others.id), "another user's transaction must not be destroyed"
+  end
+
+  test "bulk_exclude excludes multiple transactions and removes them via turbo_stream" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Exclude Expense", kind: :expense, currency: currency)
+    first = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                       amount_minor: 100, currency: currency, description: "Bulk exclude 1",
+                                       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+    second = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                        amount_minor: 200, currency: currency, description: "Bulk exclude 2",
+                                        transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_two))
+
+    post bulk_exclude_transactions_url, params: {
+      transaction_ids: [ first.id, second.id ]
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert first.reload.excluded?
+    assert second.reload.excluded?
+    assert_includes response.body, "transaction_#{first.id}"
+  end
+
+  test "bulk_exclude replaces rows in place when show_excluded is active" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Exclude Shown Expense", kind: :expense, currency: currency)
+    transaction = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                             amount_minor: 100, currency: currency, description: "Bulk exclude shown",
+                                             transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+
+    post bulk_exclude_transactions_url, params: { transaction_ids: [ transaction.id ] },
+      as: :turbo_stream, headers: { "HTTP_REFERER" => transactions_url(show_excluded: 1) }
+
+    assert_response :success
+    assert_includes response.body, "action=\"replace\""
+    assert transaction.reload.excluded?
+  end
+
+  test "bulk_exclude reports an error for an ineligible transaction" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Exclude Mixed Expense", kind: :expense, currency: currency)
+    eligible = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                          amount_minor: 100, currency: currency, description: "Eligible",
+                                          transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+    # An opening balance transaction is rejected by Transaction::Exclude.
+    ineligible = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                            amount_minor: 200, currency: currency, description: "Opening ineligible",
+                                            transacted_at: 2.days.ago, sourceable: simplefin_transactions(:transaction_two))
+    ineligible.update_columns(opening_balance: true)
+
+    post bulk_exclude_transactions_url, params: {
+      transaction_ids: [ eligible.id, ineligible.id ]
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert eligible.reload.excluded?
+    assert_not ineligible.reload.excluded?
+    assert_includes response.body, "exclude_error"
+  end
+
+  test "bulk_unexclude restores multiple excluded transactions via turbo_stream" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Restore Expense", kind: :expense, currency: currency)
+    first = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                       amount_minor: 100, currency: currency, description: "Bulk restore 1",
+                                       transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+    second = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                        amount_minor: 200, currency: currency, description: "Bulk restore 2",
+                                        transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_two))
+    Transaction::Exclude.new(first, user: @user).call
+    Transaction::Exclude.new(second, user: @user).call
+
+    post bulk_unexclude_transactions_url, params: {
+      transaction_ids: [ first.id, second.id ]
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert_not first.reload.excluded?
+    assert_not second.reload.excluded?
+    assert_includes response.body, "action=\"replace\""
+  end
+
+  test "bulk_unexclude reports an error for a transaction that is not excluded" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Restore Mixed Expense", kind: :expense, currency: currency)
+    excluded = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                          amount_minor: 100, currency: currency, description: "Excluded",
+                                          transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+    Transaction::Exclude.new(excluded, user: @user).call
+    # A transaction that was never excluded is rejected by Transaction::Unexclude.
+    not_excluded = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                              amount_minor: 200, currency: currency, description: "Not excluded",
+                                              transacted_at: 2.days.ago, sourceable: simplefin_transactions(:transaction_two))
+
+    post bulk_unexclude_transactions_url, params: {
+      transaction_ids: [ excluded.id, not_excluded.id ]
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert_not excluded.reload.excluded?
+    assert_includes response.body, "exclude_error"
+  end
+
+  test "bulk_destroy broadcasts sidebar replaces for affected accounts" do
+    currency = currencies(:usd)
+    transaction = @user.transactions.create!(src_account: accounts(:asset_account), dest_account: accounts(:expense_account),
+                                             amount_minor: 300, currency: currency, description: "Bulk destroy bcast",
+                                             transacted_at: 1.day.ago)
+    transaction.reload
+
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+      delete bulk_destroy_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
+    end
+  end
+
+  test "bulk_exclude broadcasts sidebar replaces for affected accounts" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Exclude Bcast Expense", kind: :expense, currency: currency)
+    transaction = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                             amount_minor: 100, currency: currency, description: "Bulk exclude bcast",
+                                             transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+      post bulk_exclude_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
+    end
+  end
+
+  test "bulk_unexclude broadcasts sidebar replaces for affected accounts" do
+    currency = currencies(:usd)
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, name: "Bulk Restore Bcast Expense", kind: :expense, currency: currency)
+    transaction = create_sourced_transaction(user: @user, src_account: bank, dest_account: expense,
+                                             amount_minor: 100, currency: currency, description: "Bulk restore bcast",
+                                             transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
+    Transaction::Exclude.new(transaction, user: @user).call
+
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+      post bulk_unexclude_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
+    end
+  end
 end

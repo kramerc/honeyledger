@@ -29,6 +29,9 @@ Rails.application.routes.draw do
     end
     collection do
       post :merge
+      delete :bulk_destroy
+      post :bulk_exclude
+      post :bulk_unexclude
     end
   end
 

@@ -1,5 +1,5 @@
 <%= turbo_stream.prepend :transactions do %>
-  <div class="merge-error" id="exclude_error" data-controller="error">
+  <div class="selection-error" id="exclude_error" data-controller="error">
     <strong>Could not update transaction:</strong>
     <ul>
       <% @exclude_errors.each do |error| %>
