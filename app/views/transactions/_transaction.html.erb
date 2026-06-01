@@ -13,6 +13,8 @@
             end %>
 <%= turbo_frame_tag transaction do %>
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
+       data-selection-excluded="<%= transaction.excluded? %>"
+       data-selection-excludable="<%= transaction.excludable? %>"
        data-merge-amount-minor="<%= transaction.amount_minor %>"
        data-merge-src-account-id="<%= transaction.src_account_id %>"
        data-merge-dest-account-id="<%= transaction.dest_account_id %>"
@@ -27,11 +29,11 @@
 
     <div class="row show">
       <div class="select">
-        <% unless transaction.opening_balance? || transaction.excluded? %>
+        <% unless transaction.opening_balance? %>
           <input type="checkbox"
-                 class="merge-checkbox"
-                 data-transactions--merge-target="checkbox"
-                 data-action="change->transactions--merge#toggle"
+                 class="selection-checkbox"
+                 data-transactions--selection-target="checkbox"
+                 data-action="change->transactions--selection#toggle"
                  data-transaction-id="<%= transaction.id %>">
         <% end %>
       </div>
@@ -69,7 +71,7 @@
         <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
         <% if transaction.excluded? %>
           <%= link_to "Restore", unexclude_transaction_path(transaction), data: { turbo_method: :post } %>
-        <% elsif sources.any? && !transaction.opening_balance? && !transaction.merged_sources.any? %>
+        <% elsif transaction.excludable? %>
           <%= link_to "Exclude", exclude_transaction_path(transaction), data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
         <% end %>
         <% if transaction.merged_sources.any? %>

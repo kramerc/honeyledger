@@ -735,4 +735,81 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal expected, targets
     refute_includes targets, ActionView::RecordIdentifier.dom_id(other_account, :sidebar_link)
   end
+
+  test "excludable? is true for a sourced, plain transaction" do
+    transaction = create_sourced_transaction(
+      user: users(:one),
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:expense_account),
+      amount_minor: 500,
+      currency: currencies(:usd),
+      description: "Sourced",
+      transacted_at: 1.day.ago,
+      sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    assert transaction.excludable?
+  end
+
+  test "excludable? is false without a source" do
+    transaction = Transaction.create!(
+      user: users(:one),
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:expense_account),
+      amount_minor: 500,
+      currency: currencies(:usd),
+      description: "Manual",
+      transacted_at: 1.day.ago
+    )
+
+    assert_not transaction.excludable?
+  end
+
+  test "excludable? is false when already excluded" do
+    transaction = create_sourced_transaction(
+      user: users(:one),
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:expense_account),
+      amount_minor: 500,
+      currency: currencies(:usd),
+      description: "Already excluded",
+      transacted_at: 1.day.ago,
+      sourceable: simplefin_transactions(:transaction_one)
+    )
+    transaction.update_columns(excluded_at: Time.current)
+
+    assert_not transaction.reload.excludable?
+  end
+
+  test "excludable? is false for opening balance, merged, split, and child transactions" do
+    # Each sourced transaction needs a distinct sourceable.
+    sourced = lambda do |sourceable|
+      create_sourced_transaction(
+        user: users(:one),
+        src_account: accounts(:linked_asset),
+        dest_account: accounts(:expense_account),
+        amount_minor: 500,
+        currency: currencies(:usd),
+        description: "Guarded",
+        transacted_at: 1.day.ago,
+        sourceable: sourceable
+      )
+    end
+
+    opening = sourced.call(simplefin_transactions(:transaction_one))
+    opening.update_columns(opening_balance: true)
+    assert_not opening.reload.excludable?, "opening balance must not be excludable"
+
+    merged = sourced.call(simplefin_transactions(:transaction_two))
+    merged.update_columns(merged_into_id: transactions(:two).id)
+    assert_not merged.reload.excludable?, "merged transactions must not be excludable"
+
+    split = sourced.call(simplefin_transactions(:reconciled_one))
+    split.update_columns(split: true)
+    assert_not split.reload.excludable?, "split parents must not be excludable"
+
+    child = sourced.call(simplefin_transactions(:reconciled_two))
+    child.update_columns(parent_transaction_id: transactions(:one).id)
+    assert_not child.reload.excludable?, "child transactions must not be excludable"
+  end
 end

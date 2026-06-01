@@ -53,6 +53,18 @@ class Transaction < ApplicationRecord
     excluded_at.present?
   end
 
+  # Whether this transaction may be excluded. Mirrors the guards in
+  # Transaction::Exclude so the UI can gate the per-row link and bulk action.
+  def excludable?
+    transaction_sources.any? &&
+      !excluded? &&
+      !opening_balance? &&
+      !merged_into_id? &&
+      merged_sources.none? &&
+      !split? &&
+      !parent_transaction_id?
+  end
+
   validates :amount_minor, numericality: { allow_blank: true, unless: :amount_written? } # Blank is translated to 0
   validates :transacted_at, presence: true
 

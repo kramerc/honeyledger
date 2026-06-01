@@ -1,0 +1,21 @@
+<% @excluded.each do |transaction| %>
+  <% if @show_excluded %>
+    <%= turbo_stream.replace transaction, partial: "transactions/transaction", locals: { transaction: transaction } %>
+  <% else %>
+    <%= turbo_stream.remove transaction %>
+  <% end %>
+<% end %>
+
+<% if @exclude_errors.any? %>
+  <%= turbo_stream.prepend :transactions do %>
+    <div class="selection-error" id="exclude_error" data-controller="error">
+      <strong>Could not exclude some transactions:</strong>
+      <ul>
+        <% @exclude_errors.uniq.each do |error| %>
+          <li><%= error %></li>
+        <% end %>
+      </ul>
+      <button type="button" data-action="error#close">Dismiss</button>
+    </div>
+  <% end %>
+<% end %>

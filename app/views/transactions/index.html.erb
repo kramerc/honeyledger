@@ -14,7 +14,7 @@
   <% end %>
 </div>
 
-<div data-controller="transactions--merge" data-transactions--merge-merge-url-value="<%= merge_transactions_path %>">
+<div data-controller="transactions--selection">
   <div class="transactions">
     <div class="row header">
       <div></div>
@@ -43,5 +43,5 @@
     <% end %>
   </div>
 
-  <%= render "merge_bar", categories: @categories %>
+  <%= render "selection_bar", categories: @categories, show_excluded: @show_excluded %>
 </div>

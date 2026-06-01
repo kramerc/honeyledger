@@ -127,6 +127,69 @@ class TransactionsController < ApplicationController
     end
   end
 
+  # DELETE /transactions/bulk_destroy
+  def bulk_destroy
+    transactions = current_user.transactions.where(id: bulk_transaction_ids).to_a
+    @removed_ids = transactions.map(&:id)
+
+    Transaction.collecting_sidebar_broadcasts do
+      ActiveRecord::Base.transaction do
+        # Re-fetch per id so cascade-deleted children (dependent: :destroy) are
+        # not destroyed twice, which would reverse their balances twice.
+        @removed_ids.each do |id|
+          current_user.transactions.find_by(id: id)&.destroy!
+        end
+      end
+    end
+
+    respond_to do |format|
+      format.turbo_stream
+    end
+  end
+
+  # POST /transactions/bulk_exclude
+  def bulk_exclude
+    @excluded = []
+    @exclude_errors = []
+    @show_excluded = show_excluded?
+
+    Transaction.collecting_sidebar_broadcasts do
+      current_user.transactions.where(id: bulk_transaction_ids).find_each do |transaction|
+        excluder = Transaction::Exclude.new(transaction, user: current_user)
+        if excluder.call
+          @excluded << transaction.reload
+        else
+          @exclude_errors.concat(excluder.errors)
+        end
+      end
+    end
+
+    respond_to do |format|
+      format.turbo_stream
+    end
+  end
+
+  # POST /transactions/bulk_unexclude
+  def bulk_unexclude
+    @restored = []
+    @exclude_errors = []
+
+    Transaction.collecting_sidebar_broadcasts do
+      current_user.transactions.where(id: bulk_transaction_ids).find_each do |transaction|
+        unexcluder = Transaction::Unexclude.new(transaction, user: current_user)
+        if unexcluder.call
+          @restored << transaction.reload
+        else
+          @exclude_errors.concat(unexcluder.errors)
+        end
+      end
+    end
+
+    respond_to do |format|
+      format.turbo_stream
+    end
+  end
+
   # POST /transactions/:id/exclude
   def exclude
     @transaction = current_user.transactions.find(params.expect(:id))
@@ -185,6 +248,10 @@ class TransactionsController < ApplicationController
     # Use callbacks to share common setup or constraints between actions.
     def set_transaction
       @transaction = current_user.transactions.find(params.expect(:id))
+    end
+
+    def bulk_transaction_ids
+      Array(params[:transaction_ids]).uniq
     end
 
     def build_new_transaction

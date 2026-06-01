@@ -128,7 +128,122 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_selector active_link_selector
   end
 
+  test "selecting transactions reveals the bulk action bar with a count" do
+    first = manual_transaction("Bar probe one", 100)
+    second = manual_transaction("Bar probe two", 200)
+
+    visit transactions_path
+    toggle_select(first)
+    toggle_select(second)
+
+    within ".selection-bar" do
+      assert_text "2 transactions selected"
+    end
+  end
+
+  test "bulk deleting selected transactions removes them from the list" do
+    first = manual_transaction("Bulk delete one", 100)
+    second = manual_transaction("Bulk delete two", 200)
+
+    visit transactions_path
+    toggle_select(first)
+    toggle_select(second)
+    click_button "Delete"
+    click_button "Confirm Delete"
+
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(first)}"
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(second)}"
+  end
+
+  test "cancelling the delete confirmation keeps the selection" do
+    first = manual_transaction("Keep selection one", 100)
+    second = manual_transaction("Keep selection two", 200)
+
+    visit transactions_path
+    toggle_select(first)
+    toggle_select(second)
+    click_button "Delete"
+    click_button "Cancel"
+
+    # Selection survives: the bar is back with the same count and Delete works.
+    within ".selection-bar" do
+      assert_text "2 transactions selected"
+    end
+
+    click_button "Delete"
+    click_button "Confirm Delete"
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(first)}"
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(second)}"
+  end
+
+  test "exclude stays disabled until every selected transaction is eligible" do
+    eligible = sourced_transaction("Eligible row", 100, :transaction_one)
+    ineligible = manual_transaction("Manual row", 200)
+
+    visit transactions_path
+    toggle_select(eligible)
+    toggle_select(ineligible)
+    assert_button "Exclude", disabled: true
+
+    toggle_select(ineligible)
+    assert_button "Exclude", disabled: false
+  end
+
+  test "bulk excluding selected transactions removes them from the default view" do
+    first = sourced_transaction("Bulk exclude one", 100, :transaction_one)
+    second = sourced_transaction("Bulk exclude two", 200, :transaction_two)
+
+    visit transactions_path
+    toggle_select(first)
+    toggle_select(second)
+    click_button "Exclude"
+
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(first)}"
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(second)}"
+  end
+
+  test "bulk restoring selected transactions on the excluded view" do
+    first = sourced_transaction("Bulk restore one", 100, :transaction_one)
+    second = sourced_transaction("Bulk restore two", 200, :transaction_two)
+    Transaction::Exclude.new(first, user: @user).call
+    Transaction::Exclude.new(second, user: @user).call
+
+    visit transactions_path(show_excluded: 1)
+    toggle_select(first)
+    toggle_select(second)
+    click_button "Restore"
+
+    within "##{ActionView::RecordIdentifier.dom_id(first)}" do
+      assert_no_text "Excluded"
+    end
+    within "##{ActionView::RecordIdentifier.dom_id(second)}" do
+      assert_no_text "Excluded"
+    end
+  end
+
   private
+
+  def manual_transaction(description, amount_minor)
+    Transaction.create!(
+      user: @user,
+      src_account: accounts(:asset_account),
+      dest_account: accounts(:expense_account),
+      amount_minor: amount_minor,
+      currency: currencies(:usd),
+      description: description,
+      transacted_at: 1.day.ago
+    )
+  end
+
+  def sourced_transaction(description, amount_minor, source_key)
+    transaction = manual_transaction(description, amount_minor)
+    TransactionSource.create!(ledger_transaction: transaction, sourceable: simplefin_transactions(source_key))
+    transaction
+  end
+
+  def toggle_select(transaction)
+    find("input.selection-checkbox[data-transaction-id='#{transaction.id}']").click
+  end
 
   def sign_in_as(user)
     visit new_user_session_path

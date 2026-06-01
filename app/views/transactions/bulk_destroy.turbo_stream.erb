@@ -1,0 +1,3 @@
+<% @removed_ids.each do |id| %>
+  <%= turbo_stream.remove "transaction_#{id}" %>
+<% end %>
