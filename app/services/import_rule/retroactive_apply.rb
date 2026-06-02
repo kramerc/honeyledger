@@ -86,19 +86,45 @@ class ImportRule::RetroactiveApply
       @user.transactions
         .joins(:transaction_sources)
         .where(merged_into_id: nil, excluded_at: nil, split: false, opening_balance: false, parent_transaction_id: nil)
-        .includes(src_account: :account_sources, dest_account: :account_sources)
+        .includes(src_account: :account_sources, dest_account: :account_sources, transaction_sources: :sourceable)
         .distinct
     end
 
     def identify_counterpart(transaction)
-      src_linked = transaction.src_account.account_sources.any?
-      dest_linked = transaction.dest_account.account_sources.any?
+      source_account_ids = import_side_account_ids(transaction)
+      src_linked = source_account_ids.include?(transaction.src_account_id)
+      dest_linked = source_account_ids.include?(transaction.dest_account_id)
 
       if src_linked && !dest_linked
         [ :expense, transaction.dest_account ]
       elsif dest_linked && !src_linked
         [ :revenue, transaction.src_account ]
       end
+    end
+
+    # The ledger accounts that sit on the import side of a transaction. Aggregator
+    # accounts (SimpleFIN, Lunch Flow) carry an AccountSource, so the import side is
+    # whichever account is linked. CSV imports never create AccountSource records —
+    # their import side is the Csv::Import's chosen ledger account, reached through
+    # the transaction's Csv::Transaction source. Without this, CSV-sourced
+    # transactions have no recognized counterpart and rules never match them.
+    def import_side_account_ids(transaction)
+      ids = []
+      ids << transaction.src_account_id if transaction.src_account.account_sources.any?
+      ids << transaction.dest_account_id if transaction.dest_account.account_sources.any?
+      transaction.transaction_sources.each do |source|
+        sourceable = source.sourceable
+        # Read import_id off the already-preloaded Csv::Transaction and resolve the
+        # account through a cached map, rather than walking sourceable.account
+        # (import -> account) per row inside find_each.
+        ids << csv_import_account_ids[sourceable.import_id] if sourceable.is_a?(Csv::Transaction)
+      end
+      ids.compact.uniq
+    end
+
+    # import_id => ledger account_id for this user's CSV imports, loaded once.
+    def csv_import_account_ids
+      @csv_import_account_ids ||= Csv::Import.where(user_id: @user.id).pluck(:id, :account_id).to_h
     end
 
     def find_matching_rule(description)
