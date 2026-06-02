@@ -5,7 +5,7 @@ import { Controller } from "@hotwired/stimulus"
 // account to keep before confirming. Mirrors transactions--selection, minus the merge-pair
 // and exclude/restore logic.
 export default class extends Controller {
-  static targets = [ "checkbox", "bar", "count", "message", "mergeButton", "confirmation", "targetList" ]
+  static targets = [ "checkbox", "bar", "count", "message", "mergeButton", "confirmation", "targetList", "targetTemplate" ]
 
   connect() {
     // The browser restores checkbox state across a reload, so seed the selection from whatever
@@ -83,41 +83,24 @@ export default class extends Controller {
         return byCount !== 0 ? byCount : Number(a.dataset.accountId) - Number(b.dataset.accountId)
       })[0].dataset.accountId
 
-    const form = this.confirmationTarget.querySelector("form")
-    form.querySelectorAll("input[name='account_ids[]']").forEach(input => input.remove())
-    this.targetListTarget.innerHTML = ""
-
+    this.targetListTarget.replaceChildren()
     rows.forEach(row => {
       const id = row.dataset.accountId
+      const fragment = this.targetTemplateTarget.content.cloneNode(true)
 
-      const label = document.createElement("label")
-      label.className = "selection-confirmation__target"
-
-      const radio = document.createElement("input")
-      radio.type = "radio"
-      radio.name = "target_account_id"
+      const radio = fragment.querySelector("input[name='target_account_id']")
       radio.value = id
       radio.checked = id === defaultId
-      label.appendChild(radio)
 
-      const name = document.createElement("span")
-      name.className = "selection-confirmation__target-name"
-      name.textContent = row.dataset.accountName
-      label.appendChild(name)
+      fragment.querySelector(".selection-confirmation__target-name").textContent = row.dataset.accountName
 
       const count = Number(row.dataset.transactionCount)
-      const meta = document.createElement("span")
-      meta.className = "selection-confirmation__target-count"
-      meta.textContent = `${count} ${count === 1 ? "transaction" : "transactions"}`
-      label.appendChild(meta)
+      fragment.querySelector(".selection-confirmation__target-count").textContent =
+        `${count} ${count === 1 ? "transaction" : "transactions"}`
 
-      this.targetListTarget.appendChild(label)
+      fragment.querySelector("input[name='account_ids[]']").value = id
 
-      const hidden = document.createElement("input")
-      hidden.type = "hidden"
-      hidden.name = "account_ids[]"
-      hidden.value = id
-      form.appendChild(hidden)
+      this.targetListTarget.appendChild(fragment)
     })
 
     const noun = rows.length === 1 ? "account" : "accounts"

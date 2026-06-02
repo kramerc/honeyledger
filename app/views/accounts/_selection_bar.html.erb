@@ -31,6 +31,17 @@
         <div class="selection-confirmation__targets" data-accounts--selection-target="targetList"></div>
       </div>
 
+      <%# Cloned once per selected account by accounts--selection#showConfirmation. The hidden
+          account_ids[] input rides along inside each label so the whole selection posts. %>
+      <template data-accounts--selection-target="targetTemplate">
+        <label class="selection-confirmation__target">
+          <input type="radio" name="target_account_id">
+          <span class="selection-confirmation__target-name"></span>
+          <span class="selection-confirmation__target-count"></span>
+          <input type="hidden" name="account_ids[]">
+        </label>
+      </template>
+
       <p class="selection-confirmation__note">
         Transactions and import rules from the other accounts move to the kept account, and the
         others are deleted. Already-imported transactions stay merged; a new import whose
