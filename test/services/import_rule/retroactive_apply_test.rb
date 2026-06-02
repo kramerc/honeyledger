@@ -411,4 +411,104 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     changes = service.preview
     assert_equal 0, changes.size
   end
+
+  # --- CSV-sourced transactions ---
+  #
+  # CSV imports never create AccountSource records; their import side is the
+  # Csv::Import's ledger account. These transactions used to be skipped entirely
+  # because identify_counterpart only recognized aggregator-linked accounts, so
+  # no rule (exclude or reassign) could ever match a CSV-imported transaction.
+
+  test "preview matches CSV-sourced transaction for exclude rule" do
+    csv_transaction = create_csv_sourced_transaction(
+      counterpart: @original_expense,
+      description: "Acme Wallet Account Hold for Open Authorization"
+    )
+
+    @rule.destroy!
+    exclude_rule = ImportRule.create!(
+      user: @user, match_pattern: "Acme Wallet Account Hold", match_type: :contains, exclude: true
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: exclude_rule)
+    changes = service.preview
+
+    matching = changes.find { |c| c.transaction.id == csv_transaction.id }
+    assert_not_nil matching, "expected the CSV-sourced transaction to match the exclude rule"
+    assert_equal :exclude, matching.action
+    assert_nil matching.new_account
+  end
+
+  test "apply excludes CSV-sourced transaction for exclude rule" do
+    csv_transaction = create_csv_sourced_transaction(
+      counterpart: @original_expense,
+      description: "Acme Wallet Account Hold for Open Authorization"
+    )
+
+    @rule.destroy!
+    exclude_rule = ImportRule.create!(
+      user: @user, match_pattern: "Acme Wallet Account Hold", match_type: :contains, exclude: true
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: exclude_rule)
+    count = service.apply
+
+    assert_equal 1, count
+    assert csv_transaction.reload.excluded?
+  end
+
+  test "preview reassigns counterpart for CSV-sourced transaction" do
+    csv_transaction = create_csv_sourced_transaction(
+      counterpart: @original_expense,
+      description: "GROCERY STORE #789"
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: @rule)
+    changes = service.preview
+
+    matching = changes.find { |c| c.transaction.id == csv_transaction.id }
+    assert_not_nil matching, "expected the CSV-sourced transaction to match the reassign rule"
+    assert_equal @original_expense, matching.old_account
+    assert_equal @new_expense, matching.new_account
+    assert_equal :expense, matching.direction
+  end
+
+  private
+
+    # Build a ledger transaction sourced from a CSV import, mirroring how
+    # Csv::ImportTransactionsJob wires up the import account and its expense/
+    # revenue counterpart. The import-side ledger account is deliberately NOT
+    # aggregator-linked (no AccountSource), which is the case that exposed the
+    # bug: only Csv::Transaction#account identifies it as the import side.
+    def create_csv_sourced_transaction(counterpart:, description:)
+      ledger_account = Account.create!(user: @user, name: "Acme Wallet", kind: :asset, currency: @currency)
+      assert_empty ledger_account.account_sources, "CSV import account must not be aggregator-linked"
+
+      import = Csv::Import.new(user: @user, account: ledger_account, state: "imported")
+      import.file.attach(
+        io: StringIO.new("date,amount\n2026-01-01,-50.00\n"),
+        filename: "import.csv",
+        content_type: "text/csv"
+      )
+      import.save!
+
+      csv_transaction = Csv::Transaction.create!(
+        import: import,
+        row_index: 0,
+        amount_minor: -5000,
+        description: description,
+        transacted_at: 1.day.ago
+      )
+
+      create_sourced_transaction(
+        user: @user,
+        src_account: ledger_account,
+        dest_account: counterpart,
+        amount_minor: 5000,
+        currency: @currency,
+        description: description,
+        transacted_at: 1.day.ago,
+        sourceable: csv_transaction
+      )
+    end
 end
