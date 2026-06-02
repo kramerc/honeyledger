@@ -346,6 +346,7 @@ class AccountsTest < ApplicationSystemTestCase
     within ".selection-confirmation" do
       assert_text "2 empty expense/revenue accounts will be permanently deleted."
       assert_text "asset, liability, and equity accounts are never touched"
+      assert_text "any account used by an import rule"
       assert_text "Stale Vendor"
       assert_text "Stale Income"
       click_button "Delete empty accounts"
