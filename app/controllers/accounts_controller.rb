@@ -6,16 +6,18 @@ class AccountsController < ApplicationController
 
   # GET /accounts or /accounts.json
   def index
-    @grouped_accounts = current_user.accounts.real
+    # @accounts backs the JSON view (index.json.jbuilder); the HTML view reads
+    # the kind grouping derived from the same loaded relation.
+    @accounts = current_user.accounts.real
       .includes(:currency, account_sources: :sourceable)
       .order(:kind, :name)
-      .group_by(&:kind)
+    @grouped_accounts = @accounts.group_by(&:kind)
 
     # Accounts referenced by a non-opening-balance transaction can't be destroyed
     # (dependent: :restrict_with_error). A lone opening-balance transaction is
     # auto-removed by Account#before_destroy, so it doesn't count. One query feeds
     # a Set the row partial checks to decide whether to render the Delete button.
-    account_ids = @grouped_accounts.values.flatten.map(&:id)
+    account_ids = @accounts.map(&:id)
     @accounts_with_transactions =
       if account_ids.empty?
         Set.new

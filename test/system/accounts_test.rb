@@ -97,11 +97,15 @@ class AccountsTest < ApplicationSystemTestCase
   test "the accounts index groups accounts by kind" do
     visit accounts_path
 
-    assert_text "Assets"
-    assert_text "Liabilities"
-    assert_text "Expenses"
-    assert_text "Revenues"
-    assert_no_text "Equities" # user one has no equity accounts
+    # Scope to the page content so the sidebar (which renders the same kind
+    # headings) can't make these assertions pass on its own.
+    within "main" do
+      assert_text "Assets"
+      assert_text "Liabilities"
+      assert_text "Expenses"
+      assert_text "Revenues"
+      assert_no_text "Equities" # user one has no equity accounts
+    end
   end
 
   test "account rows show color-coded balances" do

@@ -24,6 +24,14 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "should get index as JSON" do
+    get accounts_url(format: :json)
+
+    assert_response :success
+    names = JSON.parse(response.body).map { |account| account["name"] }
+    assert_includes names, accounts(:asset_account).name
+  end
+
   test "should get new" do
     get new_account_url
 
