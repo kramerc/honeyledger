@@ -119,6 +119,24 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_nil source_badge_modifier(currencies(:usd))
   end
 
+  # source_badge_order
+
+  test "source_badge_order ranks SimpleFIN ahead of Lunch Flow and CSV" do
+    sources = [
+      lunchflow_accounts(:linked_one),
+      Csv::Transaction.new,
+      simplefin_accounts(:linked_one)
+    ]
+
+    ordered = sources.sort_by { |source| source_badge_order(source) }.map { |source| source_badge_label(source) }
+
+    assert_equal [ "SimpleFIN", "Lunch Flow", "CSV" ], ordered
+  end
+
+  test "source_badge_order sorts unknown sourceable types last" do
+    assert_operator source_badge_order(currencies(:usd)), :>, source_badge_order(Csv::Transaction.new)
+  end
+
   # transaction_source_badges
 
   test "transaction_source_badges renders one styled span per source with aggregator modifiers" do

@@ -59,25 +59,39 @@
   border-radius: 8px;
 }
 
+/* Account is the only flexing column; Balance, Sources, and Actions are pinned to
+   fixed widths so they stay flush against the right edge identically across every
+   group. That keeps Actions aligned down the whole page (and Balance aligned across
+   the groups without a Sources column), no matter which columns a group carries.
+
+   Base layout: Account, Balance, Actions. Equity groups use this as-is, since
+   they're neither linkable (no Sources) nor selectable (no checkbox). */
 .accounts .row {
   display: grid;
   grid-template-columns:
-    minmax(140px, 2fr)    /* Account */
-    minmax(90px,  1fr)    /* Balance */
-    minmax(120px, 1.5fr)  /* Sources */
-    minmax(160px, 1.5fr); /* Actions */
+    minmax(140px, 1fr)    /* Account */
+    130px                 /* Balance */
+    220px;                /* Actions */
   gap: 0;
   align-items: stretch;
+}
+
+/* Asset/liability groups add a Sources column (only they can link sources). */
+.accounts--linkable .row {
+  grid-template-columns:
+    minmax(140px, 1fr)    /* Account */
+    130px                 /* Balance */
+    200px                 /* Sources */
+    220px;                /* Actions */
 }
 
 /* Expense/revenue groups carry a leading checkbox column for merging. */
 .accounts--selectable .row {
   grid-template-columns:
     44px                  /* Select */
-    minmax(140px, 2fr)    /* Account */
-    minmax(90px,  1fr)    /* Balance */
-    minmax(120px, 1.5fr)  /* Sources */
-    minmax(160px, 1.5fr); /* Actions */
+    minmax(140px, 1fr)    /* Account */
+    130px                 /* Balance */
+    220px;                /* Actions */
 }
 
 .accounts .row > .select {

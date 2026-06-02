@@ -26,20 +26,21 @@
     </span>
   </div>
 
-  <div data-label="Sources">
-    <% account_sources = account.account_sources %>
-    <% if account_sources.any? %>
-      <% account_sources.each do |account_source| %>
-        <% sourceable = account_source.sourceable %>
-        <%= tag.span source_badge_label(sourceable), class: class_names("source-badge", source_badge_modifier(sourceable)) %>
-      <% end %>
-    <% else %>
-      <span class="accounts__not-linked">Not linked</span>
-      <% if account.asset? || account.liability? %>
+  <%# Only asset/liability accounts can carry an aggregator source, so the whole
+      Sources column is dropped from expense/revenue/equity groups (see index). %>
+  <% if account.linkable? %>
+    <div data-label="Sources">
+      <% sourceables = account.account_sources.map(&:sourceable).sort_by { |sourceable| source_badge_order(sourceable) } %>
+      <% if sourceables.any? %>
+        <% sourceables.each do |sourceable| %>
+          <%= tag.span source_badge_label(sourceable), class: class_names("source-badge", source_badge_modifier(sourceable)) %>
+        <% end %>
+      <% else %>
+        <span class="accounts__not-linked">Not linked</span>
         <%= link_to "Link", integrations_path, "aria-label": "Link #{account.name} to an integration" %>
       <% end %>
-    <% end %>
-  </div>
+    </div>
+  <% end %>
 
   <div class="actions">
     <%= link_to "Transactions", account_transactions_path(account), "aria-label": "View transactions for #{account.name}" %>

@@ -21,6 +21,17 @@ module ApplicationHelper
     end
   end
 
+  # Sort rank for source badges, matching the aggregator order on the integrations
+  # page (SimpleFIN, then Lunch Flow, then CSV) rather than sorting alphabetically.
+  def source_badge_order(sourceable)
+    case sourceable
+    when Simplefin::Account, Simplefin::Transaction then 0
+    when Lunchflow::Account, Lunchflow::Transaction then 1
+    when Csv::Transaction then 2
+    else 3
+    end
+  end
+
   # Caller is responsible for passing a collection where each TransactionSource's
   # sourceable is already loaded (e.g., array from `includes(:sourceable)`).
   # An unloaded relation will N+1 on the per-source sourceable access below.

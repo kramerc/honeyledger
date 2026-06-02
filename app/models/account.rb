@@ -73,6 +73,12 @@ class Account < ApplicationRecord
     asset? || liability? || equity?
   end
 
+  # Only asset and liability accounts can be backed by an aggregator source; the
+  # `linkable` scope is the collection-level counterpart.
+  def linkable?
+    asset? || liability?
+  end
+
   def build_opening_balance_transaction(transaction_attributes = {})
     @opening_balance_transaction = Transaction.new({
       user: user,
