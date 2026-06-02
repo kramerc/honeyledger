@@ -114,9 +114,17 @@ class ImportRule::RetroactiveApply
       ids << transaction.dest_account_id if transaction.dest_account.account_sources.any?
       transaction.transaction_sources.each do |source|
         sourceable = source.sourceable
-        ids << sourceable.account&.id if sourceable.is_a?(Csv::Transaction)
+        # Read import_id off the already-preloaded Csv::Transaction and resolve the
+        # account through a cached map, rather than walking sourceable.account
+        # (import -> account) per row inside find_each.
+        ids << csv_import_account_ids[sourceable.import_id] if sourceable.is_a?(Csv::Transaction)
       end
-      ids.compact
+      ids.compact.uniq
+    end
+
+    # import_id => ledger account_id for this user's CSV imports, loaded once.
+    def csv_import_account_ids
+      @csv_import_account_ids ||= Csv::Import.where(user_id: @user.id).pluck(:id, :account_id).to_h
     end
 
     def find_matching_rule(description)
