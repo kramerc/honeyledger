@@ -6,7 +6,24 @@ class AccountsController < ApplicationController
 
   # GET /accounts or /accounts.json
   def index
-    @accounts = current_user.accounts.real.includes(:currency)
+    @grouped_accounts = current_user.accounts.real
+      .includes(:currency, account_sources: :sourceable)
+      .order(:kind, :name)
+      .group_by(&:kind)
+
+    # Accounts referenced by a non-opening-balance transaction can't be destroyed
+    # (dependent: :restrict_with_error). A lone opening-balance transaction is
+    # auto-removed by Account#before_destroy, so it doesn't count. One query feeds
+    # a Set the row partial checks to decide whether to render the Delete button.
+    account_ids = @grouped_accounts.values.flatten.map(&:id)
+    @accounts_with_transactions =
+      if account_ids.empty?
+        Set.new
+      else
+        Transaction.where(opening_balance: false)
+          .where("src_account_id IN (:ids) OR dest_account_id IN (:ids)", ids: account_ids)
+          .pluck(:src_account_id, :dest_account_id).flatten.to_set
+      end
   end
 
   # GET /accounts/1 or /accounts/1.json
@@ -78,11 +95,18 @@ class AccountsController < ApplicationController
 
   # DELETE /accounts/1 or /accounts/1.json
   def destroy
-    @account.destroy!
-
+    # Non-bang destroy: dependent: :restrict_with_error returns false (without
+    # raising) when the account still has transactions, so it degrades to a flash
+    # instead of a 500. The index hides Delete in that case, but this guards
+    # direct requests and races.
     respond_to do |format|
-      format.html { redirect_to accounts_path, notice: "Account was successfully destroyed.", status: :see_other }
-      format.json { head :no_content }
+      if @account.destroy
+        format.html { redirect_to accounts_path, notice: "Account was successfully destroyed.", status: :see_other }
+        format.json { head :no_content }
+      else
+        format.html { redirect_to accounts_path, alert: "This account still has transactions, so it can't be deleted.", status: :see_other }
+        format.json { render json: @account.errors, status: :unprocessable_entity }
+      end
     end
   end
 

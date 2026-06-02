@@ -1,0 +1,37 @@
+<% deletable = accounts_with_transactions.exclude?(account.id) %>
+<div id="<%= dom_id(account) %>" class="row">
+  <div data-label="Account">
+    <%= link_to account.name, account %>
+  </div>
+
+  <div data-label="Balance" class="numeric">
+    <% balance_minor = account.balance_minor %>
+    <% modifier = balance_minor && (balance_minor >= 0 ? "account__balance--positive" : "account__balance--negative") %>
+    <span class="account__balance <%= modifier %>">
+      <%= balance_minor ? amount_to_currency(balance_minor, account.currency) : "N/A" %>
+    </span>
+  </div>
+
+  <div data-label="Sources">
+    <% account_sources = account.account_sources %>
+    <% if account_sources.any? %>
+      <% account_sources.each do |account_source| %>
+        <% sourceable = account_source.sourceable %>
+        <%= tag.span source_badge_label(sourceable), class: class_names("source-badge", source_badge_modifier(sourceable)) %>
+      <% end %>
+    <% else %>
+      <span class="accounts__not-linked">Not linked</span>
+      <% if account.asset? || account.liability? %>
+        <%= link_to "Link", integrations_path, "aria-label": "Link #{account.name} to an integration" %>
+      <% end %>
+    <% end %>
+  </div>
+
+  <div class="actions">
+    <%= link_to "Transactions", account_transactions_path(account), "aria-label": "View transactions for #{account.name}" %>
+    <%= link_to "Edit", edit_account_path(account), "aria-label": "Edit #{account.name}" %>
+    <% if deletable %>
+      <%= button_to "Delete", account, method: :delete, "aria-label": "Delete #{account.name}", data: { turbo_confirm: "Delete #{account.name}? This cannot be undone." } %>
+    <% end %>
+  </div>
+</div>

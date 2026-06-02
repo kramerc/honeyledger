@@ -361,4 +361,25 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to accounts_url
   end
+
+  test "should not destroy account that still has transactions" do
+    account = accounts(:asset_account) # referenced by transactions(:one)
+
+    assert_no_difference("Account.count") do
+      delete account_url(account)
+    end
+
+    assert_redirected_to accounts_url
+    assert_equal "This account still has transactions, so it can't be deleted.", flash[:alert]
+  end
+
+  test "should respond unprocessable entity for JSON destroy of an account with transactions" do
+    account = accounts(:asset_account)
+
+    assert_no_difference("Account.count") do
+      delete account_url(account), as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
 end
