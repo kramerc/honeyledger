@@ -15,6 +15,15 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "should get index for a user with no accounts" do
+    empty_user = User.create!(email: "empty-index@example.com", password: "password123")
+    sign_in empty_user
+
+    get accounts_url
+
+    assert_response :success
+  end
+
   test "should get new" do
     get new_account_url
 
