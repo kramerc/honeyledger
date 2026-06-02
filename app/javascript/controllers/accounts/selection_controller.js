@@ -2,10 +2,14 @@ import { Controller } from "@hotwired/stimulus"
 
 // Drives the expense/revenue account checkboxes on the accounts index. Selecting two or more
 // accounts of the same kind and currency reveals a Merge action; the user then picks which
-// account to keep before confirming. Mirrors transactions--selection, minus the merge-pair
-// and exclude/restore logic.
+// account to keep before confirming. Empty accounts (no transactions) can also be cleaned up:
+// the header "Clean up" button selects every empty account at once, and a bar Delete button
+// removes a hand-picked subset — both open the same reviewable confirmation before deleting.
+// Mirrors transactions--selection, minus the merge-pair and exclude/restore logic.
 export default class extends Controller {
-  static targets = [ "checkbox", "bar", "count", "message", "mergeButton", "confirmation", "targetList", "targetTemplate" ]
+  static targets = [ "checkbox", "bar", "count", "message", "mergeButton", "confirmation",
+    "targetList", "targetTemplate", "deleteButton", "cleanupButton", "cleanupForm",
+    "cleanupConfirmation", "cleanupList", "cleanupItemTemplate" ]
 
   connect() {
     // The browser restores checkbox state across a reload, so seed the selection from whatever
@@ -31,6 +35,7 @@ export default class extends Controller {
     if (this.selectedIds.length < 1) {
       this.hideBar()
       this.hideConfirmation()
+      this.hideCleanupConfirmation()
       return
     }
 
@@ -40,6 +45,12 @@ export default class extends Controller {
     const validation = this.validateSelection()
     this.mergeButtonTarget.disabled = !validation.valid
     this.messageTarget.textContent = validation.valid ? "" : validation.reason
+
+    // Delete is offered only when every checked account is empty — the per-row checkbox carries
+    // its transaction count, and "0" means it can be destroyed (restrict_with_error otherwise).
+    if (this.hasDeleteButtonTarget) {
+      this.deleteButtonTarget.hidden = !this.selectedRows().every(row => row.dataset.transactionCount === "0")
+    }
 
     this.barTarget.hidden = false
   }
@@ -111,12 +122,63 @@ export default class extends Controller {
     this.barTarget.hidden = true
   }
 
+  // Header "Clean up" affordance: check every empty account the server flagged, then open the
+  // reviewable confirmation listing exactly what will be deleted.
+  confirmCleanup() {
+    const ids = JSON.parse(this.cleanupButtonTarget.dataset.emptyAccountIds || "[]").map(String)
+    this.selectedIds = ids
+    this.checkboxTargets.forEach(checkbox => { checkbox.checked = ids.includes(checkbox.dataset.accountId) })
+    this.openCleanupConfirmation(ids)
+  }
+
+  // Bar Delete: confirm the hand-picked subset (only shown when every checked account is empty).
+  confirmDeleteSelected() {
+    this.openCleanupConfirmation(this.selectedIds)
+  }
+
+  openCleanupConfirmation(ids) {
+    const rows = ids.map(id => this.checkboxFor(id)).filter(Boolean)
+
+    this.cleanupListTarget.replaceChildren()
+    rows.forEach(row => {
+      const fragment = this.cleanupItemTemplateTarget.content.cloneNode(true)
+      fragment.querySelector(".selection-confirmation__cleanup-name").textContent = row.dataset.accountName
+      this.cleanupListTarget.appendChild(fragment)
+    })
+
+    const noun = rows.length === 1 ? "account" : "accounts"
+    this.cleanupConfirmationTarget.querySelector(".selection-confirmation__preview").textContent =
+      `${rows.length} empty expense/revenue ${noun} will be permanently deleted.`
+
+    this.cleanupConfirmationTarget.hidden = false
+    this.hideBar()
+  }
+
+  submitCleanup() {
+    const form = this.cleanupFormTarget
+    form.querySelectorAll("input[name='account_ids[]']").forEach(input => input.remove())
+    this.selectedIds.forEach(id => {
+      const input = document.createElement("input")
+      input.type = "hidden"
+      input.name = "account_ids[]"
+      input.value = id
+      form.appendChild(input)
+    })
+    form.requestSubmit()
+  }
+
+  // The header button can be present on a page whose selection bar isn't rendered (the empty
+  // accounts state), so guard the bar/confirmation targets here.
   hideBar() {
-    this.barTarget.hidden = true
+    if (this.hasBarTarget) this.barTarget.hidden = true
   }
 
   hideConfirmation() {
-    this.confirmationTarget.hidden = true
+    if (this.hasConfirmationTarget) this.confirmationTarget.hidden = true
+  }
+
+  hideCleanupConfirmation() {
+    if (this.hasCleanupConfirmationTarget) this.cleanupConfirmationTarget.hidden = true
   }
 
   cancel() {
@@ -124,5 +186,6 @@ export default class extends Controller {
     this.checkboxTargets.forEach(checkbox => { checkbox.checked = false })
     this.hideBar()
     this.hideConfirmation()
+    this.hideCleanupConfirmation()
   }
 }

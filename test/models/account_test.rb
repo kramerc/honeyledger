@@ -327,6 +327,26 @@ class AccountTest < ActiveSupport::TestCase
     assert @account.empty?
   end
 
+  test "empty? counts merged-away transactions so a merge reference is not empty" do
+    # A merged transaction keeps its original src/dest accounts (zeroed, merged_into set), and
+    # unmerge restores them in place — so the account must stay non-empty even though the
+    # transaction is hidden from the unmerged scope. Bulk cleanup depends on this invariant.
+    expense = Account.create!(user: users(:one), name: "Merge Reference Expense", kind: :expense, currency: currencies(:usd))
+    revenue = Account.create!(user: users(:one), name: "Merge Reference Revenue", kind: :revenue, currency: currencies(:usd))
+    withdrawal = Transaction.create!(
+      user: users(:one), src_account: accounts(:asset_account), dest_account: expense,
+      amount_minor: 750, currency: currencies(:usd), transacted_at: 1.day.ago
+    )
+    deposit = Transaction.create!(
+      user: users(:one), src_account: revenue, dest_account: accounts(:linked_asset),
+      amount_minor: 750, currency: currencies(:usd), transacted_at: 1.day.ago
+    )
+    assert Transaction::Merge.new(withdrawal, deposit, user: users(:one)).call
+
+    assert_equal 0, Transaction.unmerged.where(dest_account: expense).count, "the merged-away transaction is hidden from the unmerged scope"
+    assert_not expense.empty?, "a merge reference still references its zeroed transaction, so it is not empty"
+  end
+
   test "empty? is true if account only has an opening balance transaction" do
     @account.src_transactions.destroy_all
     @account.dest_transactions.destroy_all

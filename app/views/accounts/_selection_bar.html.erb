@@ -11,6 +11,14 @@
     Merge
   </button>
 
+  <%# Delete is revealed only when every checked account is empty (see updateBar). %>
+  <button type="button" class="selection-bar__btn selection-bar__btn--danger"
+          data-accounts--selection-target="deleteButton"
+          data-action="accounts--selection#confirmDeleteSelected"
+          hidden>
+    Delete
+  </button>
+
   <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
           data-action="accounts--selection#cancel">
     Cancel
@@ -54,5 +62,47 @@
                 data-action="accounts--selection#cancel">Cancel</button>
       </div>
     <% end %>
+  </div>
+</div>
+
+<%# Cleanup form — the controller injects account_ids[] before submitting it. Resetting on
+    submit-end clears the selection after Turbo Drive re-renders the index. %>
+<%= form_with url: cleanup_empty_accounts_path, method: :delete,
+      data: { accounts__selection_target: "cleanupForm",
+              action: "turbo:submit-end->accounts--selection#cancel" } do %>
+<% end %>
+
+<%# Cleanup confirmation panel — lists each empty account that will be deleted so the action is
+    reviewable, not blind. The controller clones cleanupItemTemplate once per account. %>
+<div class="selection-confirmation" data-accounts--selection-target="cleanupConfirmation" hidden>
+  <div class="selection-confirmation__content">
+    <h3>Clean up empty expense/revenue accounts</h3>
+    <p class="selection-confirmation__preview"></p>
+
+    <div class="selection-confirmation__keep">
+      <span class="selection-confirmation__label">These accounts will be deleted</span>
+      <div class="selection-confirmation__cleanup-list"
+           data-accounts--selection-target="cleanupList"></div>
+    </div>
+
+    <template data-accounts--selection-target="cleanupItemTemplate">
+      <div class="selection-confirmation__cleanup-item">
+        <span class="selection-confirmation__cleanup-name"></span>
+      </div>
+    </template>
+
+    <p class="selection-confirmation__note">
+      Only empty expense and revenue accounts are listed — your asset, liability, and equity
+      accounts are never touched, and neither is any account used by an import rule. Deleting
+      these cannot be undone; a future import whose description exactly matches a removed
+      account's name may recreate it.
+    </p>
+
+    <div class="selection-confirmation__actions">
+      <button type="button" class="selection-bar__btn selection-bar__btn--danger"
+              data-action="accounts--selection#submitCleanup">Delete empty accounts</button>
+      <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+              data-action="accounts--selection#cancel">Cancel</button>
+    </div>
   </div>
 </div>

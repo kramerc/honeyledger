@@ -35,6 +35,23 @@
   text-decoration: underline;
 }
 
+/* Bulk "clean up empty accounts" trigger — a danger-tinted text button that sits beside the
+   sibling header links (matches the per-row Delete color). */
+.accounts-header__cleanup {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-negative);
+  cursor: pointer;
+}
+
+.accounts-header__cleanup:hover {
+  text-decoration: underline;
+}
+
 /* Per-kind section — hidden until it has at least one data row,
    mirroring .sidebar-kind-group:has(li) */
 .accounts-group {
@@ -225,6 +242,21 @@
   color: var(--bark-light);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Cleanup confirmation — the reviewable list of accounts the bulk delete will remove. Scrolls
+   so a long list can't push the confirmation panel past the viewport. */
+.selection-confirmation__cleanup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.selection-confirmation__cleanup-item {
+  font-size: 0.875rem;
+  color: var(--bark);
 }
 
 /* Empty state */

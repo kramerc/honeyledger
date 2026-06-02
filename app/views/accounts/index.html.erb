@@ -1,24 +1,36 @@
 <% content_for :title, "Accounts" %>
 
-<div class="accounts-header">
-  <h1>Accounts</h1>
-  <div class="accounts-header__actions">
-    <%= link_to "+ New account", new_account_path %>
-    <%= link_to "Integrations", integrations_path %>
-  </div>
-</div>
-
-<% if @grouped_accounts.blank? %>
-  <div class="empty-state">
-    <h2>No accounts yet</h2>
-    <p>Add your first account, or link one from Integrations to start tracking balances.</p>
-    <div class="empty-state__actions">
-      <%= link_to "New account", new_account_path %>
-      <%= link_to "Go to Integrations", integrations_path %>
+<%# The accounts--selection controller wraps the header too, so its "Clean up" button is in
+    scope. The selection bar (with the cleanup form/confirmation) only renders when there are
+    accounts; the button only renders when there are empties — so they always appear together. %>
+<div data-controller="accounts--selection">
+  <div class="accounts-header">
+    <h1>Accounts</h1>
+    <div class="accounts-header__actions">
+      <%= link_to "+ New account", new_account_path %>
+      <%= link_to "Integrations", integrations_path %>
+      <% if @empty_cleanup_accounts.present? %>
+        <button type="button" class="accounts-header__cleanup"
+                title="Only empty expense and revenue accounts"
+                data-accounts--selection-target="cleanupButton"
+                data-action="accounts--selection#confirmCleanup"
+                data-empty-account-ids="<%= @empty_cleanup_accounts.map(&:id).to_json %>">
+          <%= "Clean up #{pluralize(@empty_cleanup_accounts.size, "empty account")}" %>
+        </button>
+      <% end %>
     </div>
   </div>
-<% else %>
-  <div data-controller="accounts--selection">
+
+  <% if @grouped_accounts.blank? %>
+    <div class="empty-state">
+      <h2>No accounts yet</h2>
+      <p>Add your first account, or link one from Integrations to start tracking balances.</p>
+      <div class="empty-state__actions">
+        <%= link_to "New account", new_account_path %>
+        <%= link_to "Go to Integrations", integrations_path %>
+      </div>
+    </div>
+  <% else %>
     <% Account.kinds.keys.each do |kind| %>
       <% accounts = @grouped_accounts[kind] || [] %>
       <% selectable = %w[ expense revenue ].include?(kind) %>
@@ -41,5 +53,5 @@
     <% end %>
 
     <%= render "accounts/selection_bar" %>
-  </div>
-<% end %>
+  <% end %>
+</div>
