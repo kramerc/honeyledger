@@ -398,5 +398,8 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_entity
+    # restrict_with_error adds a :base error before halting, so the model's
+    # errors are present in the JSON body.
+    assert_includes JSON.parse(response.body).keys, "base"
   end
 end
