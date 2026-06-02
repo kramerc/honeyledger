@@ -22,14 +22,15 @@
     <% Account.kinds.keys.each do |kind| %>
       <% accounts = @grouped_accounts[kind] || [] %>
       <% selectable = %w[ expense revenue ].include?(kind) %>
+      <% linkable = %w[ asset liability ].include?(kind) %>
       <section class="accounts-group">
         <h2><%= kind.humanize.pluralize %></h2>
-        <div class="accounts<%= " accounts--selectable" if selectable %>">
+        <div class="accounts<%= " accounts--selectable" if selectable %><%= " accounts--linkable" if linkable %>">
           <div class="row header">
             <% if selectable %><div class="select"></div><% end %>
             <div>Account</div>
             <div>Balance</div>
-            <div>Sources</div>
+            <% if linkable %><div>Sources</div><% end %>
             <div>Actions</div>
           </div>
           <%= render partial: "accounts/account_row", collection: accounts, as: :account,

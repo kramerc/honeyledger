@@ -152,6 +152,24 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_includes Account.last.account_sources.map(&:sourceable), simplefin_account
   end
 
+  test "should not link a SimpleFIN account to a non-linkable kind" do
+    simplefin_account = simplefin_accounts(:unlinked_one)
+
+    assert_no_difference([ "Account.count", "AccountSource.count" ]) do
+      post accounts_url, params: {
+        account: {
+          name: "Groceries",
+          kind: "expense",
+          currency_id: @account.currency_id
+        },
+        simplefin_account_id: simplefin_account.id
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_not simplefin_account.reload.linked?
+  end
+
   test "rolls back account creation when AccountSource::Attach hits a concurrent-link race" do
     simplefin_account = simplefin_accounts(:unlinked_one)
 

@@ -68,15 +68,24 @@ class AccountsController < ApplicationController
     sourceable = @simplefin_account || @lunchflow_account
 
     saved =
-      begin
-        Account.transaction do
-          @account.save.tap do |ok|
-            AccountSource::Attach.call(account: @account, sourceable: sourceable) if ok && sourceable
-          end
-        end
-      rescue AccountSource::Attach::MismatchedAccount
-        @account.errors.add(:base, "is already linked to another integration")
+      if sourceable && !@account.linkable?
+        # Only asset/liability accounts can back an aggregator source. Refuse the
+        # link rather than create an expense/revenue/equity account that the index
+        # would treat as unlinkable and hide the source badge for (see the Sources
+        # column gating in accounts/_account_row and Account#linkable?).
+        @account.errors.add(:kind, "must be an asset or liability account to link an integration")
         false
+      else
+        begin
+          Account.transaction do
+            @account.save.tap do |ok|
+              AccountSource::Attach.call(account: @account, sourceable: sourceable) if ok && sourceable
+            end
+          end
+        rescue AccountSource::Attach::MismatchedAccount
+          @account.errors.add(:base, "is already linked to another integration")
+          false
+        end
       end
 
     respond_to do |format|

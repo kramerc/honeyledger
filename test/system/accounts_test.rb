@@ -134,6 +134,18 @@ class AccountsTest < ApplicationSystemTestCase
     end
   end
 
+  test "account rows order source badges like the integrations page (SimpleFIN first)" do
+    account = accounts(:linked_asset) # already carries a SimpleFIN source
+    AccountSource.create!(account: account, sourceable: lunchflow_accounts(:unlinked_one))
+
+    visit accounts_path
+
+    within row_for(account) do
+      labels = all(".source-badge").map(&:text)
+      assert_equal [ "SimpleFIN", "Lunch Flow" ], labels
+    end
+  end
+
   test "unlinked asset and liability rows offer a Link action" do
     visit accounts_path
 
@@ -147,12 +159,21 @@ class AccountsTest < ApplicationSystemTestCase
     end
   end
 
-  test "unlinked expense and revenue rows show Not linked without a Link action" do
+  test "expense and revenue groups drop the Sources column, since they can't be linked" do
     visit accounts_path
 
     within row_for(accounts(:expense_account)) do
-      assert_text "Not linked"
+      assert_no_text "Not linked"
       assert_no_link "Link", exact: true
+      assert_no_selector ".source-badge"
+    end
+
+    # The column header is gone for these groups but stays for linkable ones.
+    within find("section.accounts-group", text: "Expenses") do
+      within(".row.header") { assert_no_text "Sources" }
+    end
+    within find("section.accounts-group", text: "Assets") do
+      within(".row.header") { assert_text "Sources" }
     end
   end
 

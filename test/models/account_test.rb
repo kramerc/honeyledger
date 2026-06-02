@@ -301,6 +301,19 @@ class AccountTest < ActiveSupport::TestCase
     assert_not accounts(:revenue_account).balance_sheet?
   end
 
+  test "linkable? is true for asset and liability accounts" do
+    assert accounts(:asset_account).linkable?
+    assert accounts(:liability_account).linkable?
+  end
+
+  test "linkable? is false for equity, expense, and revenue accounts" do
+    equity = Account.create!(user: users(:one), currency: currencies(:usd), name: "Equity", kind: :equity)
+
+    assert_not equity.linkable?
+    assert_not accounts(:expense_account).linkable?
+    assert_not accounts(:revenue_account).linkable?
+  end
+
   test "empty? is false if account contains transactions" do
     @account.dest_transactions << transactions(:one)
 
