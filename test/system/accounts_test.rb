@@ -230,10 +230,88 @@ class AccountsTest < ApplicationSystemTestCase
     assert_link "Go to Integrations"
   end
 
+  test "merging two expense accounts folds one into the kept account" do
+    keeper = accounts(:expense_account) # has fixture transaction one ($50.00)
+    keeper.reset_balance
+    duplicate = Account.create!(user: @user, name: "Duplicate Expense", kind: :expense, currency: currencies(:usd))
+    Transaction.create!(
+      user: @user, src_account: accounts(:asset_account), dest_account: duplicate,
+      amount_minor: 2500, currency: currencies(:usd), transacted_at: 1.day.ago
+    )
+
+    visit accounts_path
+
+    toggle_select(keeper)
+    toggle_select(duplicate)
+
+    within ".selection-bar" do
+      assert_text "2 accounts selected"
+      click_button "Merge"
+    end
+
+    find("input[name='target_account_id'][value='#{keeper.id}']").click
+    click_button "Confirm merge"
+
+    assert_text "Accounts merged into Expense Account."
+    assert_no_selector row_for(duplicate)
+    within row_for(keeper) do
+      assert_text "$75.00" # $50.00 (fixture) + $25.00 (moved)
+    end
+  end
+
+  test "the merge confirmation shows each account's transaction count" do
+    keeper = accounts(:expense_account) # has fixture transaction one => 1 transaction
+    duplicate = Account.create!(user: @user, name: "Duplicate Expense", kind: :expense, currency: currencies(:usd))
+    2.times do |index|
+      Transaction.create!(
+        user: @user, src_account: accounts(:asset_account), dest_account: duplicate,
+        amount_minor: 100 * (index + 1), currency: currencies(:usd), transacted_at: 1.day.ago
+      )
+    end
+
+    visit accounts_path
+    toggle_select(keeper)
+    toggle_select(duplicate)
+    within(".selection-bar") { click_button "Merge" }
+
+    within ".selection-confirmation" do
+      assert_text "Expense Account"
+      assert_text "1 transaction"
+      assert_text "Duplicate Expense"
+      assert_text "2 transactions"
+    end
+  end
+
+  test "restoring a checked selection on reconnect shows the merge bar" do
+    keeper = accounts(:expense_account)
+    duplicate = Account.create!(user: @user, name: "Duplicate Expense", kind: :expense, currency: currencies(:usd))
+
+    visit accounts_path
+
+    # Reproduce a browser reload restoring checkbox state: live-check the boxes without firing a
+    # change event, then make Stimulus tear down and reconnect the controller. connect() must
+    # re-derive the selection from the already-checked boxes so the bar reappears on its own.
+    page.execute_script(<<~JS, keeper.id, duplicate.id)
+      document.querySelector("input.selection-checkbox[data-account-id='" + arguments[0] + "']").checked = true
+      document.querySelector("input.selection-checkbox[data-account-id='" + arguments[1] + "']").checked = true
+      window.__mergeWrapper = document.querySelector("[data-controller='accounts--selection']")
+      window.__mergeWrapper.removeAttribute("data-controller")
+    JS
+    page.execute_script("window.__mergeWrapper.setAttribute('data-controller', 'accounts--selection')")
+
+    within ".selection-bar" do
+      assert_text "2 accounts selected"
+    end
+  end
+
   private
 
   def row_for(account)
     "##{ActionView::RecordIdentifier.dom_id(account)}"
+  end
+
+  def toggle_select(account)
+    find("input.selection-checkbox[data-account-id='#{account.id}']").click
   end
 
   def sign_in_as(user)

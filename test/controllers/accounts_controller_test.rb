@@ -402,4 +402,53 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     # errors are present in the JSON body.
     assert_includes JSON.parse(response.body).keys, "base"
   end
+
+  test "should merge selected accounts into the chosen target" do
+    target = Account.create!(user: @user, name: "Amazon", kind: :expense, currency: currencies(:usd))
+    source = Account.create!(user: @user, name: "Amazon Marketplace", kind: :expense, currency: currencies(:usd))
+    transaction = Transaction.create!(
+      user: @user, src_account: accounts(:asset_account), dest_account: source,
+      amount_minor: 800, currency: currencies(:usd), transacted_at: 1.day.ago
+    )
+
+    post merge_accounts_url, params: { account_ids: [ target.id, source.id ], target_account_id: target.id }
+
+    assert_redirected_to accounts_url
+    assert_equal "Accounts merged into Amazon.", flash[:notice]
+    assert_nil Account.find_by(id: source.id)
+    assert_equal target.id, transaction.reload.dest_account_id
+  end
+
+  test "should not merge accounts belonging to another user" do
+    target = Account.create!(user: @user, name: "Amazon", kind: :expense, currency: currencies(:usd))
+    other = Account.create!(user: users(:two), name: "Theirs", kind: :expense, currency: currencies(:usd))
+
+    post merge_accounts_url, params: { account_ids: [ target.id, other.id ], target_account_id: target.id }
+
+    # The other user's account is scoped out, leaving no real source to merge.
+    assert_redirected_to accounts_url
+    assert_equal "Select at least one other account to merge", flash[:alert]
+    assert Account.exists?(other.id)
+  end
+
+  test "should not merge accounts of different kinds" do
+    target = Account.create!(user: @user, name: "Foo", kind: :expense, currency: currencies(:usd))
+    source = Account.create!(user: @user, name: "Bar", kind: :revenue, currency: currencies(:usd))
+
+    post merge_accounts_url, params: { account_ids: [ target.id, source.id ], target_account_id: target.id }
+
+    assert_redirected_to accounts_url
+    assert_equal "Only expense or revenue accounts of the same kind can be merged", flash[:alert]
+    assert Account.exists?(source.id)
+  end
+
+  test "should require a target account to merge" do
+    source = Account.create!(user: @user, name: "Bar", kind: :expense, currency: currencies(:usd))
+
+    post merge_accounts_url, params: { account_ids: [ source.id ] }
+
+    assert_redirected_to accounts_url
+    assert_equal "Pick a target account to keep.", flash[:alert]
+    assert Account.exists?(source.id)
+  end
 end
