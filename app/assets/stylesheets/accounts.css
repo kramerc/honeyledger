@@ -1,0 +1,241 @@
+/* Accounts index — grouped grid-table.
+   Mirrors transactions.css's grid-collapses-to-card mechanic; every generic
+   selector is namespaced under .accounts to avoid colliding with the
+   transactions table and the sidebar's .account* rules. */
+
+/* Page header band: title + in-context CTAs */
+.accounts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.accounts-header h1 {
+  margin: 0;
+}
+
+.accounts-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accounts-header__actions a {
+  color: var(--honey-dark);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.accounts-header__actions a:hover {
+  color: var(--honey);
+  text-decoration: underline;
+}
+
+/* Per-kind section — hidden until it has at least one data row,
+   mirroring .sidebar-kind-group:has(li) */
+.accounts-group {
+  display: none;
+  margin-bottom: 24px;
+}
+
+.accounts-group:has(.accounts .row:not(.header)) {
+  display: block;
+}
+
+.accounts-group h2 {
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
+
+/* Table wrapper */
+.accounts {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+}
+
+.accounts .row {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 2fr)    /* Account */
+    minmax(90px,  1fr)    /* Balance */
+    minmax(120px, 1.5fr)  /* Sources */
+    minmax(160px, 1.5fr); /* Actions */
+  gap: 0;
+  align-items: stretch;
+}
+
+.accounts .row.header {
+  background-color: var(--honey-pale);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-text);
+}
+
+/* Cells */
+.accounts .row > div {
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--bark-medium);
+  font-size: 0.875rem;
+}
+
+.accounts .row > div:last-child {
+  border-right: 0;
+}
+
+.accounts .row:last-child > div {
+  border-bottom: 0;
+}
+
+.accounts .numeric {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.accounts__not-linked {
+  color: var(--bark-light);
+  font-size: 0.8rem;
+}
+
+/* Row hover on desktop only */
+@media (min-width: 768px) {
+  .accounts .row:hover:not(.header) {
+    background-color: var(--honey-light);
+  }
+}
+
+/* Action cluster (adjacent controls, no delimiter) */
+.accounts .actions {
+  gap: 12px;
+}
+
+.accounts .actions a {
+  color: var(--honey-dark);
+  text-decoration: none;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.accounts .actions a:hover {
+  color: var(--honey);
+  text-decoration: underline;
+}
+
+.accounts .actions form.button_to {
+  margin: 0;
+  display: inline;
+}
+
+.accounts .actions button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--color-negative);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.accounts .actions button:hover {
+  text-decoration: underline;
+}
+
+/* Empty state */
+.empty-state {
+  background-color: var(--honey-pale);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+}
+
+.empty-state p {
+  margin: 0 0 16px;
+  color: var(--bark-medium);
+}
+
+.empty-state__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* ========== Mobile (< 768px): collapse each row to a card ========== */
+@media (max-width: 767px) {
+  .accounts {
+    border: none;
+    border-radius: 0;
+    overflow-x: visible;
+  }
+
+  /* Hide the desktop header row */
+  .accounts .row.header {
+    display: none;
+  }
+
+  /* Stack cells as a card */
+  .accounts .row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    background-color: var(--cream);
+  }
+
+  .accounts .row > div {
+    border: none;
+    padding: 3px 0;
+  }
+
+  /* Surface the column name as an inline label */
+  .accounts .row > div[data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--accent-text);
+    min-width: 70px;
+    display: inline;
+  }
+
+  /* Balance sits next to its label in card view (not pushed to the right).
+     .account__balance is shared with the sidebar, where it carries
+     margin-left: auto — undo that here so flex-start actually left-aligns it. */
+  .accounts .numeric {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .accounts .numeric .account__balance {
+    margin-left: 0;
+  }
+
+  /* Actions row across the bottom of the card */
+  .accounts .actions {
+    padding-top: 6px;
+    margin-top: 4px;
+    border-top: 1px solid var(--divider);
+    flex-wrap: wrap;
+  }
+}

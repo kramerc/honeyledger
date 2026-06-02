@@ -94,7 +94,147 @@ class AccountsTest < ApplicationSystemTestCase
     assert_no_selector "##{ActionView::RecordIdentifier.dom_id(account, :sidebar_item)}"
   end
 
+  test "the accounts index groups accounts by kind" do
+    visit accounts_path
+
+    # Scope to the page content so the sidebar (which renders the same kind
+    # headings) can't make these assertions pass on its own.
+    within "main" do
+      assert_text "Assets"
+      assert_text "Liabilities"
+      assert_text "Expenses"
+      assert_text "Revenues"
+      assert_no_text "Equities" # user one has no equity accounts
+    end
+  end
+
+  test "account rows show color-coded balances" do
+    accounts(:asset_account).update_column(:balance_minor, 12345)
+    accounts(:liability_account).update_column(:balance_minor, -5000)
+
+    visit accounts_path
+
+    within row_for(accounts(:asset_account)) do
+      assert_selector ".account__balance--positive"
+      assert_text "$123.45"
+    end
+    within row_for(accounts(:liability_account)) do
+      assert_selector ".account__balance--negative"
+    end
+  end
+
+  test "account rows show linked source badges" do
+    visit accounts_path
+
+    within row_for(accounts(:linked_asset)) do
+      assert_text "SimpleFIN"
+    end
+    within row_for(accounts(:lunchflow_linked_asset)) do
+      assert_text "Lunch Flow"
+    end
+  end
+
+  test "unlinked asset and liability rows offer a Link action" do
+    visit accounts_path
+
+    within row_for(accounts(:unlinked_liability)) do
+      assert_text "Not linked"
+      assert_link "Link", exact: true
+    end
+
+    within row_for(accounts(:linked_asset)) do
+      assert_no_link "Link", exact: true # account name "Linked Asset" contains "Link"
+    end
+  end
+
+  test "unlinked expense and revenue rows show Not linked without a Link action" do
+    visit accounts_path
+
+    within row_for(accounts(:expense_account)) do
+      assert_text "Not linked"
+      assert_no_link "Link", exact: true
+    end
+  end
+
+  test "clicking an account name opens its detail page" do
+    account = accounts(:unlinked_liability)
+    visit accounts_path
+
+    within row_for(account) do
+      click_link account.name
+    end
+
+    assert_current_path account_path(account)
+  end
+
+  test "the Transactions action opens the account's transactions" do
+    account = accounts(:unlinked_liability)
+    visit accounts_path
+
+    within row_for(account) do
+      click_link "Transactions"
+    end
+
+    assert_current_path account_transactions_path(account)
+  end
+
+  test "the Edit action opens the account edit form" do
+    account = accounts(:unlinked_liability)
+    visit accounts_path
+
+    within row_for(account) do
+      click_link "Edit"
+    end
+
+    assert_current_path edit_account_path(account)
+  end
+
+  test "Delete is hidden for accounts that still have transactions" do
+    visit accounts_path
+
+    within row_for(accounts(:asset_account)) do
+      assert_no_button "Delete"
+    end
+  end
+
+  test "deleting an account with no transactions removes it from the index and sidebar" do
+    account = Account.create!(user: @user, currency: currencies(:usd), name: "Index Delete Probe", kind: :asset)
+    visit accounts_path
+
+    row = row_for(account)
+    sidebar_item = "##{ActionView::RecordIdentifier.dom_id(account, :sidebar_item)}"
+    assert_selector row
+
+    within(row) do
+      accept_confirm do
+        click_button "Delete"
+      end
+    end
+
+    assert_text "Account was successfully destroyed."
+    assert_no_selector row
+    assert_no_selector sidebar_item
+  end
+
+  test "shows a friendly empty state when there are no accounts" do
+    empty_user = User.create!(email: "empty@example.com", password: "password123")
+
+    accept_confirm { click_link "Logout" }
+    assert_no_link "Logout"
+
+    sign_in_as(empty_user)
+    visit accounts_path
+
+    assert_text "No accounts yet"
+    assert_link "New account"
+    assert_link "Go to Integrations"
+  end
+
   private
+
+  def row_for(account)
+    "##{ActionView::RecordIdentifier.dom_id(account)}"
+  end
 
   def sign_in_as(user)
     visit new_user_session_path

@@ -15,6 +15,23 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "should get index for a user with no accounts" do
+    empty_user = User.create!(email: "empty-index@example.com", password: "password123")
+    sign_in empty_user
+
+    get accounts_url
+
+    assert_response :success
+  end
+
+  test "should get index as JSON" do
+    get accounts_url(format: :json)
+
+    assert_response :success
+    names = JSON.parse(response.body).map { |account| account["name"] }
+    assert_includes names, accounts(:asset_account).name
+  end
+
   test "should get new" do
     get new_account_url
 
@@ -360,5 +377,29 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to accounts_url
+  end
+
+  test "should not destroy account that still has transactions" do
+    account = accounts(:asset_account) # referenced by transactions(:one)
+
+    assert_no_difference("Account.count") do
+      delete account_url(account)
+    end
+
+    assert_redirected_to accounts_url
+    assert_equal "This account still has transactions, so it can't be deleted.", flash[:alert]
+  end
+
+  test "should respond unprocessable entity for JSON destroy of an account with transactions" do
+    account = accounts(:asset_account)
+
+    assert_no_difference("Account.count") do
+      delete account_url(account), as: :json
+    end
+
+    assert_response :unprocessable_entity
+    # restrict_with_error adds a :base error before halting, so the model's
+    # errors are present in the JSON body.
+    assert_includes JSON.parse(response.body).keys, "base"
   end
 end

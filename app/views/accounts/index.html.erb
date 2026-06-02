@@ -1,14 +1,37 @@
 <% content_for :title, "Accounts" %>
 
-<h1>Accounts</h1>
-
-<div id="accounts">
-  <% @accounts.each do |account| %>
-    <%= render account %>
-    <p>
-      <%= link_to "Show this account", account %>
-    </p>
-  <% end %>
+<div class="accounts-header">
+  <h1>Accounts</h1>
+  <div class="accounts-header__actions">
+    <%= link_to "+ New account", new_account_path %>
+    <%= link_to "Integrations", integrations_path %>
+  </div>
 </div>
 
-<%= link_to "New account", new_account_path %>
+<% if @grouped_accounts.blank? %>
+  <div class="empty-state">
+    <h2>No accounts yet</h2>
+    <p>Add your first account, or link one from Integrations to start tracking balances.</p>
+    <div class="empty-state__actions">
+      <%= link_to "New account", new_account_path %>
+      <%= link_to "Go to Integrations", integrations_path %>
+    </div>
+  </div>
+<% else %>
+  <% Account.kinds.keys.each do |kind| %>
+    <% accounts = @grouped_accounts[kind] || [] %>
+    <section class="accounts-group">
+      <h2><%= kind.humanize.pluralize %></h2>
+      <div class="accounts">
+        <div class="row header">
+          <div>Account</div>
+          <div>Balance</div>
+          <div>Sources</div>
+          <div>Actions</div>
+        </div>
+        <%= render partial: "accounts/account_row", collection: accounts, as: :account,
+              locals: { accounts_with_transactions: @accounts_with_transactions } %>
+      </div>
+    </section>
+  <% end %>
+<% end %>

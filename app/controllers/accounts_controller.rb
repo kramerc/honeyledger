@@ -6,7 +6,31 @@ class AccountsController < ApplicationController
 
   # GET /accounts or /accounts.json
   def index
-    @accounts = current_user.accounts.real.includes(:currency)
+    @accounts = current_user.accounts.real.order(:kind, :name)
+
+    respond_to do |format|
+      format.html do
+        # HTML-only work: eager-load for the balance/sources columns, group by
+        # kind, and find which accounts can't be deleted (they still have a
+        # non-opening-balance transaction; restrict_with_error). A lone
+        # opening-balance transaction is auto-removed by Account#before_destroy,
+        # so it doesn't count. The JSON format skips all of this and just renders
+        # @accounts via index.json.jbuilder.
+        @accounts = @accounts.includes(:currency, account_sources: :sourceable)
+        @grouped_accounts = @accounts.group_by(&:kind)
+
+        account_ids = @accounts.map(&:id)
+        @accounts_with_transactions =
+          if account_ids.empty?
+            Set.new
+          else
+            Transaction.where(opening_balance: false)
+              .where("src_account_id IN (:ids) OR dest_account_id IN (:ids)", ids: account_ids)
+              .pluck(:src_account_id, :dest_account_id).flatten.to_set
+          end
+      end
+      format.json
+    end
   end
 
   # GET /accounts/1 or /accounts/1.json
@@ -78,11 +102,18 @@ class AccountsController < ApplicationController
 
   # DELETE /accounts/1 or /accounts/1.json
   def destroy
-    @account.destroy!
-
+    # Non-bang destroy: dependent: :restrict_with_error returns false (without
+    # raising) when the account still has transactions, so it degrades to a flash
+    # instead of a 500. The index hides Delete in that case, but this guards
+    # direct requests and races.
     respond_to do |format|
-      format.html { redirect_to accounts_path, notice: "Account was successfully destroyed.", status: :see_other }
-      format.json { head :no_content }
+      if @account.destroy
+        format.html { redirect_to accounts_path, notice: "Account was successfully destroyed.", status: :see_other }
+        format.json { head :no_content }
+      else
+        format.html { redirect_to accounts_path, alert: "This account still has transactions, so it can't be deleted.", status: :see_other }
+        format.json { render json: @account.errors, status: :unprocessable_entity }
+      end
     end
   end
 
