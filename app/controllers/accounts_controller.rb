@@ -34,12 +34,19 @@ class AccountsController < ApplicationController
         end
         @accounts_with_transactions = @transaction_counts.keys.to_set
 
+        # An account that is the target of an import rule is an in-use mapping, not clutter —
+        # destroying it would also destroy the rule (dependent: :destroy), so keep it out of the
+        # cleanup set even when it currently has no transactions.
+        rule_target_ids = current_user.import_rules.where(account_id: account_ids).distinct.pluck(:account_id).to_set
+
         # Expense/revenue accounts that no transaction references accumulate from imports and
         # merges. They're the ones safe to bulk-delete, so surface them to the header "Clean up"
         # affordance. (A merge-reference account still holds its zeroed, merged-away transaction,
         # so it stays in @accounts_with_transactions and is correctly excluded here.)
         @empty_cleanup_accounts = @accounts.select do |account|
-          (account.expense? || account.revenue?) && @accounts_with_transactions.exclude?(account.id)
+          (account.expense? || account.revenue?) &&
+            @accounts_with_transactions.exclude?(account.id) &&
+            rule_target_ids.exclude?(account.id)
         end
       end
       format.json
@@ -140,13 +147,16 @@ class AccountsController < ApplicationController
   # DELETE /accounts/cleanup_empty
   # Bulk-deletes the user's empty expense/revenue accounts, then redirects back (Turbo Drive
   # re-renders the index, so the removed rows and the header affordance both update). Never
-  # trusts the posted ids: every candidate is re-scoped to the user's expense/revenue accounts
-  # and re-checked with empty? at delete time, so a stale list can't delete a non-empty account
-  # (including a merge reference, whose merged-away transaction keeps it non-empty so unmerge
-  # stays possible).
+  # trusts the posted ids: every candidate is re-scoped to the user's expense/revenue accounts,
+  # excludes import-rule targets (destroying one would also destroy the rule via
+  # dependent: :destroy and silently drop a future mapping), and is re-checked with empty? at
+  # delete time, so a stale list can't delete a non-empty account (including a merge reference,
+  # whose merged-away transaction keeps it non-empty so unmerge stays possible).
   def cleanup_empty
     account_ids = Array(params[:account_ids]).uniq
-    candidates = current_user.accounts.where(id: account_ids, kind: %i[ expense revenue ], virtual: false)
+    candidates = current_user.accounts
+                             .where(id: account_ids, kind: %i[ expense revenue ], virtual: false)
+                             .where.missing(:import_rules)
 
     deleted_count = 0
     Account.transaction do

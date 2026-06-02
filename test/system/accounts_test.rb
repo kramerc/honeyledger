@@ -405,6 +405,26 @@ class AccountsTest < ApplicationSystemTestCase
     end
   end
 
+  test "the cleanup affordance excludes import-rule targets" do
+    cleanable = Account.create!(user: @user, name: "Stale Vendor", kind: :expense, currency: currencies(:usd))
+    rule_target = Account.create!(user: @user, name: "Coffee", kind: :expense, currency: currencies(:usd))
+    ImportRule.create!(user: @user, account: rule_target, match_pattern: "Coffee Shop", match_type: :contains, priority: 0)
+
+    visit accounts_path
+
+    # Only the rule-free empty account is offered; the rule target is an in-use mapping, not clutter.
+    click_button "Clean up 1 empty account"
+    within ".selection-confirmation" do
+      assert_text "Stale Vendor"
+      assert_no_text "Coffee"
+      click_button "Delete empty accounts"
+    end
+
+    assert_text "Deleted 1 empty account."
+    assert_no_selector row_for(cleanable)
+    assert_selector row_for(rule_target)
+  end
+
   private
 
   def row_for(account)

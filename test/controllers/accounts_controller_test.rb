@@ -517,6 +517,18 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert Transaction::Unmerge.new(merger.merged_transaction, user: @user).call, "unmerge should still be possible"
   end
 
+  test "cleanup_empty keeps an empty account that is an import-rule target" do
+    rule_target = Account.create!(user: @user, name: "Coffee", kind: :expense, currency: currencies(:usd))
+    rule = ImportRule.create!(user: @user, account: rule_target, match_pattern: "Coffee Shop", match_type: :contains, priority: 0)
+
+    assert_no_difference("Account.count") do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ rule_target.id ] }
+    end
+
+    assert Account.exists?(rule_target.id), "an import-rule target must not be cleaned up"
+    assert ImportRule.exists?(rule.id), "its import rule mapping must survive"
+  end
+
   test "cleanup_empty ignores accounts belonging to another user" do
     other = Account.create!(user: users(:two), name: "Theirs", kind: :expense, currency: currencies(:usd))
 
