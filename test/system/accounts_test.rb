@@ -325,6 +325,86 @@ class AccountsTest < ApplicationSystemTestCase
     end
   end
 
+  test "the cleanup affordance is hidden when there are no empty accounts" do
+    # users(:one)'s expense_account and revenue_account both carry fixture transactions.
+    visit accounts_path
+
+    within "main" do
+      assert_no_button "Clean up"
+    end
+  end
+
+  test "single-click cleanup deletes all empty expense and revenue accounts" do
+    empty_expense = Account.create!(user: @user, name: "Stale Vendor", kind: :expense, currency: currencies(:usd))
+    empty_revenue = Account.create!(user: @user, name: "Stale Income", kind: :revenue, currency: currencies(:usd))
+
+    visit accounts_path
+    assert_selector row_for(empty_expense)
+
+    click_button "Clean up 2 empty accounts"
+
+    within ".selection-confirmation" do
+      assert_text "2 empty expense/revenue accounts will be permanently deleted."
+      assert_text "asset, liability, and equity accounts are never touched"
+      assert_text "Stale Vendor"
+      assert_text "Stale Income"
+      click_button "Delete empty accounts"
+    end
+
+    assert_text "Deleted 2 empty accounts."
+    assert_no_selector row_for(empty_expense)
+    assert_no_selector row_for(empty_revenue)
+    within "main" do
+      assert_no_button "Clean up"
+    end
+  end
+
+  test "canceling the cleanup confirmation keeps the empty accounts" do
+    empty_expense = Account.create!(user: @user, name: "Stale Vendor", kind: :expense, currency: currencies(:usd))
+    empty_revenue = Account.create!(user: @user, name: "Stale Income", kind: :revenue, currency: currencies(:usd))
+
+    visit accounts_path
+    click_button "Clean up 2 empty accounts"
+
+    within ".selection-confirmation" do
+      click_button "Cancel"
+    end
+
+    assert_no_selector ".selection-confirmation"
+    assert_selector row_for(empty_expense)
+    assert_selector row_for(empty_revenue)
+  end
+
+  test "the selection bar Delete removes manually checked empty accounts" do
+    empty_expense = Account.create!(user: @user, name: "Stale Vendor", kind: :expense, currency: currencies(:usd))
+
+    visit accounts_path
+    toggle_select(empty_expense)
+
+    within ".selection-bar" do
+      assert_text "1 account selected"
+      click_button "Delete"
+    end
+
+    within ".selection-confirmation" do
+      assert_text "1 empty expense/revenue account will be permanently deleted."
+      click_button "Delete empty accounts"
+    end
+
+    assert_text "Deleted 1 empty account."
+    assert_no_selector row_for(empty_expense)
+  end
+
+  test "the selection bar Delete stays hidden when a checked account still has transactions" do
+    visit accounts_path
+    toggle_select(accounts(:expense_account)) # carries a fixture transaction
+
+    within ".selection-bar" do
+      assert_text "1 account selected"
+      assert_no_button "Delete"
+    end
+  end
+
   private
 
   def row_for(account)

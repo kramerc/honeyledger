@@ -33,6 +33,14 @@ class AccountsController < ApplicationController
             end
         end
         @accounts_with_transactions = @transaction_counts.keys.to_set
+
+        # Expense/revenue accounts that no transaction references accumulate from imports and
+        # merges. They're the ones safe to bulk-delete, so surface them to the header "Clean up"
+        # affordance. (A merge-reference account still holds its zeroed, merged-away transaction,
+        # so it stays in @accounts_with_transactions and is correctly excluded here.)
+        @empty_cleanup_accounts = @accounts.select do |account|
+          (account.expense? || account.revenue?) && @accounts_with_transactions.exclude?(account.id)
+        end
       end
       format.json
     end
@@ -127,6 +135,36 @@ class AccountsController < ApplicationController
     else
       redirect_to accounts_path, alert: service.errors.first || "Pick a target account to keep.", status: :see_other
     end
+  end
+
+  # DELETE /accounts/cleanup_empty
+  # Bulk-deletes the user's empty expense/revenue accounts, then redirects back (Turbo Drive
+  # re-renders the index, so the removed rows and the header affordance both update). Never
+  # trusts the posted ids: every candidate is re-scoped to the user's expense/revenue accounts
+  # and re-checked with empty? at delete time, so a stale list can't delete a non-empty account
+  # (including a merge reference, whose merged-away transaction keeps it non-empty so unmerge
+  # stays possible).
+  def cleanup_empty
+    account_ids = Array(params[:account_ids]).uniq
+    candidates = current_user.accounts.where(id: account_ids, kind: %i[ expense revenue ], virtual: false)
+
+    deleted_count = 0
+    Account.transaction do
+      candidates.each do |account|
+        next unless account.empty?
+        # Non-bang destroy: restrict_with_error returns false (without raising) if a transaction
+        # landed since the empty? check, so a race degrades gracefully instead of 500ing.
+        deleted_count += 1 if account.destroy
+      end
+    end
+
+    notice =
+      if deleted_count.zero?
+        "No empty accounts to clean up."
+      else
+        "Deleted #{deleted_count} empty #{"account".pluralize(deleted_count)}."
+      end
+    redirect_to accounts_path, notice: notice, status: :see_other
   end
 
   # DELETE /accounts/1 or /accounts/1.json

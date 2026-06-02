@@ -4,6 +4,7 @@ Rails.application.routes.draw do
   resources :accounts do
     collection do
       post :merge
+      delete :cleanup_empty
     end
     resources :transactions, only: %i[ index ]
     resources :csv_imports, controller: "csv/imports", except: %i[ edit ] do

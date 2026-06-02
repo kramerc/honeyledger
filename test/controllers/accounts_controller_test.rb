@@ -469,4 +469,91 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Pick a target account to keep.", flash[:alert]
     assert Account.exists?(source.id)
   end
+
+  test "should clean up empty expense and revenue accounts" do
+    empty_expense = Account.create!(user: @user, name: "Empty Expense", kind: :expense, currency: currencies(:usd))
+    empty_revenue = Account.create!(user: @user, name: "Empty Revenue", kind: :revenue, currency: currencies(:usd))
+
+    assert_difference("Account.count", -2) do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ empty_expense.id, empty_revenue.id ] }
+    end
+
+    assert_redirected_to accounts_url
+    assert_equal "Deleted 2 empty accounts.", flash[:notice]
+  end
+
+  test "cleanup_empty keeps an account that still has transactions" do
+    account = accounts(:expense_account) # dest of transactions(:one)
+
+    assert_no_difference("Account.count") do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ account.id ] }
+    end
+
+    assert Account.exists?(account.id)
+    assert_equal "No empty accounts to clean up.", flash[:notice]
+  end
+
+  test "cleanup_empty keeps a merge-reference account so its merge can be undone" do
+    expense = Account.create!(user: @user, name: "Merge Reference Expense", kind: :expense, currency: currencies(:usd))
+    revenue = Account.create!(user: @user, name: "Merge Reference Revenue", kind: :revenue, currency: currencies(:usd))
+    withdrawal = Transaction.create!(
+      user: @user, src_account: accounts(:asset_account), dest_account: expense,
+      amount_minor: 750, currency: currencies(:usd), transacted_at: 1.day.ago
+    )
+    deposit = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: accounts(:linked_asset),
+      amount_minor: 750, currency: currencies(:usd), transacted_at: 1.day.ago
+    )
+    merger = Transaction::Merge.new(withdrawal, deposit, user: @user)
+    assert merger.call, "Merge setup failed: #{merger.errors.join(", ")}"
+
+    # Both accounts now hold only their zeroed, merged-away originals, so cleanup must skip them.
+    assert_no_difference("Account.count") do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ expense.id, revenue.id ] }
+    end
+
+    assert Account.exists?(expense.id)
+    assert Account.exists?(revenue.id)
+    assert Transaction::Unmerge.new(merger.merged_transaction, user: @user).call, "unmerge should still be possible"
+  end
+
+  test "cleanup_empty ignores accounts belonging to another user" do
+    other = Account.create!(user: users(:two), name: "Theirs", kind: :expense, currency: currencies(:usd))
+
+    assert_no_difference("Account.count") do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ other.id ] }
+    end
+
+    assert Account.exists?(other.id)
+  end
+
+  test "cleanup_empty ignores asset and liability accounts" do
+    asset = Account.create!(user: @user, name: "Empty Asset", kind: :asset, currency: currencies(:usd))
+
+    assert_no_difference("Account.count") do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ asset.id ] }
+    end
+
+    assert Account.exists?(asset.id)
+  end
+
+  test "cleanup_empty deletes only the empty accounts when given a mix" do
+    empty_expense = Account.create!(user: @user, name: "Empty Expense", kind: :expense, currency: currencies(:usd))
+    non_empty = accounts(:expense_account) # dest of transactions(:one)
+
+    assert_difference("Account.count", -1) do
+      delete cleanup_empty_accounts_url, params: { account_ids: [ empty_expense.id, non_empty.id ] }
+    end
+
+    assert_not Account.exists?(empty_expense.id)
+    assert Account.exists?(non_empty.id)
+    assert_equal "Deleted 1 empty account.", flash[:notice]
+  end
+
+  test "cleanup_empty reports nothing to clean up when no ids match" do
+    delete cleanup_empty_accounts_url, params: { account_ids: [] }
+
+    assert_redirected_to accounts_url
+    assert_equal "No empty accounts to clean up.", flash[:notice]
+  end
 end
