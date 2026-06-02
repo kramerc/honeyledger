@@ -6,26 +6,31 @@ class AccountsController < ApplicationController
 
   # GET /accounts or /accounts.json
   def index
-    # @accounts backs the JSON view (index.json.jbuilder); the HTML view reads
-    # the kind grouping derived from the same loaded relation.
-    @accounts = current_user.accounts.real
-      .includes(:currency, account_sources: :sourceable)
-      .order(:kind, :name)
-    @grouped_accounts = @accounts.group_by(&:kind)
+    @accounts = current_user.accounts.real.order(:kind, :name)
 
-    # Accounts referenced by a non-opening-balance transaction can't be destroyed
-    # (dependent: :restrict_with_error). A lone opening-balance transaction is
-    # auto-removed by Account#before_destroy, so it doesn't count. One query feeds
-    # a Set the row partial checks to decide whether to render the Delete button.
-    account_ids = @accounts.map(&:id)
-    @accounts_with_transactions =
-      if account_ids.empty?
-        Set.new
-      else
-        Transaction.where(opening_balance: false)
-          .where("src_account_id IN (:ids) OR dest_account_id IN (:ids)", ids: account_ids)
-          .pluck(:src_account_id, :dest_account_id).flatten.to_set
+    respond_to do |format|
+      format.html do
+        # HTML-only work: eager-load for the balance/sources columns, group by
+        # kind, and find which accounts can't be deleted (they still have a
+        # non-opening-balance transaction; restrict_with_error). A lone
+        # opening-balance transaction is auto-removed by Account#before_destroy,
+        # so it doesn't count. The JSON format skips all of this and just renders
+        # @accounts via index.json.jbuilder.
+        @accounts = @accounts.includes(:currency, account_sources: :sourceable)
+        @grouped_accounts = @accounts.group_by(&:kind)
+
+        account_ids = @accounts.map(&:id)
+        @accounts_with_transactions =
+          if account_ids.empty?
+            Set.new
+          else
+            Transaction.where(opening_balance: false)
+              .where("src_account_id IN (:ids) OR dest_account_id IN (:ids)", ids: account_ids)
+              .pluck(:src_account_id, :dest_account_id).flatten.to_set
+          end
       end
+      format.json
+    end
   end
 
   # GET /accounts/1 or /accounts/1.json
