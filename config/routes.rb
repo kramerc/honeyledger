@@ -2,6 +2,9 @@ Rails.application.routes.draw do
   devise_for :users
 
   resources :accounts do
+    collection do
+      post :merge
+    end
     resources :transactions, only: %i[ index ]
     resources :csv_imports, controller: "csv/imports", except: %i[ edit ] do
       member do

@@ -19,15 +19,20 @@ class AccountsController < ApplicationController
         @accounts = @accounts.includes(:currency, account_sources: :sourceable)
         @grouped_accounts = @accounts.group_by(&:kind)
 
+        # Tally non-opening-balance transactions touching each account. The key set drives
+        # delete-gating (any account that still has a transaction can't be destroyed via
+        # restrict_with_error), and the per-account count seeds the default "keep this one"
+        # choice when merging duplicates.
         account_ids = @accounts.map(&:id)
-        @accounts_with_transactions =
-          if account_ids.empty?
-            Set.new
-          else
-            Transaction.where(opening_balance: false)
-              .where("src_account_id IN (:ids) OR dest_account_id IN (:ids)", ids: account_ids)
-              .pluck(:src_account_id, :dest_account_id).flatten.to_set
-          end
+        @transaction_counts = Hash.new(0)
+        unless account_ids.empty?
+          Transaction.where(opening_balance: false)
+            .where("src_account_id IN (:ids) OR dest_account_id IN (:ids)", ids: account_ids)
+            .pluck(:src_account_id, :dest_account_id).each do |ids|
+              ids.each { |id| @transaction_counts[id] += 1 }
+            end
+        end
+        @accounts_with_transactions = @transaction_counts.keys.to_set
       end
       format.json
     end
@@ -97,6 +102,21 @@ class AccountsController < ApplicationController
         format.html { render :edit, status: :unprocessable_entity }
         format.json { render json: @account.errors, status: :unprocessable_entity }
       end
+    end
+  end
+
+  # POST /accounts/merge
+  # Folds the selected expense/revenue accounts into the chosen target, then redirects back
+  # (Turbo Drive re-renders the whole index, reflecting the removed rows and new balance).
+  def merge
+    accounts = current_user.accounts.where(id: Array(params[:account_ids]))
+    target = accounts.find { |account| account.id.to_s == params[:target_account_id].to_s }
+    service = Account::Merge.new(target: target, sources: accounts, user: current_user)
+
+    if target && service.call
+      redirect_to accounts_path, notice: "Accounts merged into #{target.name}.", status: :see_other
+    else
+      redirect_to accounts_path, alert: service.errors.first || "Pick a target account to keep.", status: :see_other
     end
   end
 

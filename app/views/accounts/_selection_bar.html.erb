@@ -1,0 +1,47 @@
+<%# Merge action bar — appears when one or more expense/revenue accounts are checked. Merge
+    enables only when two or more accounts of the same kind and currency are selected. %>
+<div class="selection-bar" data-accounts--selection-target="bar" hidden>
+  <span class="selection-bar__count" data-accounts--selection-target="count"></span>
+  <span class="selection-bar__message" data-accounts--selection-target="message"></span>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--primary"
+          data-accounts--selection-target="mergeButton"
+          data-action="accounts--selection#showConfirmation"
+          disabled>
+    Merge
+  </button>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+          data-action="accounts--selection#cancel">
+    Cancel
+  </button>
+</div>
+
+<%# Merge confirmation panel — pick which account to keep. The controller fills the target
+    radio list and injects the account_ids[] hidden inputs before this form is submitted. %>
+<div class="selection-confirmation" data-accounts--selection-target="confirmation" hidden>
+  <div class="selection-confirmation__content">
+    <h3>Merge accounts</h3>
+    <p class="selection-confirmation__preview"></p>
+
+    <%= form_with url: merge_accounts_path, method: :post,
+          data: { action: "turbo:submit-end->accounts--selection#cancel" } do %>
+      <div class="selection-confirmation__keep">
+        <span class="selection-confirmation__label">Keep this account</span>
+        <div class="selection-confirmation__targets" data-accounts--selection-target="targetList"></div>
+      </div>
+
+      <p class="selection-confirmation__note">
+        Transactions and import rules from the other accounts move to the kept account, and the
+        others are deleted. Already-imported transactions stay merged; a new import whose
+        description exactly matches a removed account's name may recreate it.
+      </p>
+
+      <div class="selection-confirmation__actions">
+        <button type="submit" class="selection-bar__btn selection-bar__btn--primary">Confirm merge</button>
+        <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+                data-action="accounts--selection#cancel">Cancel</button>
+      </div>
+    <% end %>
+  </div>
+</div>

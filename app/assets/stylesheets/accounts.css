@@ -70,6 +70,21 @@
   align-items: stretch;
 }
 
+/* Expense/revenue groups carry a leading checkbox column for merging. */
+.accounts--selectable .row {
+  grid-template-columns:
+    44px                  /* Select */
+    minmax(140px, 2fr)    /* Account */
+    minmax(90px,  1fr)    /* Balance */
+    minmax(120px, 1.5fr)  /* Sources */
+    minmax(160px, 1.5fr); /* Actions */
+}
+
+.accounts .row > .select {
+  justify-content: center;
+  padding: 7px 4px;
+}
+
 .accounts .row.header {
   background-color: var(--honey-pale);
   font-weight: 600;
@@ -152,6 +167,50 @@
 
 .accounts .actions button:hover {
   text-decoration: underline;
+}
+
+/* Merge confirmation — "keep this account" radio list. The surrounding
+   .selection-bar / .selection-confirmation chrome is shared (transactions.css).
+   Note: this list lives outside .selection-confirmation__field on purpose, so the
+   shared `input { width: 100% }` rule there doesn't stretch the radio buttons. */
+.selection-confirmation__keep {
+  margin-bottom: 12px;
+}
+
+.selection-confirmation__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.selection-confirmation__targets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selection-confirmation__target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--bark);
+  cursor: pointer;
+}
+
+.selection-confirmation__target input[type="radio"] {
+  width: auto;
+  flex: none;
+  margin: 0;
+}
+
+.selection-confirmation__target-count {
+  margin-left: auto;
+  color: var(--bark-light);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Empty state */

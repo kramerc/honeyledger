@@ -1,5 +1,19 @@
 <% deletable = accounts_with_transactions.exclude?(account.id) %>
 <div id="<%= dom_id(account) %>" class="row">
+  <% if account.expense? || account.revenue? %>
+    <div class="select">
+      <input type="checkbox"
+             class="selection-checkbox"
+             data-accounts--selection-target="checkbox"
+             data-action="change->accounts--selection#toggle"
+             data-account-id="<%= account.id %>"
+             data-account-name="<%= account.name %>"
+             data-kind="<%= account.kind %>"
+             data-currency-id="<%= account.currency_id %>"
+             data-transaction-count="<%= transaction_counts[account.id] %>"
+             aria-label="Select <%= account.name %> for merging">
+    </div>
+  <% end %>
   <div data-label="Account">
     <%= link_to account.name, account %>
   </div>

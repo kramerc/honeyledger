@@ -18,20 +18,27 @@
     </div>
   </div>
 <% else %>
-  <% Account.kinds.keys.each do |kind| %>
-    <% accounts = @grouped_accounts[kind] || [] %>
-    <section class="accounts-group">
-      <h2><%= kind.humanize.pluralize %></h2>
-      <div class="accounts">
-        <div class="row header">
-          <div>Account</div>
-          <div>Balance</div>
-          <div>Sources</div>
-          <div>Actions</div>
+  <div data-controller="accounts--selection">
+    <% Account.kinds.keys.each do |kind| %>
+      <% accounts = @grouped_accounts[kind] || [] %>
+      <% selectable = %w[ expense revenue ].include?(kind) %>
+      <section class="accounts-group">
+        <h2><%= kind.humanize.pluralize %></h2>
+        <div class="accounts<%= " accounts--selectable" if selectable %>">
+          <div class="row header">
+            <% if selectable %><div class="select"></div><% end %>
+            <div>Account</div>
+            <div>Balance</div>
+            <div>Sources</div>
+            <div>Actions</div>
+          </div>
+          <%= render partial: "accounts/account_row", collection: accounts, as: :account,
+                locals: { accounts_with_transactions: @accounts_with_transactions,
+                          transaction_counts: @transaction_counts } %>
         </div>
-        <%= render partial: "accounts/account_row", collection: accounts, as: :account,
-              locals: { accounts_with_transactions: @accounts_with_transactions } %>
-      </div>
-    </section>
-  <% end %>
+      </section>
+    <% end %>
+
+    <%= render "accounts/selection_bar" %>
+  </div>
 <% end %>
