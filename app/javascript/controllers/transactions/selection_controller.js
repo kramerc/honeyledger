@@ -14,7 +14,11 @@ export default class extends Controller {
   static BALANCE_SHEET_KINDS = [ "asset", "liability", "equity" ]
 
   connect() {
-    this.selectedIds = []
+    // The browser restores checkbox state across a reload, so seed the selection from whatever
+    // is already checked and reflect it in the action bar — otherwise the bar stays hidden while
+    // boxes appear checked.
+    this.selectedIds = this.checkboxTargets.filter(checkbox => checkbox.checked).map(checkbox => checkbox.dataset.transactionId)
+    this.updateBar()
   }
 
   toggle(event) {

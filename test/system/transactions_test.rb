@@ -141,6 +141,28 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "restoring a checked selection on reconnect shows the bulk action bar" do
+    first = manual_transaction("Reconnect probe one", 100)
+    second = manual_transaction("Reconnect probe two", 200)
+
+    visit transactions_path
+
+    # Reproduce a browser reload restoring checkbox state: live-check the boxes without firing a
+    # change event, then make Stimulus tear down and reconnect the controller. connect() must
+    # re-derive the selection from the already-checked boxes so the bar reappears on its own.
+    page.execute_script(<<~JS, first.id, second.id)
+      document.querySelector("input.selection-checkbox[data-transaction-id='" + arguments[0] + "']").checked = true
+      document.querySelector("input.selection-checkbox[data-transaction-id='" + arguments[1] + "']").checked = true
+      window.__selectionWrapper = document.querySelector("[data-controller='transactions--selection']")
+      window.__selectionWrapper.removeAttribute("data-controller")
+    JS
+    page.execute_script("window.__selectionWrapper.setAttribute('data-controller', 'transactions--selection')")
+
+    within ".selection-bar" do
+      assert_text "2 transactions selected"
+    end
+  end
+
   test "bulk deleting selected transactions removes them from the list" do
     first = manual_transaction("Bulk delete one", 100)
     second = manual_transaction("Bulk delete two", 200)
