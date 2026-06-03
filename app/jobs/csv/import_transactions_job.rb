@@ -72,6 +72,20 @@ class Csv::ImportTransactionsJob < ApplicationJob
             # Another import handled this source; skip this iteration.
           end
           next
+        elsif (target = find_merged_duplicate_target(csv_transaction, ledger_account))
+          # The row was already imported and then consolidated into a transfer,
+          # so Transaction::Reconcile excludes its (now zeroed, merged) ledger
+          # transaction from the candidate set. Attach this re-imported row to
+          # the same merged original instead of creating a duplicate (#184).
+          begin
+            Transaction.transaction do
+              TransactionSource::Attach.call(transaction: target, sourceable: csv_transaction)
+              target.update!(synced_at: Time.current)
+            end
+          rescue TransactionSource::Attach::MismatchedTransaction
+            # Another import handled this source; skip this iteration.
+          end
+          next
         else
           transaction = Transaction.new
         end
@@ -130,4 +144,46 @@ class Csv::ImportTransactionsJob < ApplicationJob
 
     import.update!(state: "imported", imported_at: Time.current, error: nil)
   end
+
+  private
+
+    # Recognize a re-imported statement line whose prior CSV row was already
+    # consolidated (merged) into a transfer. Transaction::Reconcile excludes
+    # merged transactions and merge results from its candidate set, so an
+    # overlapping re-import of an already-merged row would otherwise create a
+    # duplicate ledger transaction and double-count the balance (#184). Find a
+    # prior Csv::Transaction from a *different* import into the *same* ledger
+    # account with identical content (signed amount, same calendar day,
+    # case-insensitively equal description) whose ledger transaction reconcile
+    # skipped only because it is a zeroed merged original, and return that single
+    # transaction so the new row attaches there instead of duplicating.
+    def find_merged_duplicate_target(csv_transaction, ledger_account)
+      return nil if csv_transaction.description.blank?
+
+      prior_csv_ids = Csv::Transaction
+        .joins(:import)
+        .where(csv_imports: { account_id: ledger_account.id })
+        .where.not(import_id: csv_transaction.import_id)
+        .where(amount_minor: csv_transaction.amount_minor)
+        .where("LOWER(csv_transactions.description) = LOWER(?)", csv_transaction.description)
+        .where(transacted_at: csv_transaction.transacted_at.beginning_of_day..csv_transaction.transacted_at.end_of_day)
+        .select(:id)
+
+      ledger_transaction_ids = TransactionSource
+        .where(sourceable_type: "Csv::Transaction", sourceable_id: prior_csv_ids)
+        .distinct
+        .pluck(:transaction_id)
+
+      # 0 or 2+ distinct matches: ambiguous, fall through and create a new
+      # transaction rather than guess (mirrors reconcile's conservative nil).
+      return nil unless ledger_transaction_ids.size == 1
+
+      target = Transaction.find(ledger_transaction_ids.first)
+      # Only act on reconcile's gap: a zeroed *original* (merged_into_id set),
+      # which is also the row that survives a later Transaction::Unmerge. A CSV
+      # source is never attached to a merge *result* (results are created
+      # sourceless and reconcile excludes them). A live/unmerged single match
+      # means reconcile deliberately abstained, so defer to it and fall through.
+      target.merged_into_id.present? ? target : nil
+    end
 end
