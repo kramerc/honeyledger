@@ -296,6 +296,37 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     assert_equal other_side, matching.merge_candidate
   end
 
+  test "preview skips ambiguous balance sheet match with multiple candidates" do
+    savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
+    bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
+
+    transfer_out = create_sourced_transaction(
+      user: @user, src_account: @bank_account, dest_account: @original_expense,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    # Two equal-amount counterparts on the savings (rule) account — can't tell which one
+    # transfer_out pairs with, so AutoMerge would leave it untouched (#182). The preview must
+    # not surface a reassignment that never resolves.
+    revenue = Account.create!(user: @user, name: "Transfer In", kind: :revenue, currency: @currency)
+    Transaction.create!(
+      user: @user, src_account: revenue, dest_account: savings,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER FROM CHECKING 1",
+      transacted_at: 1.day.ago
+    )
+    Transaction.create!(
+      user: @user, src_account: revenue, dest_account: savings,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER FROM CHECKING 2",
+      transacted_at: 1.day.ago
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: bs_rule)
+    changes = service.preview
+
+    assert_nil changes.find { |c| c.transaction.id == transfer_out.id }
+  end
+
   test "preview has nil merge candidate when no match exists for balance sheet rule" do
     savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
     bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
