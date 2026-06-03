@@ -15,23 +15,38 @@ class Transaction::AutoMerge
               @transaction.has_fx? || @transaction.amount_minor == 0 ||
               @transaction.merged_sources.exists?
 
-    if @rule_account
-      merge_with_counterpart || absorb_into_existing_transfer || apply_rule_account
-    else
-      absorb_into_existing_transfer
-    end
+    return absorb_into_existing_transfer unless @rule_account
+
+    result = merge_with_counterpart
+    # Ambiguous: 2+ equal-amount counterparts on the rule account — we can't tell which one
+    # this transaction pairs with. Leave it untouched for manual review rather than fall
+    # through to absorb_into_existing_transfer (which clones a transfer and double-counts a
+    # still-live charge) or apply_rule_account (which reassigns arbitrarily). See #182.
+    return if result == :ambiguous
+
+    result || absorb_into_existing_transfer || apply_rule_account
   end
 
   private
 
     # Find a matching expense/revenue transaction involving the rule account and merge via Transaction::Merge.
-    # Returns true if merged, :candidate_found if a candidate existed but merge failed, false if no candidate.
+    # Returns true if merged, :candidate_found if a candidate existed but merge failed, :ambiguous if 2+
+    # mergeable counterparts matched (can't safely pick one), false if none.
     def merge_with_counterpart
-      candidate = find_expense_revenue_candidate
-      return false unless candidate
+      candidates = expense_revenue_candidates.select { |candidate| mergeable_counterpart?(candidate) }
+      return false if candidates.empty?
+      return :ambiguous if candidates.size > 1
 
-      merger = Transaction::Merge.new(@transaction, candidate, user: @transaction.user)
+      merger = Transaction::Merge.new(@transaction, candidates.first, user: @transaction.user)
       merger.call || :candidate_found
+    end
+
+    # A candidate can merge with @transaction into a transfer only when one side holds a
+    # balance-sheet account as source and the other as destination (mirrors Transaction::Merge).
+    # Same-direction rows (e.g. two deposits) are not counterparts and must not count as ambiguity.
+    def mergeable_counterpart?(candidate)
+      (@transaction.src_account.balance_sheet? && candidate.dest_account.balance_sheet?) ||
+        (candidate.src_account.balance_sheet? && @transaction.dest_account.balance_sheet?)
     end
 
     # Find an existing BS-to-BS transfer that this transaction duplicates and absorb into it
@@ -67,14 +82,12 @@ class Transaction::AutoMerge
       end
     end
 
-    # Find expense/revenue transactions involving the rule_account
-    def find_expense_revenue_candidate
-      candidates = base_candidates
+    # Expense/revenue (non-transfer) transactions involving the rule_account
+    def expense_revenue_candidates
+      base_candidates
         .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: @rule_account.id)
         .to_a
-        .select { |t| !transfer?(t) }
-
-      candidates.size == 1 ? candidates.first : nil
+        .reject { |t| transfer?(t) }
     end
 
     # Find BS-to-BS transfers involving the same ledger account

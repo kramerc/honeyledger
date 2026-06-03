@@ -259,10 +259,105 @@ class Transaction::AutoMergeTest < ActiveSupport::TestCase
       transacted_at: 2.days.ago
     )
 
+    bank_a_before = @bank_a.reload.balance_minor
+    bank_b_before = @bank_b.reload.balance_minor
+
+    # Ambiguous: two equal-amount counterparts on the rule account. AutoMerge must leave the
+    # transaction untouched rather than clone a transfer or reassign arbitrarily (#182).
+    assert_no_difference "Transaction.count" do
+      Transaction::AutoMerge.call(transaction, rule_account: @bank_b)
+    end
+
+    transaction.reload
+    assert_equal expense, transaction.dest_account # Left untouched — not reassigned
+    assert_nil transaction.merged_into_id
+    assert_equal bank_a_before, @bank_a.reload.balance_minor
+    assert_equal bank_b_before, @bank_b.reload.balance_minor
+  end
+
+  test "does not clone an existing transfer when multiple candidates exist" do
+    @bank_a.reset_balance
+    @bank_b.reset_balance
+
+    # Two equal-amount, non-transfer charges on the rule account (@bank_a) — ambiguous.
+    expense_1 = Account.create!(user: @user, name: "Charge 1", kind: :expense, currency: @currency)
+    expense_2 = Account.create!(user: @user, name: "Charge 2", kind: :expense, currency: @currency)
+    Transaction.create!(
+      user: @user, src_account: @bank_a, dest_account: expense_1,
+      amount_minor: 500, currency: @currency, description: "Charge 1",
+      transacted_at: 2.days.ago
+    )
+    Transaction.create!(
+      user: @user, src_account: @bank_a, dest_account: expense_2,
+      amount_minor: 500, currency: @currency, description: "Charge 2",
+      transacted_at: 2.days.ago
+    )
+
+    # A pre-existing balance-sheet -> balance-sheet transfer that absorb would clone.
+    existing_transfer = Transaction.create!(
+      user: @user, src_account: @bank_a, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "Existing transfer",
+      transacted_at: 2.days.ago
+    )
+
+    # Incoming deposit (the funding side) whose ledger account is @bank_b.
+    revenue = Account.create!(user: @user, name: "Funding", kind: :revenue, currency: @currency)
+    incoming = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "Funding",
+      transacted_at: 2.days.ago
+    )
+
+    bank_a_before = @bank_a.reload.balance_minor
+    bank_b_before = @bank_b.reload.balance_minor
+
+    # @bank_a has two equal-amount charges -> ambiguous, so AutoMerge must NOT fall through
+    # to absorb_into_existing_transfer and clone existing_transfer (which would leave the real
+    # charges live and double-count @bank_a). See #182.
+    assert_no_difference "Transaction.count" do
+      Transaction::AutoMerge.call(incoming, rule_account: @bank_a)
+    end
+
+    incoming.reload
+    existing_transfer.reload
+    assert_equal 500, incoming.amount_minor
+    assert_nil incoming.merged_into_id
+    assert_equal 500, existing_transfer.amount_minor
+    assert_nil existing_transfer.merged_into_id
+    assert_equal bank_a_before, @bank_a.reload.balance_minor
+    assert_equal bank_b_before, @bank_b.reload.balance_minor
+  end
+
+  test "applies rule account when same-amount rows on the rule account are same-direction" do
+    # Imported deposit: revenue -> @bank_a (balance-sheet account on the dest side).
+    revenue = Account.create!(user: @user, name: "Funding", kind: :revenue, currency: @currency)
+    transaction = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: @bank_a,
+      amount_minor: 500, currency: @currency, description: "Funding",
+      transacted_at: 2.days.ago
+    )
+
+    # Two same-amount deposits on the rule account (@bank_b) — same direction as the import
+    # (balance-sheet account on dest), so NOT mergeable counterparts. They must not be treated
+    # as ambiguity; the rule account should still be applied. See #182 review.
+    revenue_b = Account.create!(user: @user, name: "B Funding", kind: :revenue, currency: @currency)
+    Transaction.create!(
+      user: @user, src_account: revenue_b, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "B Funding 1",
+      transacted_at: 2.days.ago
+    )
+    Transaction.create!(
+      user: @user, src_account: revenue_b, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "B Funding 2",
+      transacted_at: 2.days.ago
+    )
+
     Transaction::AutoMerge.call(transaction, rule_account: @bank_b)
 
     transaction.reload
-    assert_equal @bank_b, transaction.dest_account # Fell back to apply_rule_account
+    # No mergeable counterpart exists, so revenue -> @bank_a becomes a @bank_b -> @bank_a transfer.
+    assert_equal @bank_b, transaction.src_account
+    assert_equal @bank_a, transaction.dest_account
     assert_nil transaction.merged_into_id
   end
 
