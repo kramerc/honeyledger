@@ -68,8 +68,8 @@ class ImportRule::RetroactiveApply
         merge_candidate = nil
         if rule.account.balance_sheet?
           candidates = merge_candidates(transaction, rule.account)
-          # Ambiguous balance-sheet match: Transaction::AutoMerge leaves it untouched (#182),
-          # so don't surface it as a reassignment that never resolves.
+          # Ambiguous balance-sheet match (2+ mergeable counterparts): Transaction::AutoMerge
+          # leaves it untouched (#182), so don't surface it as a reassignment that never resolves.
           next if candidates.size > 1
 
           merge_candidate = candidates.first
@@ -142,6 +142,8 @@ class ImportRule::RetroactiveApply
     end
 
     # Non-transfer transactions involving rule_account that this transaction could merge with.
+    # Only opposite-side rows are real counterparts (mirrors Transaction::Merge); same-direction
+    # rows can't form a transfer and so are not ambiguity.
     def merge_candidates(transaction, rule_account)
       @user.transactions
         .unmerged
@@ -156,6 +158,14 @@ class ImportRule::RetroactiveApply
         .where.missing(:merged_sources)
         .to_a
         .select { |t| !t.src_account.balance_sheet? || !t.dest_account.balance_sheet? }
+        .select { |candidate| mergeable?(transaction, candidate) }
+    end
+
+    # Mirrors Transaction::Merge: a candidate can merge into a transfer only when one side has a
+    # balance-sheet account as source and the other as destination.
+    def mergeable?(transaction, candidate)
+      (transaction.src_account.balance_sheet? && candidate.dest_account.balance_sheet?) ||
+        (candidate.src_account.balance_sheet? && transaction.dest_account.balance_sheet?)
     end
 
     def rule_scope

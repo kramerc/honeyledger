@@ -328,6 +328,39 @@ class Transaction::AutoMergeTest < ActiveSupport::TestCase
     assert_equal bank_b_before, @bank_b.reload.balance_minor
   end
 
+  test "applies rule account when same-amount rows on the rule account are same-direction" do
+    # Imported deposit: revenue -> @bank_a (balance-sheet account on the dest side).
+    revenue = Account.create!(user: @user, name: "Funding", kind: :revenue, currency: @currency)
+    transaction = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: @bank_a,
+      amount_minor: 500, currency: @currency, description: "Funding",
+      transacted_at: 2.days.ago
+    )
+
+    # Two same-amount deposits on the rule account (@bank_b) — same direction as the import
+    # (balance-sheet account on dest), so NOT mergeable counterparts. They must not be treated
+    # as ambiguity; the rule account should still be applied. See #182 review.
+    revenue_b = Account.create!(user: @user, name: "B Funding", kind: :revenue, currency: @currency)
+    Transaction.create!(
+      user: @user, src_account: revenue_b, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "B Funding 1",
+      transacted_at: 2.days.ago
+    )
+    Transaction.create!(
+      user: @user, src_account: revenue_b, dest_account: @bank_b,
+      amount_minor: 500, currency: @currency, description: "B Funding 2",
+      transacted_at: 2.days.ago
+    )
+
+    Transaction::AutoMerge.call(transaction, rule_account: @bank_b)
+
+    transaction.reload
+    # No mergeable counterpart exists, so revenue -> @bank_a becomes a @bank_b -> @bank_a transfer.
+    assert_equal @bank_b, transaction.src_account
+    assert_equal @bank_a, transaction.dest_account
+    assert_nil transaction.merged_into_id
+  end
+
   test "does not merge opening balance transactions" do
     expense = Account.create!(user: @user, name: "Transfer Out", kind: :expense, currency: @currency)
     transaction = Transaction.create!(

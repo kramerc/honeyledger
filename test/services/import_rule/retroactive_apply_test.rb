@@ -327,6 +327,39 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     assert_nil changes.find { |c| c.transaction.id == transfer_out.id }
   end
 
+  test "preview keeps balance sheet match when same-amount rows on the rule account are same-direction" do
+    savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
+    bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
+
+    transfer_out = create_sourced_transaction(
+      user: @user, src_account: @bank_account, dest_account: @original_expense,
+      amount_minor: 5000, currency: @currency, description: "TRANSFER TO SAVINGS",
+      transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    # Two same-amount withdrawals FROM savings — same direction as transfer_out's bank side
+    # (balance-sheet account on src), so not mergeable counterparts. They must not trigger the
+    # ambiguity skip; the change stays actionable (AutoMerge falls back to reassignment).
+    expense_b = Account.create!(user: @user, name: "B Expense", kind: :expense, currency: @currency)
+    Transaction.create!(
+      user: @user, src_account: savings, dest_account: expense_b,
+      amount_minor: 5000, currency: @currency, description: "From savings 1",
+      transacted_at: 1.day.ago
+    )
+    Transaction.create!(
+      user: @user, src_account: savings, dest_account: expense_b,
+      amount_minor: 5000, currency: @currency, description: "From savings 2",
+      transacted_at: 1.day.ago
+    )
+
+    service = ImportRule::RetroactiveApply.new(user: @user, rule: bs_rule)
+    matching = service.preview.find { |c| c.transaction.id == transfer_out.id }
+
+    assert_not_nil matching
+    assert_equal savings, matching.new_account
+    assert_nil matching.merge_candidate
+  end
+
   test "preview has nil merge candidate when no match exists for balance sheet rule" do
     savings = Account.create!(user: @user, name: "Savings", kind: :asset, currency: @currency)
     bs_rule = ImportRule.create!(user: @user, account: savings, match_pattern: "TRANSFER", match_type: :contains, priority: 20)
