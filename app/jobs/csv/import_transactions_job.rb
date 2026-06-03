@@ -169,9 +169,11 @@ class Csv::ImportTransactionsJob < ApplicationJob
         .where(transacted_at: csv_transaction.transacted_at.beginning_of_day..csv_transaction.transacted_at.end_of_day)
         .select(:id)
 
+      # Only the 0 / 1 / 2+ distinction matters below, so cap the scan at two rows.
       ledger_transaction_ids = TransactionSource
         .where(sourceable_type: "Csv::Transaction", sourceable_id: prior_csv_ids)
         .distinct
+        .limit(2)
         .pluck(:transaction_id)
 
       # 0 or 2+ distinct matches: ambiguous, fall through and create a new
