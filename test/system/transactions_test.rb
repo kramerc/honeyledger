@@ -100,6 +100,56 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "merged transfer shows aggregated and per-origin source badges" do
+    leg_a = Transaction.create!(
+      user: @user, src_account: accounts(:asset_account),
+      dest_account: accounts(:expense_account), amount_minor: 5000,
+      currency: currencies(:usd), description: "Merge leg A", transacted_at: 1.day.ago
+    )
+    leg_b = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account),
+      dest_account: accounts(:linked_asset), amount_minor: 5000,
+      currency: currencies(:usd), description: "Merge leg B", transacted_at: 1.day.ago
+    )
+    sf_txn = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "merge_sf",
+      amount: "-50.00", description: "Merge leg A",
+      transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    lf_txn = Lunchflow::Transaction.create!(
+      account: lunchflow_accounts(:unlinked_one), remote_id: "merge_lf",
+      amount: "-50.00", currency: "USD", description: "Merge leg B",
+      pending: false, date: 1.day.ago.to_date
+    )
+    TransactionSource.create!(ledger_transaction: leg_a, sourceable: sf_txn)
+    TransactionSource.create!(ledger_transaction: leg_b, sourceable: lf_txn)
+
+    merger = Transaction::Merge.new(leg_a, leg_b, user: @user)
+    assert merger.call, merger.errors.to_sentence
+    result = merger.merged_transaction
+
+    visit transactions_path
+
+    within "##{ActionView::RecordIdentifier.dom_id(result)}" do
+      # Aggregated chips in the Date cell, ordered SimpleFIN then Lunch Flow.
+      within ".source-badges" do
+        assert_selector ".source-badge", text: "SimpleFIN"
+        assert_selector ".source-badge", text: "Lunch Flow"
+      end
+
+      # Per-origin chips in the collapsible "Merged from:" breakdown.
+      click_link "Merged"
+      within ".merged-details" do
+        assert_selector ".source-badge", text: "SimpleFIN"
+        assert_selector ".source-badge", text: "Lunch Flow"
+      end
+    end
+
+    # The zeroed originals are hidden by the unmerged scope.
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(leg_a)}"
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(leg_b)}"
+  end
+
   test "sidebar active state survives a live update" do
     account = accounts(:asset_account)
     other = accounts(:expense_account)

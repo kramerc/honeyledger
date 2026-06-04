@@ -36,14 +36,20 @@ module ApplicationHelper
   # sourceable is already loaded (e.g., array from `includes(:sourceable)`).
   # An unloaded relation will N+1 on the per-source sourceable access below.
   #
+  # Sorted by source_badge_order first so chips always render in aggregator order
+  # (SimpleFIN, Lunch Flow, CSV) regardless of input order — merge results concatenate
+  # own and origin sources, so input order is otherwise non-deterministic.
+  #
   # Deduped by label so a ledger transaction carrying several sources of the same
   # type renders a single chip. A CSV that overlaps a prior import for the same
   # account attaches a second Csv::Transaction source (no stable external id, so
   # every import creates fresh rows) — without this, that shows as repeated "CSV"
-  # chips (#151). uniq keeps first-occurrence order, preserving badge ordering.
+  # chips (#151). Sorting before uniq is safe: equal order keys only occur for
+  # same-label records, which uniq collapses anyway.
   def transaction_source_badges(sources)
     badges = sources
       .map(&:sourceable)
+      .sort_by { |sourceable| source_badge_order(sourceable) }
       .uniq { |sourceable| source_badge_label(sourceable) }
       .map do |sourceable|
         classes = [ "source-badge", source_badge_modifier(sourceable) ].compact.join(" ")
