@@ -876,6 +876,18 @@ class TransactionTest < ActiveSupport::TestCase
     assert_empty result.badge_transaction_sources
   end
 
+  test "badge_transaction_sources reuses fully preloaded merged origins" do
+    result, = merged_transfer(
+      leg_a_source: simplefin_transactions(:transaction_one),
+      leg_b_source: lunchflow_transactions(:transaction_one)
+    )
+    preloaded = Transaction
+      .includes(transaction_sources: :sourceable, merged_sources: { transaction_sources: :sourceable })
+      .find(result.id)
+
+    assert_equal 2, preloaded.badge_transaction_sources.map(&:sourceable).size
+  end
+
   private
 
     # Builds two non-transfer legs (asset→expense and revenue→asset) that pair into a

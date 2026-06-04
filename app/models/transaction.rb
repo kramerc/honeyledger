@@ -114,11 +114,25 @@ class Transaction < ApplicationRecord
   # and ordering are the badge helper's job. Preload-safe so single-row re-renders
   # (merge/unmerge/show) that skip the index preload don't N+1.
   def badge_transaction_sources
-    origins = merged_sources.loaded? ? merged_sources : merged_sources.includes(transaction_sources: :sourceable)
-    own_badge_sources + origins.flat_map(&:own_badge_sources)
+    own_badge_sources + merged_origins_for_badges.flat_map(&:own_badge_sources)
   end
 
   private
+
+    # Merged origins with each origin's sources + sourceables loaded. Mirrors
+    # own_badge_sources: reuses the loaded proxy only when merged_sources AND every
+    # origin's nested transaction_sources/sourceables are already loaded (the index
+    # preloads `merged_sources: { transaction_sources: :sourceable }`); otherwise
+    # re-issues with `.includes` so a merged_sources collection that was loaded
+    # without the nested data can't silently N+1 one query per origin.
+    def merged_origins_for_badges
+      fully_loaded = merged_sources.loaded? && merged_sources.all? do |origin|
+        origin.transaction_sources.loaded? &&
+          origin.transaction_sources.all? { |source| source.association(:sourceable).loaded? }
+      end
+
+      fully_loaded ? merged_sources : merged_sources.includes(transaction_sources: :sourceable).to_a
+    end
 
     def assign_currency_from_dest_account
       self.currency = dest_account.currency if dest_account.present? && !dest_account.virtual?
