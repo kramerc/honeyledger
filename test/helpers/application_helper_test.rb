@@ -177,4 +177,19 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal 1, html.scan(/source-badge--csv">CSV<\/span>/).size
     assert_equal 1, html.scan(/source-badge--simplefin">SimpleFIN<\/span>/).size
   end
+
+  test "transaction_source_badges renders chips in aggregator order regardless of input order" do
+    fake_source = Struct.new(:sourceable)
+    # Deliberately reversed: CSV, Lunch Flow, SimpleFIN.
+    sources = [
+      fake_source.new(Csv::Transaction.new),
+      fake_source.new(lunchflow_accounts(:linked_one)),
+      fake_source.new(simplefin_accounts(:linked_one))
+    ]
+
+    html = transaction_source_badges(sources)
+
+    assert_operator html.index("source-badge--simplefin"), :<, html.index("source-badge--lunchflow")
+    assert_operator html.index("source-badge--lunchflow"), :<, html.index("source-badge--csv")
+  end
 end

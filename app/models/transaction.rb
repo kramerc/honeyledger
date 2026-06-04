@@ -94,6 +94,30 @@ class Transaction < ApplicationRecord
     [ src_account, dest_account ].find { |a| a&.real? }
   end
 
+  # This transaction's own source rows with each sourceable preloaded. Reused for the
+  # aggregated chips on the row and the per-origin chips in the "Merged from:" list.
+  # Preload-safe: reuses the loaded proxy only when transaction_sources AND every
+  # sourceable are already loaded; otherwise materializes via `.includes(:sourceable)`
+  # so neither the caller's `.any?` nor the badge helper triggers an N+1.
+  def own_badge_sources
+    if transaction_sources.loaded? && transaction_sources.all? { |s| s.association(:sourceable).loaded? }
+      transaction_sources.to_a
+    else
+      transaction_sources.includes(:sourceable).to_a
+    end
+  end
+
+  # Source rows for this row's aggregated badges: this transaction's own plus those of
+  # every merged origin. A merge result is created sourceless and inherits the aggregator
+  # provenance only through the originals it absorbed (a re-imported CSV row also attaches
+  # to the zeroed original, not the result — see Csv::ImportTransactionsJob #185). Dedup
+  # and ordering are the badge helper's job. Preload-safe so single-row re-renders
+  # (merge/unmerge/show) that skip the index preload don't N+1.
+  def badge_transaction_sources
+    origins = merged_sources.loaded? ? merged_sources : merged_sources.includes(transaction_sources: :sourceable)
+    own_badge_sources + origins.flat_map(&:own_badge_sources)
+  end
+
   private
 
     def assign_currency_from_dest_account

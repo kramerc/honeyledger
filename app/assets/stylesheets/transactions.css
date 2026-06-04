@@ -556,6 +556,10 @@
   margin-bottom: 2px;
 }
 
+.merged-details__content li .source-badge {
+  margin-left: 4px;
+}
+
 /* Select column */
 .transactions .row > .select {
   justify-content: center;

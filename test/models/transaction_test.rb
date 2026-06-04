@@ -812,4 +812,91 @@ class TransactionTest < ActiveSupport::TestCase
     child.update_columns(parent_transaction_id: transactions(:one).id)
     assert_not child.reload.excludable?, "child transactions must not be excludable"
   end
+
+  # badge_transaction_sources / own_badge_sources
+
+  test "own_badge_sources returns the transaction's own sources" do
+    transaction = create_sourced_transaction(
+      user: users(:one),
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:expense_account),
+      amount_minor: 500,
+      currency: currencies(:usd),
+      description: "Own",
+      transacted_at: 1.day.ago,
+      sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    assert_equal [ simplefin_transactions(:transaction_one) ],
+                 transaction.own_badge_sources.map(&:sourceable)
+  end
+
+  test "badge_transaction_sources returns only own sources for a non-merged transaction" do
+    transaction = create_sourced_transaction(
+      user: users(:one),
+      src_account: accounts(:linked_asset),
+      dest_account: accounts(:expense_account),
+      amount_minor: 500,
+      currency: currencies(:usd),
+      description: "Own",
+      transacted_at: 1.day.ago,
+      sourceable: simplefin_transactions(:transaction_one)
+    )
+
+    assert_equal [ simplefin_transactions(:transaction_one) ],
+                 transaction.badge_transaction_sources.map(&:sourceable)
+  end
+
+  test "badge_transaction_sources on a merge result aggregates each merged origin's sources" do
+    result, = merged_transfer(
+      leg_a_source: simplefin_transactions(:transaction_one),
+      leg_b_source: lunchflow_transactions(:transaction_one)
+    )
+
+    sourceables = result.badge_transaction_sources.map(&:sourceable)
+    assert_equal 2, sourceables.size
+    assert_includes sourceables, simplefin_transactions(:transaction_one)
+    assert_includes sourceables, lunchflow_transactions(:transaction_one)
+  end
+
+  test "badge_transaction_sources combines a merge result's own source with its origins'" do
+    result, = merged_transfer(leg_a_source: simplefin_transactions(:transaction_one))
+    # A merge result is created sourceless, but a later attach (e.g. a manual link)
+    # can still give it its own source — both surfaces must appear.
+    TransactionSource.create!(ledger_transaction: result, sourceable: lunchflow_transactions(:transaction_one))
+
+    sourceables = result.reload.badge_transaction_sources.map(&:sourceable)
+    assert_includes sourceables, lunchflow_transactions(:transaction_one) # own
+    assert_includes sourceables, simplefin_transactions(:transaction_one) # from merged origin
+  end
+
+  test "badge_transaction_sources is empty for a sourceless merge result" do
+    result, = merged_transfer
+
+    assert_empty result.badge_transaction_sources
+  end
+
+  private
+
+    # Builds two non-transfer legs (asset→expense and revenue→asset) that pair into a
+    # transfer, attaches the given sources to the legs, and merges them. Returns
+    # [merge_result, leg_a, leg_b]; the result itself is created sourceless.
+    def merged_transfer(leg_a_source: nil, leg_b_source: nil)
+      leg_a = Transaction.create!(
+        user: users(:one), src_account: accounts(:asset_account),
+        dest_account: accounts(:expense_account), amount_minor: 5000,
+        currency: currencies(:usd), description: "Leg A", transacted_at: 2.days.ago
+      )
+      leg_b = Transaction.create!(
+        user: users(:one), src_account: accounts(:revenue_account),
+        dest_account: accounts(:linked_asset), amount_minor: 5000,
+        currency: currencies(:usd), description: "Leg B", transacted_at: 2.days.ago
+      )
+      TransactionSource.create!(ledger_transaction: leg_a, sourceable: leg_a_source) if leg_a_source
+      TransactionSource.create!(ledger_transaction: leg_b, sourceable: leg_b_source) if leg_b_source
+
+      merger = Transaction::Merge.new(leg_a, leg_b, user: users(:one))
+      assert merger.call, merger.errors.to_sentence
+      [ merger.merged_transaction, leg_a, leg_b ]
+    end
 end

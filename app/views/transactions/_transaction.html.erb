@@ -1,16 +1,8 @@
 <!-- Show -->
-<%# Resolve the transaction_sources collection once with sourceable preloaded.
-    Reuse the proxy only if BOTH transaction_sources and each sourceable are
-    already loaded (TransactionsController#index covers this via
-    `includes(transaction_sources: :sourceable)`). Otherwise materialize an
-    array via `.includes(:sourceable)` so neither the .any? check nor the
-    badge helper triggers an N+1 — including the case where a caller
-    preloaded transaction_sources alone without :sourceable. %>
-<% sources = if transaction.transaction_sources.loaded? && transaction.transaction_sources.all? { |s| s.association(:sourceable).loaded? }
-              transaction.transaction_sources
-            else
-              transaction.transaction_sources.includes(:sourceable).to_a
-            end %>
+<%# Aggregated source rows for this row's chips: the transaction's own sources plus,
+    for a merge result, those of every merged origin (the result itself is created
+    sourceless). Resolution and N+1-safety live in Transaction#badge_transaction_sources. %>
+<% sources = transaction.badge_transaction_sources %>
 <%= turbo_frame_tag transaction do %>
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
        data-selection-excluded="<%= transaction.excluded? %>"
@@ -85,7 +77,8 @@
             <strong>Merged from:</strong>
             <ul>
               <% transaction.merged_sources.each do |source| %>
-                <li><%= source.src_account&.name %> → <%= source.dest_account&.name %><% if source.description.present? %> — "<%= source.description %>"<% end %></li>
+                <% origin_sources = source.own_badge_sources %>
+                <li><%= source.src_account&.name %> → <%= source.dest_account&.name %><% if source.description.present? %> — "<%= source.description %>"<% end %><%= transaction_source_badges(origin_sources) if origin_sources.any? %></li>
               <% end %>
             </ul>
           </div>
