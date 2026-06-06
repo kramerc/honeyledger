@@ -127,6 +127,52 @@ class TransactionsController < ApplicationController
     end
   end
 
+  # POST /transactions/deduplicate
+  def deduplicate
+    transaction_ids = Array(params[:transaction_ids]).uniq
+    if transaction_ids.size < 2
+      @dedupe_errors = [ "You must select at least two transactions to combine." ]
+      respond_to do |format|
+        format.turbo_stream { render :dedupe_error, status: :unprocessable_entity }
+      end
+      return
+    end
+
+    transactions = current_user.transactions.where(id: transaction_ids).to_a
+    # Any missing/foreign id leaves the set short — 404, matching find's behavior.
+    raise ActiveRecord::RecordNotFound if transactions.size != transaction_ids.size
+
+    survivor = nil
+    if params[:survivor_id].present?
+      survivor = transactions.find { |t| t.id.to_s == params[:survivor_id].to_s }
+      if survivor.nil?
+        @dedupe_errors = [ "The transaction to keep must be one of the selected transactions." ]
+        respond_to do |format|
+          format.turbo_stream { render :dedupe_error, status: :unprocessable_entity }
+        end
+        return
+      end
+    end
+
+    deduplicator = Transaction::Deduplicate.new(*transactions, user: current_user, survivor: survivor)
+
+    succeeded = false
+    Transaction.collecting_sidebar_broadcasts do
+      succeeded = deduplicator.call
+    end
+
+    respond_to do |format|
+      if succeeded
+        @survivor = deduplicator.survivor
+        @removed_ids = transactions.reject { |t| t.id == @survivor.id }.map(&:id)
+        format.turbo_stream
+      else
+        @dedupe_errors = deduplicator.errors
+        format.turbo_stream { render :dedupe_error, status: :unprocessable_entity }
+      end
+    end
+  end
+
   # DELETE /transactions/bulk_destroy
   def bulk_destroy
     transactions = current_user.transactions.where(id: bulk_transaction_ids).to_a
