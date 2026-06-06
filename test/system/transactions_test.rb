@@ -317,6 +317,21 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "combine stays disabled when a selected row is a foreign-exchange transaction" do
+    normal = manual_transaction("FX gate normal", 500)
+    fx = Transaction.create!(
+      user: @user, src_account: accounts(:asset_account), dest_account: accounts(:expense_account),
+      amount_minor: 500, currency: currencies(:usd), description: "FX gate fx",
+      transacted_at: 1.day.ago, fx_amount_minor: 400, fx_currency: currencies(:eur)
+    )
+
+    visit transactions_path
+    toggle_select(normal)
+    toggle_select(fx)
+
+    assert_button "Combine Duplicates", disabled: true
+  end
+
   test "a cross-account transfer pair still merges into a transfer" do
     bank_b = accounts(:linked_asset)
     revenue = accounts(:revenue_account)

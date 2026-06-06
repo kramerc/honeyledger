@@ -138,7 +138,9 @@ class TransactionsController < ApplicationController
       return
     end
 
-    transactions = transaction_ids.map { |id| current_user.transactions.find(id) }
+    transactions = current_user.transactions.where(id: transaction_ids).to_a
+    # Any missing/foreign id leaves the set short — 404, matching find's behavior.
+    raise ActiveRecord::RecordNotFound if transactions.size != transaction_ids.size
 
     survivor = nil
     if params[:survivor_id].present?

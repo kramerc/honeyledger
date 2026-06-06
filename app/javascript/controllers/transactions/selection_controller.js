@@ -127,6 +127,10 @@ export default class extends Controller {
     if (new Set(rows.map(r => r.amountMinor)).size !== 1) return false
     if (new Set(rows.map(r => r.currencyCode)).size !== 1) return false
 
+    // FX and split rows are rejected by Transaction::Deduplicate, so don't offer
+    // the action for them — mirror those server guards here.
+    if (rows.some(r => r.hasFx || r.isSplit)) return false
+
     // Each must be a non-transfer: exactly one balance-sheet side.
     if (!rows.every(r => isBs(r.srcKind) !== isBs(r.destKind))) return false
 
@@ -165,6 +169,8 @@ export default class extends Controller {
       destAccountName: row.dataset.mergeDestAccountName,
       description: row.dataset.mergeDescription,
       category: row.dataset.mergeCategory,
+      hasFx: row.dataset.mergeHasFx === "true",
+      isSplit: row.dataset.mergeSplit === "true",
       transactedAt: row.dataset.mergeTransactedAt,
       currencyCode: row.dataset.mergeCurrencyCode,
       currencyDecimalPlaces: parseInt(row.dataset.mergeCurrencyDecimalPlaces, 10) || 2
@@ -345,11 +351,17 @@ export default class extends Controller {
   }
 
   // Heuristic default (mirrors Transaction::Deduplicate): a categorized row,
-  // else the oldest by transacted_at.
+  // else the oldest by transacted_at. When transacted_at ties — common for
+  // duplicates — break by smallest id (the older record) so the default is
+  // stable rather than dependent on selection order.
   defaultSurvivorId(rows) {
     const categorized = rows.filter(row => row.category && row.category.length > 0)
     const pool = categorized.length > 0 ? categorized : rows
-    return pool.reduce((best, row) => (row.transactedAt < best.transactedAt ? row : best)).id
+    return pool.reduce((best, row) => {
+      if (row.transactedAt < best.transactedAt) return row
+      if (row.transactedAt === best.transactedAt && Number(row.id) < Number(best.id)) return row
+      return best
+    }).id
   }
 
   submitCombine() {
