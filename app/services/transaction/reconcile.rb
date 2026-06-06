@@ -1,4 +1,10 @@
 class Transaction::Reconcile
+  # Aggregator-sourced candidates match within ±N days of the incoming date to
+  # absorb the credit-card auth-vs-post skew (typically 1–2 days). Manual-entry
+  # orphans keep the stricter same-day window (paired with their exact-description
+  # rule, #117). Start at 3 and tune later (#158).
+  RECONCILE_TRANSACTED_AT_WINDOW_DAYS = 3
+
   def self.call(**kwargs)
     new(**kwargs).call
   end
@@ -20,7 +26,16 @@ class Transaction::Reconcile
     return nil if @description.blank?
 
     candidates = candidate_query.limit(2).to_a
-    candidates.size == 1 ? candidates.first : nil
+    return candidates.first if candidates.size == 1
+    # Two live candidates is genuine ambiguity — don't fall through to the merged
+    # path and risk attaching to the wrong event.
+    return nil if candidates.size >= 2
+
+    # No live orphan. The first aggregator's side may have been auto-merged into a
+    # transfer (zeroed, merged_into set), which the live query can't see because it
+    # matches on amount_minor. Try to attach onto that merged original instead (#158).
+    merged_candidates = merged_candidate_query.limit(2).to_a
+    merged_candidates.size == 1 ? merged_candidates.first : nil
   end
 
   private
@@ -37,11 +52,37 @@ class Transaction::Reconcile
         .where(user_id: @ledger_account.user_id)
         .where(account_column => @ledger_account.id)
         .where(amount_minor: @amount_minor, currency_id: @currency_id)
-        .where(transacted_at: @transacted_at.beginning_of_day..@transacted_at.end_of_day)
         .where(opening_balance: false, split: false, parent_transaction_id: nil)
         .where(merged_into_id: nil, fx_amount_minor: nil)
         .where.missing(:merged_sources)
         .where(orphan_with_description_clause)
+    end
+
+    # Fallback when no live orphan matches: the incoming row's counterpart on the
+    # other aggregator was already auto-merged into a transfer, so its original is
+    # zeroed (amount_minor 0) and flagged merged_into_id. The live query matches on
+    # amount_minor and so can never find it; here we match the real amount/currency
+    # on the surviving merge head instead and attach the incoming source onto the
+    # zeroed original — keeping it a sibling of the first aggregator's source so the
+    # head's badge shows both, and dodging the resync hazard of attaching to the head
+    # (whose scalars a later resync would overwrite). Csv::ImportTransactionsJob's
+    # find_merged_duplicate_target does the same within a single aggregator.
+    #
+    # Only aggregator-sourced merged originals qualify (aggregator_clause requires a
+    # source): a purely manual merged transaction is left untouched, matching the
+    # conservative #117 stance and the issue's aggregator-A-then-B scenario.
+    def merged_candidate_query
+      account_column = @ledger_side == :src ? :src_account_id : :dest_account_id
+
+      Transaction
+        .joins("INNER JOIN transactions heads ON heads.id = transactions.merged_into_id")
+        .where(user_id: @ledger_account.user_id)
+        .where(account_column => @ledger_account.id)
+        .where("heads.amount_minor = ? AND heads.currency_id = ?", @amount_minor, @currency_id)
+        .where(opening_balance: false, split: false, parent_transaction_id: nil)
+        .where(fx_amount_minor: nil)
+        .where.not(merged_into_id: nil)
+        .where(aggregator_clause)
     end
 
     # Manual-entry orphans (no transaction_sources rows) require an exact
@@ -56,22 +97,45 @@ class Transaction::Reconcile
     # have a *live* source of the same aggregator type as the incoming source,
     # since the incoming sft would represent a separate real-world event.
     def orphan_with_description_clause
+      manual_entry_clause.or(aggregator_clause)
+    end
+
+    # Manual-entry orphans keep the same-day window; aggregator-sourced orphans
+    # widen to ±N days to absorb cross-aggregator date skew (#158).
+    def manual_entry_clause
+      table = Transaction.arel_table
+
+      Arel::Nodes::Not.new(has_any_source_node)
+        .and(same_day_window(table))
+        .and(case_insensitive_eq(table[:description], @description))
+    end
+
+    def aggregator_clause
       table = Transaction.arel_table
       ts_table = TransactionSource.arel_table
 
-      has_any_source = Arel::Nodes::Exists.new(
+      has_any_source_node
+        .and(wide_window(table))
+        .and(Arel::Nodes::Not.new(live_collision_subquery(ts_table)))
+        .and(prefix_match(table[:description], @description))
+    end
+
+    def has_any_source_node
+      table = Transaction.arel_table
+      ts_table = TransactionSource.arel_table
+
+      Arel::Nodes::Exists.new(
         ts_table.project(1).where(ts_table[:transaction_id].eq(table[:id]))
       )
+    end
 
-      manual_entry = Arel::Nodes::Not.new(has_any_source)
-        .and(case_insensitive_eq(table[:description], @description))
+    def same_day_window(table)
+      table[:transacted_at].between(@transacted_at.beginning_of_day..@transacted_at.end_of_day)
+    end
 
-      live_collision = live_collision_subquery(ts_table)
-      aggregator = has_any_source
-        .and(Arel::Nodes::Not.new(live_collision))
-        .and(prefix_match(table[:description], @description))
-
-      manual_entry.or(aggregator)
+    def wide_window(table)
+      days = RECONCILE_TRANSACTED_AT_WINDOW_DAYS
+      table[:transacted_at].between((@transacted_at - days.days).beginning_of_day..(@transacted_at + days.days).end_of_day)
     end
 
     # The candidate is disqualified if it already carries a *live* source. When the

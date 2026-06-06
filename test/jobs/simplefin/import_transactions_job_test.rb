@@ -1053,6 +1053,41 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_empty refund_orphan.reload.transaction_sources
   end
 
+  test "adopts an existing Lunchflow-sourced ledger transaction when a Simplefin copy arrives a few days off (#158)" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_dual_lf", name: "Dual Aggregator Checking")
+
+    # The same ledger account is also linked to a live Lunch Flow account.
+    lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one), remote_id: 4242,
+      name: "Dual Aggregator Checking", institution_name: "Test Bank",
+      provider: "finicity", currency: "USD", status: "ACTIVE", balance: "1000.00"
+    )
+    bank_account.account_sources.create!(sourceable: lf_account)
+
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_dual", amount: "-40.03",
+      currency: "USD", description: "Merchant X", pending: false, date: "2026-04-21"
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    original = lf_transaction.ledger_transactions.first!
+
+    # SimpleFIN reports the same charge two days later (auth vs post skew).
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_dual", amount: "-40.03",
+      description: "Merchant X",
+      posted: Time.zone.parse("2026-04-23 12:00:00"),
+      transacted_at: Time.zone.parse("2026-04-23 12:00:00"), pending: false
+    )
+
+    assert_no_difference -> { Transaction.count } do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    original.reload
+    assert_includes original.transaction_sources.map(&:sourceable), sf_transaction,
+      "the off-by-two-day SimpleFIN copy should attach to the existing Lunch Flow row"
+  end
+
   private
 
     def create_linked_simplefin_account(remote_id: "acc_test", name: "SF Test Checking")
