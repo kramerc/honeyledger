@@ -989,4 +989,103 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     assert_nil candidate
   end
+
+  test "abstains when a live orphan and a merged original both match within the window (#158)" do
+    bank_b = accounts(:asset_account)
+
+    # A live aggregator orphan two days before the incoming date.
+    live_day = Time.zone.parse("2026-04-14 12:00:00")
+    stale_live = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "collide_live",
+      amount: "-14.06", description: "Payment Credit",
+      transacted_at: live_day, posted: live_day
+    )
+    create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: live_day, sourceable: stale_live
+    )
+
+    # An auto-merged original two days after the incoming date, whose head matches.
+    merged_day = Time.zone.parse("2026-04-16 12:00:00")
+    stale_merged = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "collide_merged",
+      amount: "-14.06", description: "Payment Credit",
+      transacted_at: merged_day, posted: merged_day
+    )
+    original = create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: merged_day, sourceable: stale_merged
+    )
+    counterpart_side = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account), dest_account: bank_b,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: merged_day
+    )
+    assert Transaction::Merge.new(original, counterpart_side, user: @user).call
+
+    # Both a live and a merged candidate sit within ±3 days — genuinely ambiguous,
+    # so we must not silently attach to the live one and hide the merged event.
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 1406,
+      currency_id: @currency.id,
+      transacted_at: Time.zone.parse("2026-04-15 12:00:00"),
+      description: "Payment Credit"
+    )
+
+    assert_nil candidate
+  end
+
+  test "CSV-sourced orphans keep the same-day window (the widening is aggregator-only) (#158)" do
+    orphan_day = Time.zone.parse("2026-04-15 12:00:00")
+    csv_orphan = create_csv_sourced_orphan(transacted_at: orphan_day, description: "Merchant X with extra detail")
+
+    # Same day, prefix match → adopted (the prefix branch still applies to CSV).
+    same_day = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: orphan_day,
+      description: "Merchant X"
+    )
+    assert_equal csv_orphan, same_day
+
+    # One day off → not adopted. CSV sources do not get the widened window.
+    off_by_one = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: orphan_day + 1.day,
+      description: "Merchant X"
+    )
+    assert_nil off_by_one
+  end
+
+  private
+
+    def create_csv_sourced_orphan(transacted_at:, description:, amount_minor: 5000)
+      import = Csv::Import.new(user: @user, account: @ledger_account, state: "imported")
+      import.file.attach(
+        io: StringIO.new("date,amount\n2026-01-01,-50.00\n"),
+        filename: "import.csv",
+        content_type: "text/csv"
+      )
+      import.save!
+
+      csv_transaction = Csv::Transaction.create!(
+        import: import, row_index: 0, amount_minor: -amount_minor,
+        description: description, transacted_at: transacted_at
+      )
+
+      create_sourced_transaction(
+        user: @user, src_account: @ledger_account, dest_account: @counterpart,
+        amount_minor: amount_minor, currency: @currency, description: description,
+        transacted_at: transacted_at, sourceable: csv_transaction
+      )
+    end
 end

@@ -25,17 +25,17 @@ class Transaction::Reconcile
   def call
     return nil if @description.blank?
 
-    candidates = candidate_query.limit(2).to_a
-    return candidates.first if candidates.size == 1
-    # Two live candidates is genuine ambiguity — don't fall through to the merged
-    # path and risk attaching to the wrong event.
-    return nil if candidates.size >= 2
+    # Abstain immediately if the live orphans alone are already ambiguous.
+    live_candidates = candidate_query.limit(2).to_a
+    return nil if live_candidates.size >= 2
 
-    # No live orphan. The first aggregator's side may have been auto-merged into a
-    # transfer (zeroed, merged_into set), which the live query can't see because it
-    # matches on amount_minor. Try to attach onto that merged original instead (#158).
-    merged_candidates = merged_candidate_query.limit(2).to_a
-    merged_candidates.size == 1 ? merged_candidates.first : nil
+    # The first aggregator's side may have been auto-merged into a transfer (zeroed,
+    # merged_into set), which the live query can't see because it matches on
+    # amount_minor. Consider live and merged candidates together so that a live +
+    # merged collision within the widened window is treated as ambiguous rather than
+    # silently attaching to the live row and hiding the merged event (#158).
+    candidates = live_candidates + merged_candidate_query.limit(2).to_a
+    candidates.size == 1 ? candidates.first : nil
   end
 
   private
@@ -68,9 +68,11 @@ class Transaction::Reconcile
     # (whose scalars a later resync would overwrite). Csv::ImportTransactionsJob's
     # find_merged_duplicate_target does the same within a single aggregator.
     #
-    # Only aggregator-sourced merged originals qualify (aggregator_clause requires a
-    # source): a purely manual merged transaction is left untouched, matching the
-    # conservative #117 stance and the issue's aggregator-A-then-B scenario.
+    # Only sourced merged originals qualify (sourced_clause requires a source): a
+    # purely manual merged transaction is left untouched, matching the conservative
+    # #117 stance and the issue's aggregator-A-then-B scenario. Within sourced_clause
+    # only aggregator sources get the widened window, so this fires for the
+    # SimpleFIN/Lunch Flow date-skew case it targets.
     def merged_candidate_query
       account_column = @ledger_side == :src ? :src_account_id : :dest_account_id
 
@@ -82,7 +84,7 @@ class Transaction::Reconcile
         .where(opening_balance: false, split: false, parent_transaction_id: nil)
         .where(fx_amount_minor: nil)
         .where.not(merged_into_id: nil)
-        .where(aggregator_clause)
+        .where(sourced_clause)
     end
 
     # Manual-entry orphans (no transaction_sources rows) require an exact
@@ -90,18 +92,18 @@ class Transaction::Reconcile
     # manual placeholder cannot be scooped up by an unrelated long aggregator
     # description that happens to share a short prefix.
     #
-    # Aggregator-sourced orphans (some transaction_sources rows) use a
-    # bidirectional case-insensitive prefix match — covers the cross-aggregator
-    # truncation case (e.g. Lunch Flow's 32-char merchant truncation of a
-    # longer SimpleFIN description). Candidates are excluded if they already
-    # have a *live* source of the same aggregator type as the incoming source,
-    # since the incoming sft would represent a separate real-world event.
+    # Sourced orphans (some transaction_sources rows) use a bidirectional
+    # case-insensitive prefix match — covers the cross-aggregator truncation case
+    # (e.g. Lunch Flow's 32-char merchant truncation of a longer SimpleFIN
+    # description). Candidates are excluded if they already have a *live* source of
+    # the same aggregator type as the incoming source, since the incoming sft would
+    # represent a separate real-world event.
     def orphan_with_description_clause
-      manual_entry_clause.or(aggregator_clause)
+      manual_entry_clause.or(sourced_clause)
     end
 
-    # Manual-entry orphans keep the same-day window; aggregator-sourced orphans
-    # widen to ±N days to absorb cross-aggregator date skew (#158).
+    # Manual-entry orphans keep the same-day window paired with their exact-description
+    # rule (#117).
     def manual_entry_clause
       table = Transaction.arel_table
 
@@ -110,23 +112,44 @@ class Transaction::Reconcile
         .and(case_insensitive_eq(table[:description], @description))
     end
 
-    def aggregator_clause
+    def sourced_clause
       table = Transaction.arel_table
       ts_table = TransactionSource.arel_table
 
       has_any_source_node
-        .and(wide_window(table))
+        .and(sourced_date_window(table))
         .and(Arel::Nodes::Not.new(live_collision_subquery(ts_table)))
         .and(prefix_match(table[:description], @description))
     end
 
+    # Aggregator-sourced (SimpleFIN/Lunch Flow) candidates widen to ±N days to absorb
+    # the credit-card auth-vs-post skew (#158); CSV- and any other-sourced candidates
+    # keep the same-day window, since the date-skew problem is specific to bank feeds
+    # and the issue scopes the wider window to aggregators. wide_window already
+    # subsumes same_day_window, so an aggregator source effectively matches on the
+    # wide window alone.
+    def sourced_date_window(table)
+      same_day_window(table).or(has_aggregator_source_node.and(wide_window(table)))
+    end
+
     def has_any_source_node
+      source_exists_node
+    end
+
+    def has_aggregator_source_node
+      ts_table = TransactionSource.arel_table
+      aggregator_type_names = AggregatorLinkable.registry.map { |account_class| account_class.transaction_class.name }
+
+      source_exists_node(ts_table[:sourceable_type].in(aggregator_type_names))
+    end
+
+    def source_exists_node(extra_condition = nil)
       table = Transaction.arel_table
       ts_table = TransactionSource.arel_table
 
-      Arel::Nodes::Exists.new(
-        ts_table.project(1).where(ts_table[:transaction_id].eq(table[:id]))
-      )
+      subquery = ts_table.project(1).where(ts_table[:transaction_id].eq(table[:id]))
+      subquery = subquery.where(extra_condition) if extra_condition
+      Arel::Nodes::Exists.new(subquery)
     end
 
     def same_day_window(table)
