@@ -58,15 +58,16 @@ class Transaction::Reconcile
         .where(orphan_with_description_clause)
     end
 
-    # Fallback when no live orphan matches: the incoming row's counterpart on the
-    # other aggregator was already auto-merged into a transfer, so its original is
-    # zeroed (amount_minor 0) and flagged merged_into_id. The live query matches on
-    # amount_minor and so can never find it; here we match the real amount/currency
-    # on the surviving merge head instead and attach the incoming source onto the
-    # zeroed original — keeping it a sibling of the first aggregator's source so the
-    # head's badge shows both, and dodging the resync hazard of attaching to the head
-    # (whose scalars a later resync would overwrite). Csv::ImportTransactionsJob's
-    # find_merged_duplicate_target does the same within a single aggregator.
+    # The incoming row's counterpart on the other aggregator may already have been
+    # auto-merged into a transfer, so its original is zeroed (amount_minor 0) and
+    # flagged merged_into_id. The live query matches on amount_minor and so can never
+    # find it; here we match the real amount/currency on the surviving merge head
+    # instead and attach the incoming source onto the zeroed original — keeping it a
+    # sibling of the first aggregator's source so the head's badge shows both, and
+    # dodging the resync hazard of attaching to the head (whose scalars a later resync
+    # would overwrite). Csv::ImportTransactionsJob's find_merged_duplicate_target does
+    # the same within a single aggregator. call evaluates this alongside the live query
+    # every time so a live + merged collision within the window is caught as ambiguous.
     #
     # Only sourced merged originals qualify (sourced_clause requires a source): a
     # purely manual merged transaction is left untouched, matching the conservative
