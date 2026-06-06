@@ -803,4 +803,289 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
     assert_nil candidate, "ledger transactions with any live source must not be reconciliation candidates"
   end
+
+  test "matches an aggregator-sourced orphan within the widened ±N-day window (#158)" do
+    orphan_day = Time.zone.parse("2026-04-15 12:00:00")
+    stale_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "skew_orphan",
+      amount: "-40.03", description: "Merchant X",
+      transacted_at: orphan_day, posted: orphan_day
+    )
+    orphan = create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 4003, currency: @currency, description: "Merchant X",
+      transacted_at: orphan_day, sourceable: stale_simplefin_transaction
+    )
+
+    (-3..3).each do |offset|
+      candidate = Transaction::Reconcile.call(
+        ledger_account: @ledger_account,
+        ledger_side: :src,
+        amount_minor: 4003,
+        currency_id: @currency.id,
+        transacted_at: orphan_day + offset.days,
+        description: "Merchant X"
+      )
+
+      assert_equal orphan, candidate, "expected a match at a #{offset}-day skew"
+    end
+  end
+
+  test "does not match an aggregator-sourced orphan beyond the ±N-day window (#158)" do
+    orphan_day = Time.zone.parse("2026-04-15 12:00:00")
+    stale_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "skew_orphan_far",
+      amount: "-40.03", description: "Merchant X",
+      transacted_at: orphan_day, posted: orphan_day
+    )
+    create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 4003, currency: @currency, description: "Merchant X",
+      transacted_at: orphan_day, sourceable: stale_simplefin_transaction
+    )
+
+    [ -4, 4 ].each do |offset|
+      candidate = Transaction::Reconcile.call(
+        ledger_account: @ledger_account,
+        ledger_side: :src,
+        amount_minor: 4003,
+        currency_id: @currency.id,
+        transacted_at: orphan_day + offset.days,
+        description: "Merchant X"
+      )
+
+      assert_nil candidate, "expected no match at a #{offset}-day skew (N + 1)"
+    end
+  end
+
+  test "abstains when two aggregator-sourced orphans fall within the widened window (#158)" do
+    day_a = Time.zone.parse("2026-04-14 12:00:00")
+    day_b = Time.zone.parse("2026-04-16 12:00:00")
+    stale_a = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "window_amb_a",
+      amount: "-40.03", description: "Merchant X",
+      transacted_at: day_a, posted: day_a
+    )
+    stale_b = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "window_amb_b",
+      amount: "-40.03", description: "Merchant X",
+      transacted_at: day_b, posted: day_b
+    )
+    create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 4003, currency: @currency, description: "Merchant X",
+      transacted_at: day_a, sourceable: stale_a
+    )
+    create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 4003, currency: @currency, description: "Merchant X",
+      transacted_at: day_b, sourceable: stale_b
+    )
+
+    # Incoming date sits within ±3 days of both orphans — genuinely ambiguous.
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 4003,
+      currency_id: @currency.id,
+      transacted_at: Time.zone.parse("2026-04-15 12:00:00"),
+      description: "Merchant X"
+    )
+
+    assert_nil candidate
+  end
+
+  test "manual-entry orphans keep the same-day window (off-by-one day is not adopted) (#117/#158)" do
+    orphan_day = Time.zone.parse("2026-04-15 12:00:00")
+    Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 5000, currency: @currency, description: "Coffee Shop",
+      transacted_at: orphan_day
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: orphan_day + 1.day,
+      description: "Coffee Shop"
+    )
+
+    # The widened window is aggregator-only; a manual placeholder one day off is not adopted.
+    assert_nil candidate
+  end
+
+  test "attaches onto an auto-merged original whose head matches within the window (#158)" do
+    bank_b = accounts(:asset_account)
+    merge_day = Time.zone.parse("2026-04-15 12:00:00")
+
+    # Aggregator A's payment on the credit card, sourced and then auto-merged with the
+    # paying account's counterpart into a transfer. The original is zeroed and flagged
+    # merged_into; the surviving head carries the real amount.
+    stale_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "merged_orig",
+      amount: "-14.06", description: "Payment Credit",
+      transacted_at: merge_day, posted: merge_day
+    )
+    original = create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: merge_day, sourceable: stale_simplefin_transaction
+    )
+    counterpart_side = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account), dest_account: bank_b,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: merge_day
+    )
+    merger = Transaction::Merge.new(original, counterpart_side, user: @user)
+    assert merger.call, merger.errors.inspect
+    head = merger.merged_transaction
+
+    # Aggregator B's copy of the same payment arrives one day off.
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 1406,
+      currency_id: @currency.id,
+      transacted_at: merge_day + 1.day,
+      description: "Payment Credit"
+    )
+
+    assert_equal original, candidate
+    assert_equal head.id, candidate.merged_into_id
+  end
+
+  test "abstains when two auto-merged originals match within the window (#158)" do
+    bank_b = accounts(:asset_account)
+
+    [ Time.zone.parse("2026-04-14 12:00:00"), Time.zone.parse("2026-04-16 12:00:00") ].each_with_index do |day, index|
+      stale = Simplefin::Transaction.create!(
+        account: @stale_simplefin_account, remote_id: "merged_amb_#{index}",
+        amount: "-14.06", description: "Payment Credit",
+        transacted_at: day, posted: day
+      )
+      original = create_sourced_transaction(
+        user: @user, src_account: @ledger_account, dest_account: @counterpart,
+        amount_minor: 1406, currency: @currency, description: "Payment Credit",
+        transacted_at: day, sourceable: stale
+      )
+      counterpart_side = Transaction.create!(
+        user: @user, src_account: accounts(:revenue_account), dest_account: bank_b,
+        amount_minor: 1406, currency: @currency, description: "Payment Credit",
+        transacted_at: day
+      )
+      assert Transaction::Merge.new(original, counterpart_side, user: @user).call
+    end
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 1406,
+      currency_id: @currency.id,
+      transacted_at: Time.zone.parse("2026-04-15 12:00:00"),
+      description: "Payment Credit"
+    )
+
+    assert_nil candidate
+  end
+
+  test "abstains when a live orphan and a merged original both match within the window (#158)" do
+    bank_b = accounts(:asset_account)
+
+    # A live aggregator orphan two days before the incoming date.
+    live_day = Time.zone.parse("2026-04-14 12:00:00")
+    stale_live = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "collide_live",
+      amount: "-14.06", description: "Payment Credit",
+      transacted_at: live_day, posted: live_day
+    )
+    create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: live_day, sourceable: stale_live
+    )
+
+    # An auto-merged original two days after the incoming date, whose head matches.
+    merged_day = Time.zone.parse("2026-04-16 12:00:00")
+    stale_merged = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "collide_merged",
+      amount: "-14.06", description: "Payment Credit",
+      transacted_at: merged_day, posted: merged_day
+    )
+    original = create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: merged_day, sourceable: stale_merged
+    )
+    counterpart_side = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account), dest_account: bank_b,
+      amount_minor: 1406, currency: @currency, description: "Payment Credit",
+      transacted_at: merged_day
+    )
+    assert Transaction::Merge.new(original, counterpart_side, user: @user).call
+
+    # Both a live and a merged candidate sit within ±3 days — genuinely ambiguous,
+    # so we must not silently attach to the live one and hide the merged event.
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 1406,
+      currency_id: @currency.id,
+      transacted_at: Time.zone.parse("2026-04-15 12:00:00"),
+      description: "Payment Credit"
+    )
+
+    assert_nil candidate
+  end
+
+  test "CSV-sourced orphans keep the same-day window (the widening is aggregator-only) (#158)" do
+    orphan_day = Time.zone.parse("2026-04-15 12:00:00")
+    csv_orphan = create_csv_sourced_orphan(transacted_at: orphan_day, description: "Merchant X with extra detail")
+
+    # Same day, prefix match → adopted (the prefix branch still applies to CSV).
+    same_day = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: orphan_day,
+      description: "Merchant X"
+    )
+    assert_equal csv_orphan, same_day
+
+    # One day off → not adopted. CSV sources do not get the widened window.
+    off_by_one = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: orphan_day + 1.day,
+      description: "Merchant X"
+    )
+    assert_nil off_by_one
+  end
+
+  private
+
+    def create_csv_sourced_orphan(transacted_at:, description:, amount_minor: 5000)
+      import = Csv::Import.new(user: @user, account: @ledger_account, state: "imported")
+      import.file.attach(
+        io: StringIO.new("date,amount\n2026-01-01,-50.00\n"),
+        filename: "import.csv",
+        content_type: "text/csv"
+      )
+      import.save!
+
+      csv_transaction = Csv::Transaction.create!(
+        import: import, row_index: 0, amount_minor: -amount_minor,
+        description: description, transacted_at: transacted_at
+      )
+
+      create_sourced_transaction(
+        user: @user, src_account: @ledger_account, dest_account: @counterpart,
+        amount_minor: amount_minor, currency: @currency, description: description,
+        transacted_at: transacted_at, sourceable: csv_transaction
+      )
+    end
 end

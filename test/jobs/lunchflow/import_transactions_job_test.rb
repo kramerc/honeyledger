@@ -570,6 +570,90 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal full_description, original_ledger_transaction.description, "user-facing description should be preserved on the adopted row"
   end
 
+  test "adopts an existing Simplefin-sourced ledger transaction when a Lunch Flow copy arrives a few days off (#158)" do
+    lf_account, bank_account = create_linked_lunchflow_account(remote_id: 7777, name: "Dual Aggregator Checking")
+
+    # The same ledger account is also linked to a live SimpleFIN account.
+    sf_account = Simplefin::Account.create!(
+      connection: simplefin_connections(:one), remote_id: "acc_dual_sf",
+      name: "Dual Aggregator Checking", currency: "USD", balance: "1000.00"
+    )
+    bank_account.account_sources.create!(sourceable: sf_account)
+
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_dual", amount: "-40.03",
+      description: "Merchant X",
+      posted: Time.zone.parse("2026-04-23 12:00:00"),
+      transacted_at: Time.zone.parse("2026-04-23 12:00:00"), pending: false
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    original = sf_transaction.ledger_transactions.first!
+
+    # Lunch Flow reports the same charge two days earlier (auth vs post skew).
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_dual", amount: "-40.03",
+      currency: "USD", description: "Merchant X", pending: false, date: "2026-04-21"
+    )
+
+    assert_no_difference -> { Transaction.count } do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    original.reload
+    assert_includes original.transaction_sources.map(&:sourceable), lf_transaction,
+      "the off-by-two-day Lunch Flow copy should attach to the existing SimpleFIN row"
+  end
+
+  test "attaches a Lunch Flow copy onto an auto-merged Simplefin payment a few days off (#158)" do
+    lf_account, credit_card = create_linked_lunchflow_account(remote_id: 6666, name: "Dual Card")
+    sf_account = Simplefin::Account.create!(
+      connection: simplefin_connections(:one), remote_id: "acc_dual_merge_sf",
+      name: "Dual Card", currency: "USD", balance: "1000.00"
+    )
+    credit_card.account_sources.create!(sourceable: sf_account)
+
+    # SimpleFIN imports the card payment credit (positive amount → ledger on dest).
+    sf_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_payment", amount: "14.06",
+      description: "Payment Thank You",
+      posted: Time.zone.parse("2026-03-23 12:00:00"),
+      transacted_at: Time.zone.parse("2026-03-23 12:00:00"), pending: false
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    original = sf_transaction.ledger_transactions.first!
+
+    # Merge it with the paying account's debit into a checking → card transfer, as
+    # AutoMerge would when both sides are imported.
+    checking = Account.create!(user: @user, currency: @currency, name: "Paying Checking", kind: :asset)
+    expense = Account.create!(user: @user, currency: @currency, name: "Card Payment", kind: :expense)
+    paying_side = Transaction.create!(
+      user: @user, src_account: checking, dest_account: expense,
+      amount_minor: 1406, currency: @currency, description: "Payment Thank You",
+      transacted_at: Time.zone.parse("2026-03-23 12:00:00")
+    )
+    merger = Transaction::Merge.new(original, paying_side, user: @user)
+    assert merger.call, merger.errors.inspect
+    head = merger.merged_transaction
+
+    # Lunch Flow reports the same payment one day earlier.
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_payment", amount: "14.06",
+      currency: "USD", description: "Payment Thank You", pending: false, date: "2026-03-22"
+    )
+
+    assert_no_difference -> { Transaction.count } do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+
+    original.reload
+    head.reload
+    assert_includes original.transaction_sources.map(&:sourceable), lf_transaction,
+      "the Lunch Flow copy should attach onto the zeroed, auto-merged original"
+    assert_equal 0, original.amount_minor, "the merged original must stay zeroed"
+    assert_equal head.id, original.merged_into_id
+    assert_equal 1406, head.amount_minor, "the surviving transfer head must be untouched"
+  end
+
   test "bumps the ledger transaction's synced_at when re-encountering a secondary Lunch Flow source" do
     lf_account, bank_account = create_linked_lunchflow_account(remote_id: 9991, name: "Secondary Sync Bank")
     sf_account = Simplefin::Account.create!(
