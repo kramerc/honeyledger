@@ -15,6 +15,7 @@
        data-merge-src-account-name="<%= transaction.src_account&.name %>"
        data-merge-dest-account-name="<%= transaction.dest_account&.name %>"
        data-merge-description="<%= transaction.description %>"
+       data-merge-category="<%= transaction.category&.name %>"
        data-merge-transacted-at="<%= transaction.transacted_at&.strftime("%Y-%m-%dT%H:%M") %>"
        data-merge-currency-code="<%= transaction.currency.code %>"
        data-merge-currency-decimal-places="<%= transaction.currency.decimal_places %>">

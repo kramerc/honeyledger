@@ -7,6 +7,7 @@ export default class extends Controller {
   static targets = [
     "checkbox", "bar", "count",
     "deleteButton", "excludeButton", "restoreButton", "mergeButton", "mergeMessage",
+    "combineButton", "combineConfirmation", "combineOptions", "combineForm", "combineSurvivorId",
     "confirmation", "deleteConfirmation",
     "deleteForm", "excludeForm", "restoreForm"
   ]
@@ -38,6 +39,7 @@ export default class extends Controller {
     if (this.selectedIds.length < 1) {
       this.hideBar()
       this.hideConfirmation()
+      this.hideCombineConfirmation()
       this.hideDeleteConfirmation()
       return
     }
@@ -51,6 +53,7 @@ export default class extends Controller {
     this.updateExcludeButton()
     this.updateRestoreButton()
     this.updateMergeButton()
+    this.updateCombineButton()
 
     this.barTarget.hidden = false
   }
@@ -100,6 +103,41 @@ export default class extends Controller {
     }
   }
 
+  updateCombineButton() {
+    if (!this.hasCombineButtonTarget) return
+
+    const anyExcluded = this.selectedRows().some(row => row.dataset.selectionExcluded === "true")
+
+    if (this.selectedIds.length < 2 || anyExcluded) {
+      this.combineButtonTarget.disabled = true
+      return
+    }
+
+    const rows = this.selectedIds.map(id => this.transactionData(id))
+    this.combineButtonTarget.disabled = !rows.every(Boolean) || !this.validateDuplicates(rows)
+  }
+
+  // Duplicates of one event: equal amount + currency, each a non-transfer, all
+  // sharing the same bank account on the same side (all src == BankX, or all
+  // dest == BankX). Mutually exclusive with a valid transfer pair.
+  validateDuplicates(rows) {
+    const balanceSheetKinds = this.constructor.BALANCE_SHEET_KINDS
+    const isBs = kind => balanceSheetKinds.includes(kind)
+
+    if (new Set(rows.map(r => r.amountMinor)).size !== 1) return false
+    if (new Set(rows.map(r => r.currencyCode)).size !== 1) return false
+
+    // Each must be a non-transfer: exactly one balance-sheet side.
+    if (!rows.every(r => isBs(r.srcKind) !== isBs(r.destKind))) return false
+
+    const allSrc = rows.every(r => isBs(r.srcKind))
+    const allDest = rows.every(r => isBs(r.destKind))
+
+    if (allSrc) return new Set(rows.map(r => r.srcAccountId)).size === 1
+    if (allDest) return new Set(rows.map(r => r.destAccountId)).size === 1
+    return false
+  }
+
   // --- Row data helpers -----------------------------------------------------
 
   selectedRows() {
@@ -126,6 +164,7 @@ export default class extends Controller {
       srcAccountName: row.dataset.mergeSrcAccountName,
       destAccountName: row.dataset.mergeDestAccountName,
       description: row.dataset.mergeDescription,
+      category: row.dataset.mergeCategory,
       transactedAt: row.dataset.mergeTransactedAt,
       currencyCode: row.dataset.mergeCurrencyCode,
       currencyDecimalPlaces: parseInt(row.dataset.mergeCurrencyDecimalPlaces, 10) || 2
@@ -255,6 +294,76 @@ export default class extends Controller {
     this.confirmationTarget.hidden = true
   }
 
+  // --- Combine duplicates confirmation --------------------------------------
+
+  showCombineConfirmation() {
+    if (!this.hasCombineConfirmationTarget) return
+
+    const rows = this.selectedIds.map(id => this.transactionData(id)).filter(Boolean)
+    if (rows.length < 2 || !this.validateDuplicates(rows)) return
+
+    const defaultId = this.defaultSurvivorId(rows)
+
+    this.combineOptionsTarget.innerHTML = ""
+    rows.forEach(row => {
+      const label = document.createElement("label")
+      label.className = "selection-confirmation__option"
+
+      const input = document.createElement("input")
+      input.type = "radio"
+      input.name = "combine_survivor"
+      input.value = row.id
+      input.checked = row.id === defaultId
+
+      const body = document.createElement("span")
+      body.className = "selection-confirmation__option-body"
+
+      const title = document.createElement("span")
+      title.className = "selection-confirmation__option-title"
+      title.textContent = row.description || "(no description)"
+
+      // Lead the subtext with the date — the field that distinguishes otherwise
+      // identical duplicates.
+      const details = []
+      if (row.transactedAt) details.push(row.transactedAt.replace("T", " "))
+      details.push(`${row.srcAccountName} → ${row.destAccountName}`)
+      if (row.category) details.push(row.category)
+
+      const detail = document.createElement("span")
+      detail.className = "selection-confirmation__option-detail"
+      detail.textContent = details.join(" · ")
+
+      body.appendChild(title)
+      body.appendChild(detail)
+      label.appendChild(input)
+      label.appendChild(body)
+      this.combineOptionsTarget.appendChild(label)
+    })
+
+    this.combineConfirmationTarget.hidden = false
+    this.barTarget.hidden = true
+  }
+
+  // Heuristic default (mirrors Transaction::Deduplicate): a categorized row,
+  // else the oldest by transacted_at.
+  defaultSurvivorId(rows) {
+    const categorized = rows.filter(row => row.category && row.category.length > 0)
+    const pool = categorized.length > 0 ? categorized : rows
+    return pool.reduce((best, row) => (row.transactedAt < best.transactedAt ? row : best)).id
+  }
+
+  submitCombine() {
+    const checked = this.combineOptionsTarget.querySelector("input[name='combine_survivor']:checked")
+    if (!checked) return
+    this.combineSurvivorIdTarget.value = checked.value
+    this.submitBulk(this.combineFormTarget)
+  }
+
+  hideCombineConfirmation() {
+    if (!this.hasCombineConfirmationTarget) return
+    this.combineConfirmationTarget.hidden = true
+  }
+
   hideDeleteConfirmation() {
     if (!this.hasDeleteConfirmationTarget) return
     this.deleteConfirmationTarget.hidden = true
@@ -270,6 +379,7 @@ export default class extends Controller {
     this.checkboxTargets.forEach(cb => cb.checked = false)
     this.hideBar()
     this.hideConfirmation()
+    this.hideCombineConfirmation()
     this.hideDeleteConfirmation()
   }
 

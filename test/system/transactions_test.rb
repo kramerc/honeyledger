@@ -293,6 +293,56 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "combining duplicates keeps the chosen row and moves its sources onto it" do
+    sourced = sourced_transaction("Dup sourced", 500, :transaction_one)
+    manual = manual_transaction("Dup manual", 500)
+
+    visit transactions_path
+    toggle_select(sourced)
+    toggle_select(manual)
+
+    assert_button "Combine Duplicates", disabled: false
+    assert_button "Merge into Transfer", disabled: true
+
+    click_button "Combine Duplicates"
+
+    within ".selection-confirmation:not([hidden])" do
+      find("input[name='combine_survivor'][value='#{manual.id}']").click
+      click_button "Combine"
+    end
+
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(sourced)}"
+    within "##{ActionView::RecordIdentifier.dom_id(manual)}" do
+      assert_selector ".source-badge", text: "SimpleFIN"
+    end
+  end
+
+  test "a cross-account transfer pair still merges into a transfer" do
+    bank_b = accounts(:linked_asset)
+    revenue = accounts(:revenue_account)
+    withdrawal = manual_transaction("Transfer out", 700)
+    deposit = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: bank_b,
+      amount_minor: 700, currency: currencies(:usd), description: "Transfer in",
+      transacted_at: 1.day.ago
+    )
+
+    visit transactions_path
+    toggle_select(withdrawal)
+    toggle_select(deposit)
+
+    assert_button "Merge into Transfer", disabled: false
+    assert_button "Combine Duplicates", disabled: true
+
+    click_button "Merge into Transfer"
+    within ".selection-confirmation:not([hidden])" do
+      click_button "Confirm Merge"
+    end
+
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(withdrawal)}"
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(deposit)}"
+  end
+
   private
 
   def manual_transaction(description, amount_minor)

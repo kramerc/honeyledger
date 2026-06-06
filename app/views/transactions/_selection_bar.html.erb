@@ -1,6 +1,8 @@
 <%# Selection action bar shown when one or more transactions are selected.
     Delete works on any selection; Exclude and Restore enable only when every
-    selected row is eligible; Merge enables only for a valid two-row pair. %>
+    selected row is eligible; Merge enables only for a valid two-row transfer
+    pair; Combine Duplicates enables only for two or more same-account, same-side
+    duplicates (mutually exclusive with Merge). %>
 <div class="selection-bar" data-transactions--selection-target="bar" hidden>
   <span class="selection-bar__count" data-transactions--selection-target="count"></span>
   <span class="selection-bar__message" data-transactions--selection-target="mergeMessage"></span>
@@ -10,6 +12,13 @@
           data-action="transactions--selection#showConfirmation"
           disabled>
     Merge into Transfer
+  </button>
+
+  <button type="button" class="selection-bar__btn selection-bar__btn--primary"
+          data-transactions--selection-target="combineButton"
+          data-action="transactions--selection#showCombineConfirmation"
+          disabled>
+    Combine Duplicates
   </button>
 
   <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
@@ -90,6 +99,34 @@
 
       <div class="selection-confirmation__actions">
         <button type="submit" class="selection-bar__btn selection-bar__btn--primary">Confirm Merge</button>
+        <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
+                data-action="transactions--selection#cancel">Cancel</button>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<%# Combine duplicates confirmation panel. The radio options are injected by the
+    controller from the current selection; the chosen id is written into the
+    hidden survivor_id field before submit. %>
+<div class="selection-confirmation" data-transactions--selection-target="combineConfirmation" hidden>
+  <div class="selection-confirmation__content">
+    <h3>Combine duplicate transactions</h3>
+    <p class="selection-confirmation__note">
+      Choose the transaction to keep. The others are removed and their sources are
+      kept on the one you keep. This cannot be undone.
+    </p>
+
+    <div class="selection-confirmation__options" data-transactions--selection-target="combineOptions"></div>
+
+    <%= form_with url: deduplicate_transactions_path, method: :post,
+          data: { transactions__selection_target: "combineForm",
+                  action: "turbo:submit-end->transactions--selection#cancel" } do %>
+      <input type="hidden" name="survivor_id" value="" data-transactions--selection-target="combineSurvivorId">
+
+      <div class="selection-confirmation__actions">
+        <button type="button" class="selection-bar__btn selection-bar__btn--primary"
+                data-action="transactions--selection#submitCombine">Combine</button>
         <button type="button" class="selection-bar__btn selection-bar__btn--secondary"
                 data-action="transactions--selection#cancel">Cancel</button>
       </div>

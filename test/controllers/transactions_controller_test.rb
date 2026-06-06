@@ -520,6 +520,104 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
+  test "deduplicate keeps the chosen survivor and removes the duplicate" do
+    currency = currencies(:usd)
+    bank = Account.create!(user: @user, name: "Dedupe Ctrl Bank", kind: :asset, currency: currency)
+    expense_a = Account.create!(user: @user, name: "Dedupe Ctrl Expense A", kind: :expense, currency: currency)
+    expense_b = Account.create!(user: @user, name: "Dedupe Ctrl Expense B", kind: :expense, currency: currency)
+
+    keep = Transaction.create!(user: @user, src_account: bank, dest_account: expense_a,
+                               amount_minor: 500, currency: currency, description: "Keep me",
+                               transacted_at: Time.current)
+    dup = Transaction.create!(user: @user, src_account: bank, dest_account: expense_b,
+                              amount_minor: 500, currency: currency, description: "Duplicate",
+                              transacted_at: Time.current)
+
+    assert_difference("Transaction.count", -1) do
+      post deduplicate_transactions_url, params: {
+        transaction_ids: [ keep.id, dup.id ], survivor_id: keep.id
+      }, as: :turbo_stream
+    end
+
+    assert_response :success
+    assert Transaction.exists?(keep.id)
+    assert_not Transaction.exists?(dup.id)
+  end
+
+  test "deduplicate with a survivor_id outside the selection returns error" do
+    currency = currencies(:usd)
+    bank = Account.create!(user: @user, name: "Dedupe Bad Survivor Bank", kind: :asset, currency: currency)
+    expense = Account.create!(user: @user, name: "Dedupe Bad Survivor Expense", kind: :expense, currency: currency)
+
+    a = Transaction.create!(user: @user, src_account: bank, dest_account: expense,
+                            amount_minor: 500, currency: currency, description: "A", transacted_at: Time.current)
+    b = Transaction.create!(user: @user, src_account: bank, dest_account: expense,
+                            amount_minor: 500, currency: currency, description: "B", transacted_at: Time.current)
+
+    post deduplicate_transactions_url, params: {
+      transaction_ids: [ a.id, b.id ], survivor_id: @transaction.id
+    }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
+
+  test "deduplicate with fewer than two transaction IDs returns error" do
+    post deduplicate_transactions_url, params: {
+      transaction_ids: [ @transaction.id ]
+    }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
+
+  test "deduplicate with an invalid selection returns error" do
+    currency = currencies(:usd)
+    a = Transaction.create!(user: @user, src_account: accounts(:asset_account),
+                            dest_account: accounts(:expense_account), amount_minor: 100,
+                            currency: currency, transacted_at: Time.current, description: "A")
+    b = Transaction.create!(user: @user, src_account: accounts(:asset_account),
+                            dest_account: accounts(:expense_account), amount_minor: 200,
+                            currency: currency, transacted_at: Time.current, description: "B")
+
+    post deduplicate_transactions_url, params: {
+      transaction_ids: [ a.id, b.id ]
+    }, as: :turbo_stream
+
+    assert_response :unprocessable_entity
+  end
+
+  test "deduplicate rejects another user's transactions" do
+    other_user_tx = transactions(:opening_balance_revenue)
+    post deduplicate_transactions_url, params: {
+      transaction_ids: [ other_user_tx.id, @transaction.id ]
+    }, as: :turbo_stream
+
+    assert_response :not_found
+  end
+
+  test "deduplicate broadcasts sidebar replaces for the affected accounts" do
+    currency = currencies(:usd)
+    bank = Account.create!(user: @user, name: "Dedupe Broadcast Bank", kind: :asset, currency: currency)
+    expense_a = Account.create!(user: @user, name: "Dedupe Broadcast Expense A", kind: :expense, currency: currency)
+    expense_b = Account.create!(user: @user, name: "Dedupe Broadcast Expense B", kind: :expense, currency: currency)
+
+    keep = Transaction.create!(user: @user, src_account: bank, dest_account: expense_a,
+                               amount_minor: 500, currency: currency, description: "Keep", transacted_at: Time.current)
+    dup = Transaction.create!(user: @user, src_account: bank, dest_account: expense_b,
+                              amount_minor: 500, currency: currency, description: "Dup", transacted_at: Time.current)
+
+    streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
+      post deduplicate_transactions_url, params: {
+        transaction_ids: [ keep.id, dup.id ], survivor_id: keep.id
+      }, as: :turbo_stream
+    end
+
+    targets = streams.map { |s| s["target"] }
+    # Destroying the duplicate reverses its posting, touching the bank and the
+    # duplicate's expense account. Assert the set, not a fixed count.
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(bank, :sidebar_link)
+    assert_includes targets, ActionView::RecordIdentifier.dom_id(expense_b, :sidebar_link)
+  end
+
   test "create broadcasts sidebar replaces for affected accounts" do
     assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
       post transactions_url, params: { transaction: {

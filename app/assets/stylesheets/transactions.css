@@ -720,6 +720,43 @@
   color: var(--bark-medium);
 }
 
+.selection-confirmation__options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.selection-confirmation__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--bark-medium);
+  cursor: pointer;
+}
+
+.selection-confirmation__option input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.selection-confirmation__option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.selection-confirmation__option-title {
+  color: var(--bark);
+  font-weight: 500;
+}
+
+.selection-confirmation__option-detail {
+  font-size: 0.8rem;
+  color: var(--bark-medium);
+}
+
 .selection-confirmation__actions {
   display: flex;
   gap: 8px;
