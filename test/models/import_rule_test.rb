@@ -187,5 +187,6 @@ class ImportRuleTest < ActiveSupport::TestCase
 
     assert_not ImportRule.new(match_pattern: "coffee", match_type: :exact).matches?("BLUE COFFEE BAR")
     assert_not ImportRule.new(match_pattern: "", match_type: :contains).matches?("anything")
+    assert_not ImportRule.new(match_pattern: "x", match_type: nil).matches?("x")
   end
 end

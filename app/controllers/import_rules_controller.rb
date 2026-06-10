@@ -107,8 +107,8 @@ class ImportRulesController < ApplicationController
     else
       assign_rules
       respond_to do |format|
-        format.html { redirect_to import_rules_path, notice: "#{count} #{"transaction".pluralize(count)} reassigned." }
-        format.turbo_stream { flash.now[:notice] = "#{count} #{"transaction".pluralize(count)} reassigned."; render :apply }
+        format.html { redirect_to import_rules_path, notice: "#{count} #{"transaction".pluralize(count)} updated." }
+        format.turbo_stream { flash.now[:notice] = "#{count} #{"transaction".pluralize(count)} updated."; render :apply }
       end
     end
   end
@@ -124,18 +124,23 @@ class ImportRulesController < ApplicationController
   private
 
     # When the per-rule Preview's "Apply" submitted the editor form, also re-run the saved
-    # rule over existing transactions. Returns the count reassigned, or nil if not applying.
+    # rule over existing transactions. Returns the count updated, or nil if not applying;
+    # records any apply failure in @apply_error so the notice can surface it.
     def maybe_apply_retroactively
       return nil if params[:apply_after_save].blank?
 
-      ImportRule::RetroactiveApply.new(user: current_user, rule: @import_rule).apply
+      service = ImportRule::RetroactiveApply.new(user: current_user, rule: @import_rule)
+      applied = service.apply
+      @apply_error = service.errors.first
+      applied
     end
 
     def saved_notice(verb, applied)
       return "Rule was successfully #{verb}." if applied.nil?
+      return "Rule saved, but the changes couldn’t be applied: #{@apply_error}" if @apply_error
       return "Rule saved." if applied.zero?
 
-      "Rule saved · #{applied} #{"transaction".pluralize(applied)} reassigned."
+      "Rule saved · #{applied} #{"transaction".pluralize(applied)} updated."
     end
 
     # True when the draft has unsaved edits (or is a brand-new rule) — so the Preview modal
@@ -153,10 +158,13 @@ class ImportRulesController < ApplicationController
     def build_draft_rule
       exclude = ActiveModel::Type::Boolean.new.cast(params[:exclude]) || false
       match_type = ImportRule.match_types.key?(params[:match_type].to_s) ? params[:match_type] : "contains"
+      # Resolve the account through the current user so an enumerated foreign account_id can't
+      # be referenced in the (un-validated) draft preview/apply.
+      account = params[:account_id].present? ? current_user.accounts.find_by(id: params[:account_id]) : nil
       current_user.import_rules.build(
         match_pattern: params[:pattern],
         match_type: match_type,
-        account_id: (exclude ? nil : params[:account_id].presence),
+        account: (exclude ? nil : account),
         exclude: exclude
       )
     end

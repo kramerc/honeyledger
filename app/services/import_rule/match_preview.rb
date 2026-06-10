@@ -39,11 +39,11 @@ class ImportRule::MatchPreview
     matches.count(&:would_move)
   end
 
-  # "N" or "N+" — the + is only added when the result set is truncated AND the visible window
-  # is entirely movable rows (so there may be more movable rows beyond the cap). Because
-  # movable rows are ordered first, a count below the cap is exact.
+  # "N" or "N+" — when the result set is truncated the move count is only a lower bound of the
+  # visible window (more movable rows may exist beyond the cap), so qualify it with "+". The
+  # Preview modal (RetroactiveApply, unbounded) is the authoritative count.
   def move_count_summary
-    return "#{move_count}+" if has_more? && move_count == LIMIT
+    return "#{move_count}+" if has_more?
 
     move_count.to_s
   end
@@ -117,10 +117,12 @@ class ImportRule::MatchPreview
         .distinct
     end
 
+    # TRIM the column so the preview matches ImportRule#for_description / #matches?, which
+    # strip the description before comparing (otherwise " FOO " disagrees on exact/ends_with).
     def like_clause
       case @match_type
-      when "exact" then "LOWER(transactions.description) = :pattern"
-      else "LOWER(transactions.description) LIKE :pattern ESCAPE '\\'"
+      when "exact" then "LOWER(TRIM(transactions.description)) = :pattern"
+      else "LOWER(TRIM(transactions.description)) LIKE :pattern ESCAPE '\\'"
       end
     end
 

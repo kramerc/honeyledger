@@ -178,7 +178,7 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
 
     post apply_import_rules_url
     assert_redirected_to import_rules_path
-    assert_match(/reassigned/, flash[:notice])
+    assert_match(/updated/, flash[:notice])
   end
 
   test "should redirect with alert on apply error" do
@@ -392,7 +392,7 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to import_rules_path
-    assert_match(/reassigned/, flash[:notice])
+    assert_match(/updated/, flash[:notice])
     assert_equal new_category, transaction.reload.dest_account
   end
 
@@ -413,8 +413,46 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
       apply_after_save: "1", import_rule: { match_pattern: "UPDATEAPPLY" }
     }
 
-    assert_match(/reassigned/, flash[:notice])
+    assert_match(/updated/, flash[:notice])
     assert_equal target, transaction.reload.dest_account
+  end
+
+  test "draft preview ignores another user's account_id" do
+    foreign = Account.create!(user: users(:two), currency: currencies(:eur), name: "Foreign Acct", kind: :expense)
+    bank = accounts(:linked_asset)
+    mine = Account.create!(user: @user, currency: currencies(:usd), name: "Mine Cat", kind: :expense)
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_leak",
+      amount: "-2.00", description: "LEAKTEST ITEM", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    create_sourced_transaction(
+      user: @user, src_account: bank, dest_account: mine, amount_minor: 200,
+      currency: currencies(:usd), description: "LEAKTEST ITEM", transacted_at: 1.day.ago, sourceable: source
+    )
+
+    get preview_import_rules_url, params: { pattern: "LEAKTEST", match_type: "contains", account_id: foreign.id }
+
+    assert_response :success
+    assert_no_match "Foreign Acct", @response.body
+  end
+
+  test "surfaces a failure from save-and-apply but keeps the rule saved" do
+    service_mock = Minitest::Mock.new
+    service_mock.expect(:apply, 0)
+    service_mock.expect(:errors, [ "boom" ])
+
+    assert_difference("ImportRule.count") do
+      ImportRule::RetroactiveApply.stub(:new, service_mock) do
+        post import_rules_url, params: {
+          apply_after_save: "1",
+          import_rule: { match_pattern: "ApplyErr", match_type: "contains", account_id: accounts(:expense_account).id }
+        }
+      end
+    end
+
+    assert ImportRule.exists?(user: @user, match_pattern: "ApplyErr")
+    assert_match(/couldn.t be applied: boom/, flash[:notice])
+    assert_mock service_mock
   end
 
   private

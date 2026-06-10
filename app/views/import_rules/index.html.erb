@@ -58,7 +58,7 @@
         </div>
         <div class="ir-seg" role="group" aria-label="Filter rules">
           <% [ [ "all", "All" ], [ "assign", "Assign" ], [ "exclude", "Exclude" ] ].each_with_index do |(value, label), index| %>
-            <button type="button" class="<%= "active" if index.zero? %>"
+            <button type="button" class="<%= "active" if index.zero? %>" aria-pressed="<%= index.zero? %>"
                     data-segment="<%= value %>"
                     data-import-rules--list-filter-target="segment"
                     data-action="import-rules--list-filter#selectSegment"><%= label %></button>

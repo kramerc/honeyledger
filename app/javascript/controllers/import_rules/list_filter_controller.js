@@ -19,7 +19,11 @@ export default class extends Controller {
 
   selectSegment(event) {
     this.segment = event.currentTarget.dataset.segment
-    this.segmentTargets.forEach(button => button.classList.toggle("active", button === event.currentTarget))
+    this.segmentTargets.forEach(button => {
+      const selected = button === event.currentTarget
+      button.classList.toggle("active", selected)
+      button.setAttribute("aria-pressed", selected)
+    })
     this.apply()
   }
 

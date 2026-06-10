@@ -243,7 +243,7 @@ class ImportRulesTest < ApplicationSystemTestCase
 
     # The rule is persisted (shows in the list) and the flash confirms the reassignment.
     within("#ir_list") { assert_text "APPLYSAVE" }
-    assert_text "reassigned"
+    assert_text "updated"
     assert ImportRule.exists?(user: @user, match_pattern: "APPLYSAVE")
   end
 

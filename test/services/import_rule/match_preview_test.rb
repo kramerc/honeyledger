@@ -138,6 +138,13 @@ class ImportRule::MatchPreviewTest < ActiveSupport::TestCase
     assert_equal "1 match", build(pattern: "GROCERY STORE #123", match_type: "exact").count_summary
   end
 
+  test "trims surrounding whitespace so it matches the apply path" do
+    padded = seed_transaction(description: "  WHITESPACE STORE  ", remote_id: "mp_ws")
+
+    assert_includes build(pattern: "WHITESPACE STORE", match_type: "exact").matches.map { |m| m.transaction.id }, padded.id
+    assert_includes build(pattern: "STORE", match_type: "ends_with").matches.map { |m| m.transaction.id }, padded.id
+  end
+
   private
 
     def build(pattern:, match_type: "contains", account_id: nil, exclude: false)
