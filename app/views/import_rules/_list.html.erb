@@ -1,0 +1,10 @@
+<div id="ir_list" class="ir-list">
+  <% if @import_rules.empty? %>
+    <div class="ir-list-empty">
+      <p>No rules yet.</p>
+      <p class="ir-list-empty__sub">Create your first rule to start auto-sorting imported transactions.</p>
+    </div>
+  <% else %>
+    <%= render partial: "rule_row", collection: @import_rules, as: :rule, locals: { selected_id: @selected_id } %>
+  <% end %>
+</div>

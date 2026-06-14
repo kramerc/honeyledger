@@ -1,35 +1,88 @@
 <% content_for :title, "Import Rules" %>
 
-<h1>Import Rules</h1>
+<div class="ir-wrap" data-controller="import-rules--modal">
+  <div id="ir_flash"></div>
 
-<p>Rules control how imported transactions are matched to accounts. Matching is case-insensitive.</p>
+  <div class="ir-page-head">
+    <div class="ir-page-head__titles">
+      <h1>Import Rules</h1>
+      <p class="ir-page-head__sub">Rules sort imported transactions into accounts automatically. When several rules match, the topmost wins; matching is case-insensitive.</p>
+    </div>
+    <div class="ir-page-head__actions">
+      <button type="button" class="ir-btn ir-btn--secondary ir-btn-icon"
+              data-action="import-rules--modal#open"
+              data-import-rules--modal-src-param="<%= preview_apply_import_rules_path %>">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M4 4v6h6M20 20v-6h-6" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M20 10a8 8 0 0 0-14.3-3.7L4 8M4 14a8 8 0 0 0 14.3 3.7L20 16" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Preview &amp; apply all
+      </button>
+      <%= link_to new_import_rule_path, class: "ir-btn ir-btn-icon", data: { turbo_frame: "rule_editor" } do %>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19" stroke-linecap="round" />
+          <line x1="5" y1="12" x2="19" y2="12" stroke-linecap="round" />
+        </svg>
+        New rule
+      <% end %>
+    </div>
+  </div>
 
-<table>
-  <thead>
-    <tr>
-      <th>Pattern</th>
-      <th>Match Type</th>
-      <th>Action</th>
-      <th>Priority</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% @import_rules.each do |rule| %>
-      <tr>
-        <td><%= rule.match_pattern %></td>
-        <td><%= rule.match_type.humanize %></td>
-        <td><%= rule.exclude? ? "Exclude" : "Assign to #{rule.account.name} (#{rule.account.kind})" %></td>
-        <td><%= rule.priority %></td>
-        <td>
-          <%= link_to "Preview", preview_import_rule_path(rule) %>
-          <%= link_to "Edit", edit_import_rule_path(rule) %>
-          <%= link_to "Delete", import_rule_path(rule), data: { turbo_method: :delete, turbo_confirm: "Delete this rule?" } %>
-        </td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+  <div class="ir-summary">
+    <div class="ir-summary__cell">
+      <div class="ir-summary__label">Rules</div>
+      <div class="ir-summary__value"><%= @total_count %></div>
+    </div>
+    <div class="ir-summary__cell">
+      <div class="ir-summary__label">Assign to account</div>
+      <div class="ir-summary__value"><%= @assign_count %></div>
+    </div>
+    <div class="ir-summary__cell">
+      <div class="ir-summary__label">Exclude</div>
+      <div class="ir-summary__value"><%= @exclude_count %></div>
+    </div>
+  </div>
 
-<%= link_to "New Rule", new_import_rule_path %>
-<%= link_to "Preview & Apply Rules", preview_apply_import_rules_path %>
+  <div class="ir-layout">
+    <div class="ir-list-col"
+         data-controller="import-rules--list-filter import-rules--reorder"
+         data-import-rules--reorder-url-value="<%= reorder_import_rules_path %>">
+      <div class="ir-list-toolbar">
+        <div class="ir-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
+          </svg>
+          <%= search_field_tag :ir_search, nil, placeholder: "Search patterns or accounts…",
+                autocomplete: "off",
+                data: { "import-rules--list-filter-target": "search", action: "input->import-rules--list-filter#filter" } %>
+        </div>
+        <div class="ir-seg" role="group" aria-label="Filter rules">
+          <% [ [ "all", "All" ], [ "assign", "Assign" ], [ "exclude", "Exclude" ] ].each_with_index do |(value, label), index| %>
+            <button type="button" class="<%= "active" if index.zero? %>" aria-pressed="<%= index.zero? %>"
+                    data-segment="<%= value %>"
+                    data-import-rules--list-filter-target="segment"
+                    data-action="import-rules--list-filter#selectSegment"><%= label %></button>
+          <% end %>
+        </div>
+      </div>
+
+      <div class="ir-list-meta">
+        <span class="ir-list-meta__count"><span data-import-rules--list-filter-target="count"><%= @total_count %></span> <%= "rule".pluralize(@total_count) %></span>
+        <span class="ir-list-meta__sort">top rule wins · drag to reorder</span>
+      </div>
+
+      <%= render "list" %>
+    </div>
+
+    <div class="ir-detail-col">
+      <%= turbo_frame_tag "rule_editor" do %>
+        <%= render "editor_empty" %>
+      <% end %>
+    </div>
+  </div>
+
+  <dialog class="ir-modal-dialog" data-import-rules--modal-target="dialog"
+          data-action="click->import-rules--modal#backdrop turbo:submit-end->import-rules--modal#submitEnd">
+    <%= turbo_frame_tag "preview_modal_frame", data: { "import-rules--modal-target": "frame" } %>
+  </dialog>
+</div>

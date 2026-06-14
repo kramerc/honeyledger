@@ -1,0 +1,10 @@
+<%= turbo_stream.replace "ir_list" do %>
+  <%= render "list" %>
+<% end %>
+
+<%# Keep the just-saved rule open in the editor (now in "Edit rule" mode). %>
+<%= turbo_stream.replace "rule_editor" do %>
+  <%= render "form", import_rule: @import_rule %>
+<% end %>
+
+<%= render "flash_stream" %>

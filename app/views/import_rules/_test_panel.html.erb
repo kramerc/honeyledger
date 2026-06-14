@@ -1,0 +1,43 @@
+<%# locals: preview (ImportRule::MatchPreview) %>
+<div class="ir-test">
+  <%= render "test_head", count: (preview.pattern.present? ? preview.count_summary : "—"), zero: preview.matches.empty? %>
+
+  <div class="ir-test__list">
+    <% if preview.pattern.blank? %>
+      <div class="ir-test__empty">Start typing a pattern to see what it matches.</div>
+    <% elsif preview.matches.empty? %>
+      <div class="ir-test__empty">No transactions match this pattern yet.<br>New imports matching it will be caught automatically.</div>
+    <% else %>
+      <% preview.matches.each do |match| %>
+        <% transaction = match.transaction %>
+        <div class="ir-test__row<%= " ir-test__row--excluded" if match.excluded %>">
+          <div class="ir-test__desc">
+            <%= highlight_match(transaction.description, preview.pattern, preview.match_type) %>
+            <% if !match.excluded && !preview.exclude? && match.would_move && match.current_account %>
+              <span class="ir-test__steal">· now in <%= match.current_account.name %></span>
+            <% end %>
+          </div>
+          <div class="ir-test__meta">
+            <% if match.excluded %>
+              <span class="ir-test__excluded"><span class="ir-x" aria-hidden="true">⊘</span> Excluded</span>
+            <% end %>
+            <span class="ir-test__date"><%= transaction.transacted_at&.strftime("%b %-d") %></span>
+            <span class="ir-test__amt<%= " ir-test__amt--neg" if match.direction == :expense %><%= " ir-test__amt--pos" if match.direction == :revenue %>">
+              <%= transaction_amount_with_currency(transaction) %>
+            </span>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <% if preview.pattern.present? && preview.move_count.positive? %>
+    <div class="ir-test__foot">
+      <% if preview.exclude? %>
+        <%= preview.move_count_summary %> would be excluded
+      <% else %>
+        <%= preview.move_count_summary %> would move into <%= preview.target_account&.name || "this account" %>
+      <% end %>
+    </div>
+  <% end %>
+</div>

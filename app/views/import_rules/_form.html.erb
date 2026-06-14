@@ -1,50 +1,96 @@
-<%= form_with(model: import_rule) do |form| %>
-  <% if import_rule.errors.any? %>
-    <div id="error_explanation">
-      <h2><%= pluralize(import_rule.errors.count, "error") %> prohibited this rule from being saved:</h2>
-      <ul>
-        <% import_rule.errors.full_messages.each do |message| %>
-          <li><%= message %></li>
+<%= turbo_frame_tag "rule_editor" do %>
+  <div class="ir-detail">
+    <div class="ir-detail__head">
+      <span class="ir-detail__title"><%= import_rule.persisted? ? "Edit rule" : "New rule" %></span>
+      <%= link_to "✕", import_rules_path, class: "ir-detail__close", aria: { label: "Close editor" }, data: { turbo_frame: "rule_editor" } %>
+    </div>
+
+    <div class="ir-detail__body">
+      <%= form_with model: import_rule,
+            data: {
+              controller: "import-rules--action import-rules--live-test",
+              action: "input->import-rules--live-test#update change->import-rules--live-test#update",
+              "import-rules--live-test-url-value": match_preview_import_rules_path,
+              "import-rules--live-test-preview-url-value": preview_import_rules_path,
+              "import-rules--live-test-rule-id-value": import_rule.id
+            } do |form| %>
+
+        <% if import_rule.errors.any? %>
+          <div class="ir-form-errors">
+            <strong><%= pluralize(import_rule.errors.count, "error") %> prohibited this rule from being saved:</strong>
+            <ul>
+              <% import_rule.errors.full_messages.each do |message| %>
+                <li><%= message %></li>
+              <% end %>
+            </ul>
+          </div>
         <% end %>
-      </ul>
+
+        <div class="ir-field">
+          <%= form.label :match_pattern, class: "ir-field__label" do %>
+            Pattern <span class="ir-field__hint">case-insensitive</span>
+          <% end %>
+          <%= form.text_field :match_pattern, required: true, class: "ir-pattern-input", placeholder: "e.g. WHOLEFDS" %>
+        </div>
+
+        <div class="ir-field">
+          <div class="ir-field__label">Match when description…</div>
+          <div class="ir-mtseg">
+            <% ImportRule.match_types.keys.each do |match_type| %>
+              <%= form.radio_button :match_type, match_type, class: "ir-mtseg__input" %>
+              <%= form.label :match_type, match_type_short_label(match_type), value: match_type, class: "ir-mtseg__label" %>
+            <% end %>
+          </div>
+        </div>
+
+        <div class="ir-field">
+          <div class="ir-field__label">Then</div>
+          <div class="ir-action-toggle">
+            <%= form.radio_button :exclude, false, class: "ir-action-toggle__input",
+                  data: { "import-rules--action-target": "radio", action: "change->import-rules--action#toggle" } %>
+            <%= form.label :exclude, "Assign to account", value: false, class: "ir-action-toggle__btn" %>
+            <%= form.radio_button :exclude, true, class: "ir-action-toggle__input",
+                  data: { "import-rules--action-target": "radio", action: "change->import-rules--action#toggle" } %>
+            <%= form.label :exclude, "⊘ Exclude", value: true, class: "ir-action-toggle__btn" %>
+          </div>
+
+          <div class="ir-account-field" data-import-rules--action-target="accountField">
+            <%= form.label :account_id, "Account", class: "ir-field__label" %>
+            <%= form.select :account_id,
+                  grouped_account_options_for_select(current_user.accounts.real.order(:kind, :name), Account.kinds.keys, selected_key: import_rule.account_id),
+                  { include_blank: "Select an account…" },
+                  class: "ir-select", data: { "import-rules--action-target": "account" } %>
+          </div>
+
+          <div class="ir-exclude-note" data-import-rules--action-target="note" hidden>
+            Matching transactions are kept out of balances and reports — useful for internal transfers, credit-card payments, and reimbursements.
+          </div>
+        </div>
+
+        <div class="ir-section-label">Live preview</div>
+        <%# Preloaded server-side so editing an existing rule shows its matches immediately. %>
+        <%= turbo_frame_tag "ir_match_preview", class: "ir-test-frame", data: { "import-rules--live-test-target": "frame" } do %>
+          <%= render "test_panel", preview: import_rule_live_preview(import_rule) %>
+        <% end %>
+
+        <div class="ir-editor-foot">
+          <%= form.submit (import_rule.persisted? ? "Save changes" : "Create rule"), class: "ir-btn" %>
+          <%# Previews the current draft (live-test keeps the modal URL in sync with edits). %>
+          <button type="button" class="ir-btn ir-btn--secondary"
+                  data-import-rules--live-test-target="previewButton"
+                  data-action="import-rules--modal#open"
+                  data-import-rules--modal-src-param="<%= preview_import_rules_path(pattern: import_rule.match_pattern, match_type: import_rule.match_type, account_id: import_rule.account_id, exclude: import_rule.exclude, id: import_rule.id) %>">Preview</button>
+          <span class="ir-spacer"></span>
+          <% if import_rule.persisted? %>
+            <%# A link (not button_to) so it stays valid markup inside the editor's own form. %>
+            <%= link_to "Delete", import_rule_path(import_rule),
+                  class: "ir-btn ir-btn--secondary ir-btn--danger",
+                  data: { turbo_method: :delete, turbo_confirm: "Delete this rule?" } %>
+          <% else %>
+            <%= link_to "Cancel", import_rules_path, class: "ir-btn ir-btn--secondary", data: { turbo_frame: "rule_editor" } %>
+          <% end %>
+        </div>
+      <% end %>
     </div>
-  <% end %>
-
-  <div>
-    <%= form.label :match_pattern, "Pattern", style: "display: block" %>
-    <%= form.text_field :match_pattern, required: true %>
-    <br><small>Matching is case-insensitive.</small>
-  </div>
-
-  <div>
-    <%= form.label :match_type, "Match Type", style: "display: block" %>
-    <%= form.select :match_type, ImportRule.match_types.keys.map { |t| [ t.humanize, t ] } %>
-  </div>
-
-  <div data-controller="toggle-field">
-    <div style="margin-top: 0.5em">
-      <label for="<%= form.field_id(:exclude) %>">
-        <%= form.check_box :exclude, id: form.field_id(:exclude), data: { toggle_field_target: "checkbox", action: "change->toggle-field#toggle" } %>
-        Exclude matching transactions from calculations instead of assigning them to an account.
-      </label>
-    </div>
-
-    <div>
-      <%= form.label :account_id, "Account", style: "display: block" %>
-      <%= form.select :account_id,
-        grouped_account_options_for_select(current_user.accounts.real.order(:kind, :name), Account.kinds.keys, selected_key: import_rule.account_id),
-        { include_blank: "Select an account..." },
-        data: { toggle_field_target: "field" } %>
-    </div>
-  </div>
-
-  <div>
-    <%= form.label :priority, style: "display: block" %>
-    <%= form.number_field :priority, value: import_rule.priority || 0 %>
-    <br><small>Higher priority rules are checked first when multiple rules match.</small>
-  </div>
-
-  <div>
-    <%= form.submit %>
   </div>
 <% end %>

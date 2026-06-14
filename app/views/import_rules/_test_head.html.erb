@@ -1,0 +1,10 @@
+<%# locals: count (String, e.g. "2 matches" or "—"), zero (Boolean) %>
+<div class="ir-test__head">
+  <span class="ir-test__title">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
+    </svg>
+    Live matches in your ledger
+  </span>
+  <span class="ir-test__count<%= " ir-test__count--zero" if zero %>"><%= count %></span>
+</div>

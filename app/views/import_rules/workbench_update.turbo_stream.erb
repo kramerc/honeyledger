@@ -1,0 +1,11 @@
+<%= turbo_stream.replace "ir_list" do %>
+  <%= render "list" %>
+<% end %>
+
+<%= turbo_stream.replace "rule_editor" do %>
+  <%= turbo_frame_tag "rule_editor" do %>
+    <%= render "editor_empty" %>
+  <% end %>
+<% end %>
+
+<%= render "flash_stream" %>
