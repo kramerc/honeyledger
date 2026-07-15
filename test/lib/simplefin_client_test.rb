@@ -78,4 +78,34 @@ class SimplefinClientTest < ActiveSupport::TestCase
       assert_equal 2, opts[:query][:version]
     end
   end
+
+  test "accounts omits pending when not requested" do
+    client = SimplefinClient.new(username: "user", password: "pass")
+
+    called_with = nil
+    stub_get = ->(*args) { called_with = args; { "accounts" => [] } }
+
+    SimplefinClient.stub :get, stub_get do
+      client.accounts(start_date: 1000)
+      # The SimpleFIN bridge presence-checks `pending`, so sending pending=0 opts
+      # us into pending transactions. Omitting the key is what yields the default.
+      assert_not called_with[1][:query].key?(:pending)
+    end
+  end
+
+  test "accounts omits balances-only when not requested" do
+    client = SimplefinClient.new(username: "user", password: "pass")
+
+    called_with = nil
+    stub_get = ->(*args) { called_with = args; { "accounts" => [] } }
+
+    SimplefinClient.stub :get, stub_get do
+      client.accounts(start_date: 1000)
+      query = called_with[1][:query]
+      assert_not query.key?(:"balances-only")
+      # Guard against an over-eager compact dropping legitimate params.
+      assert_equal 1000, query[:"start-date"]
+      assert_equal 2, query[:version]
+    end
+  end
 end
