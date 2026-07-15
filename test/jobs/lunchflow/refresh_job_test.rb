@@ -351,7 +351,7 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     def mock_client.include_pending_calls = @include_pending_calls ||= []
 
     def mock_client.transactions(account_id, include_pending: false)
-      (@include_pending_calls ||= []) << include_pending
+      include_pending_calls << include_pending
       []
     end
 

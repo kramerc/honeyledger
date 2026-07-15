@@ -56,7 +56,7 @@ class Lunchflow::RefreshJob < ApplicationJob
 
       api_transactions = client.transactions(api_account["id"])
       api_transactions.each do |api_txn|
-        # Skip pending transactions with no ID (can't upsert without identifier)
+        # Skip transactions with no ID (can't upsert without identifier)
         next if api_txn["id"].nil?
 
         lf_transaction = Lunchflow::Transaction.find_or_initialize_by(
