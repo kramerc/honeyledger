@@ -336,4 +336,31 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     assert_nil @lunchflow_connection.error
     assert_not_nil @lunchflow_connection.refreshed_at
   end
+
+  test "does not request pending transactions from the API" do
+    mock_client = Minitest::Mock.new
+
+    def mock_client.accounts
+      [ { "id" => 501, "name" => "Checking", "currency" => "USD", "status" => "ACTIVE" } ]
+    end
+
+    def mock_client.balance(account_id)
+      { "amount" => 100.0, "currency" => "USD" }
+    end
+
+    def mock_client.include_pending_calls = @include_pending_calls ||= []
+
+    def mock_client.transactions(account_id, include_pending: false)
+      (@include_pending_calls ||= []) << include_pending
+      []
+    end
+
+    LunchflowClient.stub :new, mock_client do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+
+    # Pending transactions are excluded from the ledger for now; the refresh must
+    # not opt into them via include_pending.
+    assert_equal [ false ], mock_client.include_pending_calls
+  end
 end

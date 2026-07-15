@@ -36,6 +36,23 @@ class LunchflowClientTest < ActiveSupport::TestCase
     end
   end
 
+  test "transactions defaults include_pending to false" do
+    client = LunchflowClient.new(api_key: "test_key")
+
+    called_with = nil
+    response = { "transactions" => [] }
+    stub_get = ->(*args) { called_with = args; response }
+
+    response.define_singleton_method(:code) { 200 }
+
+    LunchflowClient.stub :get, stub_get do
+      client.transactions(42)
+      # The Lunch Flow API value-checks the flag, so include_pending=false
+      # correctly excludes pending transactions (verified against the live API).
+      assert_equal false, called_with[1][:query][:include_pending]
+    end
+  end
+
   test "balance fetches for specific account" do
     client = LunchflowClient.new(api_key: "test_key")
 
