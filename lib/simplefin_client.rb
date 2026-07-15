@@ -29,9 +29,9 @@ class SimplefinClient
     self.class.get("/accounts", basic_auth: @auth, query: {
       'start-date': start_date,
       'end-date': end_date,
-      pending: pending ? 1 : 0,
+      pending: (1 if pending),
       account: account,
-      'balances-only': balances_only ? 1 : 0,
+      'balances-only': (1 if balances_only),
       version: 2
     }.compact)
   end
