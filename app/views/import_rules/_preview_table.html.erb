@@ -1,42 +1,30 @@
-<% has_reassigns = changes.any? { |c| c.action != :exclude } %>
-<table>
-  <thead>
-    <tr>
-      <th>Description</th>
-      <th>Date</th>
-      <th>Amount</th>
-      <% if has_reassigns %>
-        <th>Current Account</th>
-        <th></th>
-        <th>New Account</th>
-      <% else %>
-        <th>Action</th>
-      <% end %>
-    </tr>
-  </thead>
-  <tbody>
-    <% changes.each do |change| %>
-      <tr>
-        <td><%= change.transaction.description %></td>
-        <td><%= change.transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
-        <td class="numeric"><%= transaction_amount_with_currency(change.transaction) %></td>
-        <% if has_reassigns %>
-          <td><%= change.old_account.name %> (<%= change.old_account.kind %>)</td>
-          <td>&rarr;</td>
-          <td>
-            <% if change.action == :exclude %>
-              <em>Exclude</em>
-            <% else %>
-              <%= change.new_account.name %> (<%= change.new_account.kind %>)
-              <% if change.merge_candidate %>
-                <br><small>Will merge with: <%= change.merge_candidate.description %> (<%= change.merge_candidate.transacted_at&.strftime("%Y-%m-%d") %>, <%= transaction_amount_with_currency(change.merge_candidate) %>)</small>
-              <% end %>
-            <% end %>
-          </td>
-        <% else %>
-          <td><em>Exclude</em></td>
-        <% end %>
-      </tr>
+<%# locals: changes (array of ImportRule::TransactionScope::Change) %>
+<% reassigns = changes.reject { |change| change.action == :exclude } %>
+<% excludes = changes.select { |change| change.action == :exclude } %>
+<% duplicate_count = reassigns.count { |change| change.merge_candidate } %>
+
+<% if reassigns.any? %>
+  <div class="ir-change-group">
+    <div class="ir-change-group__head">
+      <span class="ir-change-group__title">Reassign to a different account</span>
+      <span class="ir-change-group__count">
+        <%= pluralize(reassigns.size, "transaction") %><%= " · #{pluralize(duplicate_count, "possible duplicate")}" if duplicate_count.positive? %>
+      </span>
+    </div>
+    <% reassigns.each do |change| %>
+      <%= render "change_row", change: change %>
     <% end %>
-  </tbody>
-</table>
+  </div>
+<% end %>
+
+<% if excludes.any? %>
+  <div class="ir-change-group">
+    <div class="ir-change-group__head">
+      <span class="ir-change-group__title">Exclude from balances</span>
+      <span class="ir-change-group__count"><%= pluralize(excludes.size, "transaction") %></span>
+    </div>
+    <% excludes.each do |change| %>
+      <%= render "change_row", change: change %>
+    <% end %>
+  </div>
+<% end %>

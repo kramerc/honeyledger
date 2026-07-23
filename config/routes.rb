@@ -18,8 +18,8 @@ Rails.application.routes.draw do
     collection do
       get :preview_apply
       post :apply
-    end
-    member do
+      post :reorder
+      get :match_preview
       get :preview
     end
   end

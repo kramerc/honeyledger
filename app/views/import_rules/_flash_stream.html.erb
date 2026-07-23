@@ -1,0 +1,4 @@
+<%= turbo_stream.update "ir_flash" do %>
+  <% if flash[:notice].present? %><%= render "flash", kind: "notice", message: flash[:notice] %><% end %>
+  <% if flash[:alert].present? %><%= render "flash", kind: "alert", message: flash[:alert] %><% end %>
+<% end %>

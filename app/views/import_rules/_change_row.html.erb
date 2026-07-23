@@ -1,0 +1,22 @@
+<%# locals: change (ImportRule::TransactionScope::Change) %>
+<div class="ir-change">
+  <div class="ir-change__main">
+    <div class="ir-change__desc"><%= change.transaction.description %></div>
+    <div class="ir-change__sub">
+      <span><%= change.transaction.transacted_at&.strftime("%b %-d, %Y") %></span>
+      <span class="ir-change__amt"><%= transaction_amount_with_currency(change.transaction) %></span>
+      <% if change.merge_candidate %>
+        <span class="ir-merge-flag" title="Possible duplicate of &quot;<%= change.merge_candidate.description %>&quot; on <%= change.merge_candidate.transacted_at&.strftime("%b %-d, %Y") %>">likely duplicate</span>
+      <% end %>
+    </div>
+  </div>
+  <div class="ir-change__move">
+    <span class="ir-change__from"><%= change.old_account.name %></span>
+    <span class="ir-change__arrow" aria-hidden="true">→</span>
+    <% if change.action == :exclude %>
+      <%= render "account_chip", account: nil, exclude: true %>
+    <% else %>
+      <%= render "account_chip", account: change.new_account, exclude: false %>
+    <% end %>
+  </div>
+</div>
