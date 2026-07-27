@@ -5,6 +5,12 @@ class Transaction::Reconcile
   # rule, #117). Start at 3 and tune later (#158).
   RECONCILE_TRANSACTED_AT_WINDOW_DAYS = 3
 
+  # How many candidates each query fetches before the tie-break (#197). The old limit(2) only had to
+  # answer "is there more than one?"; picking the nearest means seeing the whole set. Hitting the cap
+  # abstains: at that much ambiguity we cannot be sure the true nearest was even fetched, and
+  # abstaining is the conservative answer either way.
+  RECONCILE_TIE_BREAK_CANDIDATE_LIMIT = 10
+
   # Aggregators mask embedded digit runs differently, and masking happens mid-string, so
   # neither description is a prefix of the other and the raw prefix match fails on rows that
   # describe the same event (#221). Collapsing digit-or-X runs to a common token on both sides
@@ -60,20 +66,60 @@ class Transaction::Reconcile
   def call
     return nil if @description.blank?
 
-    # Abstain immediately if the live orphans alone are already ambiguous.
-    live_candidates = candidate_query.limit(2).to_a
-    return nil if live_candidates.size >= 2
+    live_candidates = fetch_candidates(candidate_query)
+    merged_candidates = fetch_candidates(merged_candidate_query)
+    return nil if live_candidates.size >= RECONCILE_TIE_BREAK_CANDIDATE_LIMIT ||
+      merged_candidates.size >= RECONCILE_TIE_BREAK_CANDIDATE_LIMIT
 
     # The first aggregator's side may have been auto-merged into a transfer (zeroed,
     # merged_into set), which the live query can't see because it matches on
-    # amount_minor. Consider live and merged candidates together so that a live +
-    # merged collision within the widened window is treated as ambiguous rather than
-    # silently attaching to the live row and hiding the merged event (#158).
-    candidates = live_candidates + merged_candidate_query.limit(2).to_a
-    candidates.size == 1 ? candidates.first : nil
+    # amount_minor. A live + merged collision within the widened window stays ambiguous
+    # rather than silently attaching to the live row and hiding the merged event (#158).
+    #
+    # Deliberately carved out of the #197 tie-break rather than overlooked by it. Date
+    # proximity could rank these two against each other, but #158 abstained on the shape
+    # itself, not merely on the count, and hiding a merged event is a different kind of
+    # damage from attaching to the wrong one of two equals. Revisit as its own decision.
+    return nil if live_candidates.any? && merged_candidates.any?
+
+    candidates = live_candidates.presence || merged_candidates
+    return nil if candidates.empty?
+    return candidates.first if candidates.size == 1
+
+    nearest_candidate(candidates)
   end
 
   private
+
+    # transaction_sources is preloaded because nearest_candidate inspects it per candidate; the set
+    # is capped either way, but this keeps it to one extra query instead of one per row.
+    def fetch_candidates(query)
+      query.includes(:transaction_sources).limit(RECONCILE_TIE_BREAK_CANDIDATE_LIMIT).to_a
+    end
+
+    # Several candidates matched amount, currency, direction, description and the window, so the
+    # only signal left is date proximity. Take the candidate that is *strictly* nearest; anything
+    # equidistant keeps abstaining, which is the pre-#197 behaviour for the whole set (#197).
+    def nearest_candidate(candidates)
+      # A manual entry is same-day by construction (manual_entry_clause), so it would win every
+      # tie-break it took part in. Adopting a hand-entered row on date proximity alone is a call
+      # for a human to confirm, not for the importer to make silently — those pairs belong in the
+      # suggestion surface (#223), so any manual candidate in the running abstains the whole set.
+      # A lone manual candidate never reaches here and is still adopted as before (#117).
+      return nil if candidates.any? { |candidate| candidate.transaction_sources.empty? }
+
+      nearest = candidates.group_by { |candidate| day_distance(candidate) }.min_by(&:first).last
+      nearest.size == 1 ? nearest.first : nil
+    end
+
+    # Calendar days, not raw timestamps. Aggregators disagree on time-of-day precision — Lunch Flow
+    # stores a DATE (so its ledger rows sit at midnight) while SimpleFIN carries a real posted time —
+    # so an incoming afternoon row measures *closer* to the next midnight than to its own day's, and
+    # timestamp distance would systematically pick the wrong day. Day distance also keeps a same-day
+    # cluster equidistant, which is the ambiguity the count-based rule already declined to resolve.
+    def day_distance(candidate)
+      (candidate.transacted_at.to_date - @transacted_at.to_date).to_i.abs
+    end
 
     def candidate_query
       # Direction-aware: an incoming charge (ledger on src) must only match a
