@@ -28,6 +28,18 @@ class Transaction::Reconcile
   MASKED_RUN_PATTERN = "[0-9x]{2,}"
   MASKED_RUN_PLACEHOLDER = "~"
 
+  # Collapsing digit runs is only safe when one of the two descriptions is actually redacted.
+  # Two unmasked rows whose digits genuinely differ — an account number ending 01-234123-4
+  # against one ending 99-887766-4 — normalize to the same string, and with a single candidate
+  # in play the two-candidate ambiguity guard cannot catch it: the incoming source would attach
+  # to the wrong ledger event. Requiring mask evidence on at least one side keeps the
+  # masked-against-unmasked case working and leaves digits that both feeds report verbatim to
+  # the raw comparison, where a differing digit still separates them.
+  #
+  # Any run of two or more X's contains "xx", so a substring test is equivalent to the run
+  # pattern and needs no regex operator on the column.
+  MASK_EVIDENCE = "xx"
+
   def self.call(**kwargs)
     new(**kwargs).call
   end
@@ -288,6 +300,10 @@ class Transaction::Reconcile
     # a blank stored description would be adopted under any nonblank importing one. Normalizing
     # cannot introduce a new blank — a nonblank input always yields a nonblank output, since a
     # collapsed run is replaced by a character rather than removed.
+    #
+    # Gated on MASK_EVIDENCE: the whole comparison only applies when one of the two sides is
+    # actually redacted. When the incoming value carries the mask the gate is satisfied in Ruby
+    # and no column predicate is emitted at all.
     def normalized_prefix_match(column, value)
       column_normalized = normalized(lower_col(column))
       value_normalized = normalized(lower_quoted(value))
@@ -297,7 +313,14 @@ class Transaction::Reconcile
       value_starts_with_column = length_function(column_normalized).gt(0)
         .and(left_function(value_normalized, length_function(column_normalized)).eq(column_normalized))
 
-      column_starts_with_value.or(value_starts_with_column)
+      match = column_starts_with_value.or(value_starts_with_column)
+      return match if value.downcase.include?(MASK_EVIDENCE)
+
+      column_is_masked(column).and(match)
+    end
+
+    def column_is_masked(column)
+      lower_col(column).matches("%#{MASK_EVIDENCE}%")
     end
 
     # The pattern is a constant and the value side is a quoted string literal, never a pattern,

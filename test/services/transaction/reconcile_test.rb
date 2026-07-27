@@ -1123,6 +1123,25 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     assert_nil candidate
   end
 
+  test "does not normalize when neither description is masked (#221)" do
+    # The ambiguity guard cannot help here: there is exactly one candidate, so an unguarded
+    # normalization would collapse two genuinely distinct account numbers to the same string
+    # and attach the incoming source to the wrong ledger event. Both sides report their digits
+    # verbatim, so there is no mask to bridge and the raw comparison must have the last word.
+    create_masked_orphan(remote_id: "unmasked_digits", description: "TRANSFER TO SAVINGS VS. A01-234123-4 (Cash)")
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "TRANSFER TO SAVINGS VS. A99-887766-4 (Cash)"
+    )
+
+    assert_nil candidate
+  end
+
   test "manual-entry orphans are not reached by masked-digit normalization (#221)" do
     # #117: a manual placeholder keeps its exact-description rule, so it cannot be scooped
     # up by an aggregator row that differs only in an account number.
@@ -1255,9 +1274,13 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
   private
 
     def create_masked_orphan(remote_id:, description:, amount_minor: 5000, transacted_at: 2.days.ago)
+      # Derive the aggregator amount from amount_minor rather than hard-coding it, so a caller
+      # that varies amount_minor cannot silently create a source/ledger amount mismatch.
+      source_amount = -(amount_minor.to_d / 10**@currency.decimal_places)
+
       stale_simplefin_transaction = Simplefin::Transaction.create!(
         account: @stale_simplefin_account, remote_id: remote_id,
-        amount: "-50.00", description: description,
+        amount: source_amount.to_s("F"), description: description,
         transacted_at: transacted_at, posted: transacted_at
       )
 
