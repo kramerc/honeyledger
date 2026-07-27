@@ -1070,7 +1070,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     orphan_description = "TRANSFER FROM LINKED ACCOUNT VS. AXX-XXX123-4 (Cash)"
     importing_description = "TRANSFER FROM LINKED ACCOUNT VS. A01-234123-4 (Cash)"
 
-    orphan = create_masked_orphan(remote_id: "masked_account", description: orphan_description)
+    orphan = create_aggregator_orphan(remote_id: "masked_account", description: orphan_description)
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1087,7 +1087,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
   end
 
   test "adopts a stale orphan whose description masks an embedded date (#221)" do
-    orphan = create_masked_orphan(
+    orphan = create_aggregator_orphan(
       remote_id: "masked_date",
       description: "PAYMENT TO LENDER as of XXXX-07-03 (Cash)"
     )
@@ -1108,8 +1108,8 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     # The over-normalization failure mode: collapsing digit runs makes two genuinely
     # distinct transfers look alike. Reconcile must abstain and leave a duplicate rather
     # than attach the incoming row to an arbitrary one of them.
-    create_masked_orphan(remote_id: "masked_amb_a", description: "TRANSFER TO SAVINGS VS. A01-234123-4 (Cash)")
-    create_masked_orphan(remote_id: "masked_amb_b", description: "TRANSFER TO SAVINGS VS. A99-887766-4 (Cash)")
+    create_aggregator_orphan(remote_id: "masked_amb_a", description: "TRANSFER TO SAVINGS VS. A01-234123-4 (Cash)")
+    create_aggregator_orphan(remote_id: "masked_amb_b", description: "TRANSFER TO SAVINGS VS. A99-887766-4 (Cash)")
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1128,7 +1128,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     # normalization would collapse two genuinely distinct account numbers to the same string
     # and attach the incoming source to the wrong ledger event. Both sides report their digits
     # verbatim, so there is no mask to bridge and the raw comparison must have the last word.
-    create_masked_orphan(remote_id: "unmasked_digits", description: "TRANSFER TO SAVINGS VS. A01-234123-4 (Cash)")
+    create_aggregator_orphan(remote_id: "unmasked_digits", description: "TRANSFER TO SAVINGS VS. A01-234123-4 (Cash)")
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1166,7 +1166,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
 
   test "does not normalize away a single differing digit (#221)" do
     # Runs of one are left alone, so a lone digit still distinguishes two descriptions.
-    create_masked_orphan(remote_id: "single_digit", description: "PAYMENT 1")
+    create_aggregator_orphan(remote_id: "single_digit", description: "PAYMENT 1")
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1185,7 +1185,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     # "vendor charge 1" against "vendor charge ~ extra detail", which is not a prefix.
     # Only the raw branch reaches this row — it would regress if normalization replaced
     # the prefix match instead of being OR'd onto it.
-    orphan = create_masked_orphan(remote_id: "truncated_run", description: "VENDOR CHARGE 1")
+    orphan = create_aggregator_orphan(remote_id: "truncated_run", description: "VENDOR CHARGE 1")
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1203,7 +1203,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     # `#` is a store-number marker in real feeds, not a redaction glyph, so it stays
     # outside the maskable class — and it is not the placeholder either, which is what
     # keeps "STORE #12" from normalizing onto "STORE 12".
-    create_masked_orphan(remote_id: "literal_hash", description: "STORE #12 PURCHASE")
+    create_aggregator_orphan(remote_id: "literal_hash", description: "STORE #12 PURCHASE")
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1220,7 +1220,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
   test "treats regex metacharacters in the importing description literally (#221)" do
     # If the importing value were ever interpolated into the normalization pattern, this
     # shape would match the stored description as a regex. It must compare as literal text.
-    create_masked_orphan(remote_id: "regex_metachar", description: "PROMO BIG SALE")
+    create_aggregator_orphan(remote_id: "regex_metachar", description: "PROMO BIG SALE")
 
     candidate = Transaction::Reconcile.call(
       ledger_account: @ledger_account,
@@ -1271,9 +1271,228 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     assert_equal head.id, candidate.merged_into_id
   end
 
+  test "adopts the strictly nearest candidate when several match (#197)" do
+    incoming_day = Time.zone.parse("2026-04-15 12:00:00")
+    description = "RECURRING VENDOR CHARGE"
+
+    nearest = create_aggregator_orphan(
+      remote_id: "tiebreak_near", description: description, transacted_at: incoming_day - 1.day
+    )
+    create_aggregator_orphan(
+      remote_id: "tiebreak_far", description: description, transacted_at: incoming_day - 3.days
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: description
+    )
+
+    assert_equal nearest, candidate
+  end
+
+  test "abstains when two candidates are equidistant (#197)" do
+    incoming_day = Time.zone.parse("2026-04-15 12:00:00")
+    description = "RECURRING VENDOR CHARGE"
+
+    create_aggregator_orphan(
+      remote_id: "equi_before", description: description, transacted_at: incoming_day - 1.day
+    )
+    create_aggregator_orphan(
+      remote_id: "equi_after", description: description, transacted_at: incoming_day + 1.day
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: description
+    )
+
+    assert_nil candidate
+  end
+
+  test "measures distance in calendar days rather than raw timestamps (#197)" do
+    # Lunch Flow stores a DATE, so its ledger rows sit at midnight, while an incoming SimpleFIN
+    # row carries a real posted time. An afternoon incoming row is fewer *hours* from the next
+    # day's midnight than from its own day's, so timestamp distance would pick the wrong day.
+    incoming_day = Time.zone.parse("2026-04-15 14:00:00")
+
+    same_day = create_aggregator_orphan(
+      remote_id: "granularity_same_day", description: "RECURRING VENDOR CHARGE",
+      transacted_at: Time.zone.parse("2026-04-15 00:00:00")
+    )
+    create_aggregator_orphan(
+      remote_id: "granularity_next_day", description: "RECURRING VENDOR CHARGE",
+      transacted_at: Time.zone.parse("2026-04-16 00:00:00")
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: "RECURRING VENDOR CHARGE"
+    )
+
+    assert_equal same_day, candidate
+  end
+
+  test "abstains for a same-day cluster at differing times (#197)" do
+    # Same calendar day means equidistant, so the cluster stays as ambiguous as it was before
+    # the tie-break existed.
+    incoming_day = Time.zone.parse("2026-04-15 12:00:00")
+
+    create_aggregator_orphan(
+      remote_id: "cluster_early", description: "RECURRING VENDOR CHARGE",
+      transacted_at: Time.zone.parse("2026-04-15 01:00:00")
+    )
+    create_aggregator_orphan(
+      remote_id: "cluster_late", description: "RECURRING VENDOR CHARGE",
+      transacted_at: Time.zone.parse("2026-04-15 05:00:00")
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: "RECURRING VENDOR CHARGE"
+    )
+
+    assert_nil candidate
+  end
+
+  test "abstains when a manual entry is in the running, even as the nearest (#197)" do
+    # Adopting a hand-entered row on date proximity alone is a call for a human to confirm, so
+    # the pair goes to the suggestion surface (#223) rather than being attached here.
+    incoming_day = Time.zone.parse("2026-04-15 12:00:00")
+    description = "RECURRING VENDOR CHARGE"
+
+    Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 5000, currency: @currency, description: description,
+      transacted_at: incoming_day
+    )
+    create_aggregator_orphan(
+      remote_id: "manual_competitor", description: description, transacted_at: incoming_day + 2.days
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: description
+    )
+
+    assert_nil candidate
+  end
+
+  test "abstains when a live orphan and a merged original sit at different distances (#158/#197)" do
+    # The #158 carve-out: date proximity must not resolve this shape, because hiding a merged
+    # event is a different kind of damage from picking the wrong one of two equals. The existing
+    # #158 test is equidistant and so cannot detect a regression here.
+    bank_b = accounts(:asset_account)
+    incoming_day = Time.zone.parse("2026-04-15 12:00:00")
+    description = "RECURRING VENDOR CHARGE"
+
+    create_aggregator_orphan(
+      remote_id: "distance_live", description: description, transacted_at: incoming_day
+    )
+
+    merged_day = incoming_day + 2.days
+    original = create_aggregator_orphan(
+      remote_id: "distance_merged", description: description, transacted_at: merged_day
+    )
+    counterpart_side = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account), dest_account: bank_b,
+      amount_minor: 5000, currency: @currency, description: description,
+      transacted_at: merged_day
+    )
+    assert Transaction::Merge.new(original, counterpart_side, user: @user).call
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: description
+    )
+
+    assert_nil candidate
+  end
+
+  test "abstains when the candidate set fills the tie-break fetch limit (#197)" do
+    # One candidate is uniquely nearest, so without the cap guard the tie-break would attach.
+    # At this much ambiguity we cannot be sure the true nearest was even fetched.
+    incoming_day = Time.zone.parse("2026-04-15 12:00:00")
+    description = "RECURRING VENDOR CHARGE"
+
+    create_aggregator_orphan(
+      remote_id: "cap_nearest", description: description, transacted_at: incoming_day
+    )
+    (Transaction::Reconcile::RECONCILE_TIE_BREAK_CANDIDATE_LIMIT - 1).times do |index|
+      create_aggregator_orphan(
+        remote_id: "cap_filler_#{index}", description: description,
+        transacted_at: incoming_day + 2.days
+      )
+    end
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: incoming_day,
+      description: description
+    )
+
+    assert_nil candidate
+  end
+
+  test "pairs each of two incoming rows with its own same-day candidate (#197)" do
+    # The shape observed on a live account: two equal-amount charges on consecutive days, each
+    # reported by both aggregators. Counting candidates abstains on both; proximity resolves a
+    # clean 1:1 pairing.
+    first_day = Time.zone.parse("2026-04-15 12:00:00")
+    second_day = first_day + 1.day
+    description = "RECURRING VENDOR CHARGE"
+
+    first_orphan = create_aggregator_orphan(
+      remote_id: "pairing_first", description: description, transacted_at: first_day
+    )
+    second_orphan = create_aggregator_orphan(
+      remote_id: "pairing_second", description: description, transacted_at: second_day
+    )
+
+    reconcile_on = ->(day) do
+      Transaction::Reconcile.call(
+        ledger_account: @ledger_account,
+        ledger_side: :src,
+        amount_minor: 5000,
+        currency_id: @currency.id,
+        transacted_at: day,
+        description: description
+      )
+    end
+
+    assert_equal first_orphan, reconcile_on.call(first_day)
+    assert_equal second_orphan, reconcile_on.call(second_day)
+  end
+
   private
 
-    def create_masked_orphan(remote_id:, description:, amount_minor: 5000, transacted_at: 2.days.ago)
+    def create_aggregator_orphan(remote_id:, description:, amount_minor: 5000, transacted_at: 2.days.ago)
       # Derive the aggregator amount from amount_minor rather than hard-coding it, so a caller
       # that varies amount_minor cannot silently create a source/ledger amount mismatch.
       source_amount = -(amount_minor.to_d / 10**@currency.decimal_places)
