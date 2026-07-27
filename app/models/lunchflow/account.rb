@@ -28,10 +28,12 @@ class Lunchflow::Account < ApplicationRecord
     amount = balance.to_d
     oldest_date = Date.current
 
-    transactions.each do |lf_transaction|
-      date = lf_transaction.date || lf_transaction.created_at.to_date
+    transactions.each do |lunchflow_transaction|
+      date = lunchflow_transaction.date || lunchflow_transaction.created_at.to_date
       oldest_date = date if date < oldest_date
-      amount -= lf_transaction.amount.to_d
+      # Signed by the direction the importer will post the row in, not by the feed's
+      # sign — the two disagree for an inbound transfer the feed signed negative (#227).
+      amount -= lunchflow_transaction.signed_ledger_amount
     end
 
     {

@@ -16,7 +16,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         ledger_account = lft.account.ledger_accounts.first
         next if ledger_account.nil?
 
-        description = lft.merchant.presence || lft.description
+        description = lft.resolved_description
 
         # Direction is decided once per row and drives reconciliation, kind, and
         # src/dest assignment below. Normally the sign decides it: a negative amount
@@ -25,11 +25,9 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         # negative has its inbound leg flipped by description (#222) — only the
         # direction is overridden, the amount is stored as .abs either way and
         # Lunchflow::Transaction stays a verbatim mirror. This feed signs those rows
-        # correctly today, so the negative? gate leaves it inert.
-        direction = Transaction::InferLedgerSide.call(
-          description: description,
-          amount_minor: lft.amount_minor
-        )
+        # correctly today, so the negative? gate leaves it inert. The rule lives on
+        # the row model so the opening-balance walk-back reads the same answer (#227).
+        direction = lft.ledger_direction
         ledger_side = direction.ledger_side
 
         existing_source = TransactionSource.find_by(sourceable: lft)

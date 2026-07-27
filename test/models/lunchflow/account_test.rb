@@ -50,13 +50,33 @@ class Lunchflow::AccountTest < ActiveSupport::TestCase
   test "suggested_opening_balance amount aligns with Lunch Flow transactions" do
     assert_not_empty @linked_lunchflow_account.transactions
 
-    amount_sum = @linked_lunchflow_account.transactions.reduce(0.to_d) do |sum, transaction|
-      sum + transaction.amount.to_d
-    end
+    # Fixture: 2500.00 reported balance and a single -75.00 row.
     result = @linked_lunchflow_account.suggested_opening_balance
 
-    expected_amount = @linked_lunchflow_account.balance.to_d - amount_sum
-    assert_equal expected_amount, result[:amount]
+    assert_equal 2575.to_d, result[:amount]
+  end
+
+  test "suggested_opening_balance walks back a negative inbound transfer as money arriving" do
+    lunchflow_account = build_lunchflow_account(balance: "100.00")
+    build_lunchflow_transaction(lunchflow_account, amount: "-30.00", merchant: "Test Merchant")
+    build_lunchflow_transaction(lunchflow_account, amount: "-20.00", merchant: "TRANSFERRED FROM Test Savings")
+
+    # 100.00 - (-30.00 + 20.00). Subtracting the raw feed signs would return 150.00.
+    assert_equal 110.to_d, lunchflow_account.suggested_opening_balance[:amount]
+  end
+
+  test "suggested_opening_balance reads the direction from the resolved description" do
+    lunchflow_account = build_lunchflow_account(balance: "100.00")
+    # The merchant wins over the description, exactly as the importer resolves it, so
+    # the transfer wording here is not what decides the direction.
+    build_lunchflow_transaction(
+      lunchflow_account,
+      amount: "-20.00",
+      merchant: "Test Merchant",
+      description: "TRANSFERRED FROM Test Savings"
+    )
+
+    assert_equal 120.to_d, lunchflow_account.suggested_opening_balance[:amount]
   end
 
   test "creating an account_source enqueues an import" do
@@ -66,4 +86,33 @@ class Lunchflow::AccountTest < ActiveSupport::TestCase
       AccountSource.create!(account: account, sourceable: @unlinked_lunchflow_account)
     end
   end
+
+  private
+
+    # Built here rather than added to the fixtures: test/system/integrations_test.rb
+    # asserts the exact list of fixture account names on the integrations page.
+    def build_lunchflow_account(balance:)
+      Lunchflow::Account.create!(
+        connection: lunchflow_connections(:one),
+        remote_id: "opening_balance_#{balance}",
+        institution_name: "Test Bank",
+        name: "Test Checking",
+        provider: "finicity",
+        status: "ACTIVE",
+        currency: "USD",
+        balance: balance
+      )
+    end
+
+    def build_lunchflow_transaction(lunchflow_account, amount:, merchant:, description: "Test Transaction")
+      lunchflow_account.transactions.create!(
+        remote_id: "opening_balance_txn_#{merchant}",
+        amount: amount,
+        currency: "USD",
+        description: description,
+        merchant: merchant,
+        date: 1.day.ago.to_date,
+        pending: false
+      )
+    end
 end
