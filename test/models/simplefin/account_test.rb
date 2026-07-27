@@ -68,13 +68,28 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
   test "suggested_opening_balance amount aligns with SimpleFIN transactions" do
     assert_not_empty @reconciled_simplefin_account.transactions
 
-    amount_sum = @reconciled_simplefin_account.transactions.reduce(0.to_d) do |sum, transaction|
-      sum + transaction.amount.to_d
-    end
+    # Fixture: 50.00 reported balance, rows of -30.00, 25.00, 10.00 and 15.00 (net +20.00).
     result = @reconciled_simplefin_account.suggested_opening_balance
 
-    expected_amount = @reconciled_simplefin_account.balance.to_d - amount_sum
-    assert_equal expected_amount, result[:amount]
+    assert_equal 30.to_d, result[:amount]
+  end
+
+  test "suggested_opening_balance walks back a negative inbound transfer as money arriving" do
+    simplefin_account = build_simplefin_account(balance: "100.00")
+    build_simplefin_transaction(simplefin_account, amount: "-30.00", description: "Test Purchase")
+    build_simplefin_transaction(simplefin_account, amount: "-20.00", description: "TRANSFERRED FROM Test Savings")
+
+    # The transfer is posted as +20.00 by the importer (#222), so the walk-back is
+    # 100.00 - (-30.00 + 20.00). Subtracting the raw feed signs would return 150.00.
+    assert_equal 110.to_d, simplefin_account.suggested_opening_balance[:amount]
+  end
+
+  test "suggested_opening_balance ignores a row the feed sent no amount for" do
+    simplefin_account = build_simplefin_account(balance: "100.00")
+    build_simplefin_transaction(simplefin_account, amount: "-30.00", description: "Test Purchase")
+    build_simplefin_transaction(simplefin_account, amount: nil, description: "Test Transaction")
+
+    assert_equal 130.to_d, simplefin_account.suggested_opening_balance[:amount]
   end
 
   test "suggested_opening_balance date aligns with SimpleFIN transactions" do
@@ -108,4 +123,30 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
       linked_account.update!(name: "Updated Name")
     end
   end
+
+  private
+
+    # Built here rather than added to the fixtures: test/system/integrations_test.rb
+    # asserts the exact list of fixture account names on the integrations page.
+    def build_simplefin_account(balance:)
+      Simplefin::Account.create!(
+        connection: simplefin_connections(:one),
+        remote_id: "opening_balance_#{balance}",
+        org: { "name" => "Test Bank" },
+        name: "Test Checking",
+        currency: "USD",
+        balance: balance,
+        balance_date: Time.current
+      )
+    end
+
+    def build_simplefin_transaction(simplefin_account, amount:, description:)
+      simplefin_account.transactions.create!(
+        remote_id: "opening_balance_txn_#{description}",
+        amount: amount,
+        description: description,
+        posted: 1.day.ago,
+        pending: false
+      )
+    end
 end

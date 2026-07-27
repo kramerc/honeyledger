@@ -22,11 +22,9 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         # (ledger on dest). One feed signs both legs of an internal transfer
         # negative, so an inbound transfer is flipped by description (#222) — only
         # the direction is overridden, the amount is stored as .abs either way and
-        # Simplefin::Transaction stays a verbatim mirror.
-        direction = Transaction::InferLedgerSide.call(
-          description: sft.description,
-          amount_minor: sft.amount_minor
-        )
+        # Simplefin::Transaction stays a verbatim mirror. The rule lives on the row
+        # model so the opening-balance walk-back reads the same answer (#227).
+        direction = sft.ledger_direction
         ledger_side = direction.ledger_side
 
         existing_source = TransactionSource.find_by(sourceable: sft)

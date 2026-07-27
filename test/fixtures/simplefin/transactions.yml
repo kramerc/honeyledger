@@ -20,7 +20,7 @@ transaction_two:
   pending: false
   extra:
 
-# Reconciled to $50.00 with $20.00 opening balance transaction
+# Reconciled to a $50.00 balance; the rows net to +$20.00, so the suggested opening balance is $30.00
 reconciled_one:
   account: reconciled_one
   remote_id: fixture_txn_3

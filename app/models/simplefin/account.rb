@@ -42,7 +42,9 @@ class Simplefin::Account < ApplicationRecord
       ].compact.min
 
       oldest_date = date if date < oldest_date
-      amount -= simplefin_transaction.amount.to_d
+      # Signed by the direction the importer will post the row in, not by the feed's
+      # sign — the two disagree for an inbound transfer the feed signed negative (#227).
+      amount -= simplefin_transaction.signed_ledger_amount
     end
 
     {

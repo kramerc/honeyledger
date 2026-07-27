@@ -1282,6 +1282,48 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal bank_b, transaction.dest_account
   end
 
+  # The whole point of the suggestion: acting on it should leave the linked account
+  # agreeing with the balance the bank reports. Before #227 the override made it
+  # overshoot by twice the transfer, so this landed 40.00 high.
+  test "an opening balance taken from the suggestion lands the linked account on the reported balance (#227)" do
+    sf_account = Simplefin::Account.create!(
+      connection: simplefin_connections(:one),
+      remote_id: "acc_opening_balance",
+      name: "SF Opening Balance Checking",
+      currency: "USD",
+      balance: "100.00",
+      balance_date: Time.current
+    )
+    Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_ob_charge", amount: "-30.00",
+      description: "Coffee Shop",
+      posted: 2.days.ago, transacted_at: 2.days.ago, pending: false
+    )
+    Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_ob_inbound", amount: "-20.00",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    # Exactly what AccountsController#new pre-fills the form with.
+    suggestion = sf_account.suggested_opening_balance
+    assert_equal 110.to_d, suggestion[:amount]
+
+    bank_account = Account.create!(
+      user: @user,
+      currency: @currency,
+      name: "Linked SF Opening Balance Checking",
+      kind: :asset,
+      opening_balance_amount: suggestion[:amount],
+      opening_balance_transacted_at: suggestion[:transacted_at]
+    )
+    AccountSource.create!(account: bank_account, sourceable: sf_account)
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    assert_equal 10_000, bank_account.reload.balance_minor
+  end
+
   private
 
     def create_linked_simplefin_account(remote_id: "acc_test", name: "SF Test Checking")
