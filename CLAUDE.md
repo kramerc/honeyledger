@@ -75,6 +75,8 @@ Both SimpleFIN and Lunch Flow follow the same namespaced pattern: `Connection` �
 
 Each aggregator namespace has its own `ImportTransactionsJob` (`Simplefin::ImportTransactionsJob`, `Lunchflow::ImportTransactionsJob`) that converts aggregator transactions to app `Transaction` records with double-entry bookkeeping. Negative amount = expense (auto-creates expense account), positive = revenue. Lunch Flow imports prefer `merchant` over `description`. Each job requires a specific account ID. RefreshJobs automatically enqueue import jobs for linked accounts after a successful per-account refresh.
 
+Direction is not derived from the sign alone. `Transaction::InferLedgerSide` (`app/services/transaction/infer_ledger_side.rb`) applies one override on top of it: a feed that signs *both* legs of an internal transfer negative has its inbound leg (`TRANSFER…FROM` wording plus a negative amount) flipped to `:dest` (#222). Only the direction is overridden — the aggregator row stays a verbatim mirror and the ledger amount is stored as `.abs` either way. The override is gated on `negative?` so it is inert for correctly-signed feeds and self-heals if the provider fixes their signing. When it fires, `transaction_sources.direction_overridden` records it on the source attachment; that flag is written on create only and is never re-derived on resync.
+
 ### Production Database Setup
 
 Production uses four separate PostgreSQL databases (Rails multi-DB):

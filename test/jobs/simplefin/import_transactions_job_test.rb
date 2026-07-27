@@ -1088,6 +1088,200 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       "the off-by-two-day SimpleFIN copy should attach to the existing Lunch Flow row"
   end
 
+  test "flips an inbound transfer that the feed signed negative onto the destination side (#222)" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_inbound", name: "Inbound Checking")
+
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_inbound_negative", amount: "-38.26",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    transaction = simplefin_transaction.ledger_transactions.sole
+    assert_equal bank_account, transaction.dest_account,
+      "money arriving cannot leave the receiving account"
+    assert_equal "TRANSFERRED FROM ACCT ****0001", transaction.src_account.name
+    assert_equal "revenue", transaction.src_account.kind
+    assert_equal 3826, transaction.amount_minor
+    assert_equal 3826, bank_account.reload.balance_minor
+  end
+
+  test "leaves a positive TRANSFERRED FROM row unchanged and unflagged (#222)" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_inbound_ok", name: "Correct Checking")
+
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_inbound_positive", amount: "38.26",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    transaction = simplefin_transaction.ledger_transactions.sole
+    assert_equal bank_account, transaction.dest_account
+    assert_equal "revenue", transaction.src_account.kind
+    assert_not simplefin_transaction.transaction_sources.sole.direction_overridden?,
+      "a correctly-signed row needs no override, so the rule must stay quiet"
+  end
+
+  test "leaves a negative TRANSFERRED TO row on the source side (#222)" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_outbound", name: "Outbound Checking")
+
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_outbound", amount: "-38.26",
+      description: "TRANSFERRED TO ACCT ****0002",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    transaction = simplefin_transaction.ledger_transactions.sole
+    assert_equal bank_account, transaction.src_account
+    assert_equal "expense", transaction.dest_account.kind
+    assert_not simplefin_transaction.transaction_sources.sole.direction_overridden?
+  end
+
+  test "records direction_overridden on the source row only when the override fires (#222)" do
+    sf_account, _bank_account = create_linked_simplefin_account(remote_id: "acc_audit", name: "Audit Checking")
+
+    inbound_transfer = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_audit_inbound", amount: "-38.26",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+    ordinary_charge = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_audit_charge", amount: "-50.00",
+      description: "Coffee Shop",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    assert inbound_transfer.transaction_sources.sole.direction_overridden?
+    assert_not ordinary_charge.transaction_sources.sole.direction_overridden?
+  end
+
+  test "adopts the correctly-signed Lunch Flow leg instead of duplicating an inbound transfer (#222)" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_dual_inbound", name: "Dual Inbound Checking")
+
+    # The same ledger account is also linked to a live Lunch Flow account, which
+    # signs the receiving leg of the transfer correctly.
+    lf_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one), remote_id: 4343,
+      name: "Dual Inbound Checking", institution_name: "Test Bank",
+      provider: "finicity", currency: "USD", status: "ACTIVE", balance: "1000.00"
+    )
+    bank_account.account_sources.create!(sourceable: lf_account)
+
+    lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_dual_inbound", amount: "38.26",
+      currency: "USD", description: "TRANSFERRED FROM ACCT ****0001",
+      pending: false, date: "2026-04-21"
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    original = lunchflow_transaction.ledger_transactions.sole
+
+    # SimpleFIN reports the same event with the receiving leg wrongly signed negative.
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_dual_inbound", amount: "-38.26",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: Time.zone.parse("2026-04-21 12:00:00"),
+      transacted_at: Time.zone.parse("2026-04-21 12:00:00"), pending: false
+    )
+
+    assert_no_difference -> { Transaction.count } do
+      Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    end
+
+    original.reload
+    assert_includes original.transaction_sources.map(&:sourceable), simplefin_transaction,
+      "the wrongly-signed SimpleFIN copy should reconcile onto the Lunch Flow row"
+    assert_equal bank_account, original.dest_account
+    assert_equal 3826, bank_account.reload.balance_minor,
+      "without the override the duplicate points the other way and cancels the balance out"
+
+    assert original.transaction_sources.find_by(sourceable: simplefin_transaction).direction_overridden?
+    assert_not original.transaction_sources.find_by(sourceable: lunchflow_transaction).direction_overridden?
+  end
+
+  test "known limitation: a legitimately negative returned transfer is still flipped (#222 residual risk)" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_returned", name: "Returned Checking")
+
+    # A reversed or returned transfer would legitimately debit the receiving account
+    # while still being worded "TRANSFERRED FROM". No such wording appears in the
+    # observed corpus, so the heuristic flips it — this test pins the accepted false
+    # positive, and direction_overridden is what makes such rows findable. If a
+    # reversal-wording exclusion is ever added, these assertions flip visibly.
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_returned", amount: "-38.26",
+      description: "TRANSFERRED FROM ACCT ****0001 RETURNED",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    transaction = simplefin_transaction.ledger_transactions.sole
+    assert_equal bank_account, transaction.dest_account
+    assert simplefin_transaction.transaction_sources.sole.direction_overridden?
+  end
+
+  test "an overridden inbound leg and its outbound leg become mergeable into a transfer (#222)" do
+    sf_account_a, bank_a = create_linked_simplefin_account(remote_id: "acc_leg_a", name: "Leg A Checking")
+    sf_account_b, bank_b = create_linked_simplefin_account(remote_id: "acc_leg_b", name: "Leg B Checking")
+
+    outbound = Simplefin::Transaction.create!(
+      account: sf_account_a, remote_id: "sf_leg_a", amount: "-38.26",
+      description: "TRANSFERRED TO ACCT ****0002",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+    inbound = Simplefin::Transaction.create!(
+      account: sf_account_b, remote_id: "sf_leg_b", amount: "-38.26",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_a.id)
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_b.id)
+
+    leg_a = outbound.ledger_transactions.sole
+    leg_b = inbound.ledger_transactions.sole
+
+    # AutoMerge only absorbs balance-sheet-to-balance-sheet transfers, so neither
+    # leg merges on its own — but with the direction corrected the pair is now one
+    # balance-sheet src and one balance-sheet dest, which Merge requires. Before the
+    # fix both legs sat on src and merging them was impossible.
+    assert_nil leg_a.merged_into_id
+    assert_nil leg_b.merged_into_id
+    assert_equal bank_a, leg_a.src_account
+    assert_equal bank_b, leg_b.dest_account
+
+    assert Transaction::Merge.new(leg_a, leg_b, user: @user).call
+    merged = leg_a.reload.merged_into || leg_b.reload.merged_into
+    assert_equal bank_a, merged.src_account
+    assert_equal bank_b, merged.dest_account
+  end
+
+  test "applies a balance sheet import rule on the correct side of an overridden inbound transfer (#222)" do
+    _sf_account_a, bank_a = create_linked_simplefin_account(remote_id: "acc_rule_a", name: "Rule A Checking")
+    sf_account_b, bank_b = create_linked_simplefin_account(remote_id: "acc_rule_b", name: "Rule B Checking")
+
+    ImportRule.create!(user: @user, account: bank_a, match_pattern: "TRANSFERRED FROM", match_type: :contains)
+
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account_b, remote_id: "sf_rule_inbound", amount: "-38.26",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      posted: 1.day.ago, transacted_at: 1.day.ago, pending: false
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account_b.id)
+
+    transaction = simplefin_transaction.ledger_transactions.sole
+    assert_equal bank_a, transaction.src_account
+    assert_equal bank_b, transaction.dest_account
+  end
+
   private
 
     def create_linked_simplefin_account(remote_id: "acc_test", name: "SF Test Checking")

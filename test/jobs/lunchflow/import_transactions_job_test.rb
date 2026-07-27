@@ -756,6 +756,60 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_empty refund_orphan.reload.transaction_sources
   end
 
+  test "leaves a correctly-signed inbound transfer alone (#222 is inert for this feed)" do
+    lf_account, lf_bank_account = create_linked_lunchflow_account(remote_id: 951, name: "Inbound OK Checking")
+
+    lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_inbound_positive", amount: "38.26",
+      currency: "USD", description: "TRANSFERRED FROM ACCT ****0001",
+      pending: false, date: Date.current - 1
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = lunchflow_transaction.ledger_transactions.sole
+    assert_equal lf_bank_account, transaction.dest_account
+    assert_equal "revenue", transaction.src_account.kind
+    assert_not lunchflow_transaction.transaction_sources.sole.direction_overridden?
+  end
+
+  test "flips a negative TRANSFERRED FROM row on Lunch Flow too (#222)" do
+    lf_account, lf_bank_account = create_linked_lunchflow_account(remote_id: 952, name: "Inbound Flip Checking")
+
+    lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_inbound_negative", amount: "-38.26",
+      currency: "USD", description: "TRANSFERRED FROM ACCT ****0001",
+      pending: false, date: Date.current - 1
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = lunchflow_transaction.ledger_transactions.sole
+    assert_equal lf_bank_account, transaction.dest_account
+    assert_equal "revenue", transaction.src_account.kind
+    assert lunchflow_transaction.transaction_sources.sole.direction_overridden?
+  end
+
+  test "decides direction from the merchant string when one is present (#222)" do
+    lf_account, lf_bank_account = create_linked_lunchflow_account(remote_id: 953, name: "Merchant Precedence Checking")
+
+    # The job stores merchant in preference to description, so the override must be
+    # evaluated against the same resolved string the ledger transaction ends up with.
+    lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_merchant_precedence", amount: "-38.26",
+      currency: "USD", merchant: "Coffee Shop",
+      description: "TRANSFERRED FROM ACCT ****0001",
+      pending: false, date: Date.current - 1
+    )
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+
+    transaction = lunchflow_transaction.ledger_transactions.sole
+    assert_equal lf_bank_account, transaction.src_account
+    assert_equal "Coffee Shop", transaction.description
+    assert_not lunchflow_transaction.transaction_sources.sole.direction_overridden?
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")

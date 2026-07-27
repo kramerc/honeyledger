@@ -49,4 +49,34 @@ class TransactionSource::AttachTest < ActiveSupport::TestCase
       TransactionSource::Attach.call(transaction: other_ledger, sourceable: @simplefin_transaction)
     end
   end
+
+  test "defaults direction_overridden to false" do
+    row = TransactionSource::Attach.call(transaction: @ledger_transaction, sourceable: @simplefin_transaction)
+
+    assert_not row.direction_overridden?
+  end
+
+  test "records direction_overridden when the importer overrode the direction (#222)" do
+    row = TransactionSource::Attach.call(
+      transaction: @ledger_transaction, sourceable: @simplefin_transaction,
+      direction_overridden: true
+    )
+
+    assert row.direction_overridden?
+  end
+
+  test "does not rewrite direction_overridden on the idempotent find path (#222)" do
+    TransactionSource::Attach.call(transaction: @ledger_transaction, sourceable: @simplefin_transaction)
+
+    row = nil
+    assert_no_difference("TransactionSource.count") do
+      row = TransactionSource::Attach.call(
+        transaction: @ledger_transaction, sourceable: @simplefin_transaction,
+        direction_overridden: true
+      )
+    end
+
+    assert_not row.reload.direction_overridden?,
+      "the flag is a historical fact about the first writer's import decision, not a re-derivation"
+  end
 end
