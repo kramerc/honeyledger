@@ -18,12 +18,19 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
 
         description = lft.merchant.presence || lft.description
 
-        # Sign decides direction once per row: a negative amount is a charge
-        # (ledger account on src), non-negative is a refund/credit (ledger on
-        # dest). amount_minor carries the same sign as the source amount (and we
-        # already compute it for storage), so we reuse it — no BigDecimal parse —
-        # for reconciliation, kind, and src/dest assignment below.
-        ledger_side = lft.amount_minor.negative? ? :src : :dest
+        # Direction is decided once per row and drives reconciliation, kind, and
+        # src/dest assignment below. Normally the sign decides it: a negative amount
+        # is a charge (ledger account on src), non-negative is a refund/credit
+        # (ledger on dest). A feed that signs both legs of an internal transfer
+        # negative has its inbound leg flipped by description (#222) — only the
+        # direction is overridden, the amount is stored as .abs either way and
+        # Lunchflow::Transaction stays a verbatim mirror. This feed signs those rows
+        # correctly today, so the negative? gate leaves it inert.
+        direction = Transaction::InferLedgerSide.call(
+          description: description,
+          amount_minor: lft.amount_minor
+        )
+        ledger_side = direction.ledger_side
 
         existing_source = TransactionSource.find_by(sourceable: lft)
 
@@ -66,7 +73,10 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           # insert, the AR transaction rolls back and we move on.
           begin
             Transaction.transaction do
-              TransactionSource::Attach.call(transaction: match, sourceable: lft)
+              TransactionSource::Attach.call(
+                transaction: match, sourceable: lft,
+                direction_overridden: direction.direction_overridden?
+              )
               match.update!(synced_at: Time.current)
             end
           rescue TransactionSource::Attach::MismatchedTransaction
@@ -111,7 +121,10 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         begin
           Transaction.transaction do
             transaction.save!
-            TransactionSource::Attach.call(transaction: transaction, sourceable: lft)
+            TransactionSource::Attach.call(
+              transaction: transaction, sourceable: lft,
+              direction_overridden: direction.direction_overridden?
+            )
           end
         rescue TransactionSource::Attach::MismatchedTransaction
           next

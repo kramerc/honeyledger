@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_05_160556) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -226,10 +226,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_160556) do
 
   create_table "transaction_sources", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.boolean "direction_overridden", default: false, null: false
     t.bigint "sourceable_id", null: false
     t.string "sourceable_type", null: false
     t.bigint "transaction_id", null: false
     t.datetime "updated_at", null: false
+    t.index ["direction_overridden"], name: "index_transaction_sources_on_direction_overridden", where: "direction_overridden"
     t.index ["sourceable_type", "sourceable_id"], name: "index_transaction_sources_on_sourceable", unique: true
     t.index ["transaction_id", "sourceable_type", "sourceable_id"], name: "index_transaction_sources_on_transaction_and_sourceable", unique: true
     t.index ["transaction_id"], name: "index_transaction_sources_on_transaction_id"

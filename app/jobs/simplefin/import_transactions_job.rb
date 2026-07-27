@@ -16,12 +16,18 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         ledger_account = sft.account.ledger_accounts.first
         next if ledger_account.nil?
 
-        # Sign decides direction once per row: a negative amount is a charge
-        # (ledger account on src), non-negative is a refund/credit (ledger on
-        # dest). amount_minor carries the same sign as the source amount (and we
-        # already compute it for storage), so we reuse it — no BigDecimal parse —
-        # for reconciliation, kind, and src/dest assignment below.
-        ledger_side = sft.amount_minor.negative? ? :src : :dest
+        # Direction is decided once per row and drives reconciliation, kind, and
+        # src/dest assignment below. Normally the sign decides it: a negative amount
+        # is a charge (ledger account on src), non-negative is a refund/credit
+        # (ledger on dest). One feed signs both legs of an internal transfer
+        # negative, so an inbound transfer is flipped by description (#222) — only
+        # the direction is overridden, the amount is stored as .abs either way and
+        # Simplefin::Transaction stays a verbatim mirror.
+        direction = Transaction::InferLedgerSide.call(
+          description: sft.description,
+          amount_minor: sft.amount_minor
+        )
+        ledger_side = direction.ledger_side
 
         existing_source = TransactionSource.find_by(sourceable: sft)
 
@@ -64,7 +70,10 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           # insert, the AR transaction rolls back and we move on.
           begin
             Transaction.transaction do
-              TransactionSource::Attach.call(transaction: match, sourceable: sft)
+              TransactionSource::Attach.call(
+                transaction: match, sourceable: sft,
+                direction_overridden: direction.direction_overridden?
+              )
               match.update!(synced_at: Time.current)
             end
           rescue TransactionSource::Attach::MismatchedTransaction
@@ -109,7 +118,10 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         begin
           Transaction.transaction do
             transaction.save!
-            TransactionSource::Attach.call(transaction: transaction, sourceable: sft)
+            TransactionSource::Attach.call(
+              transaction: transaction, sourceable: sft,
+              direction_overridden: direction.direction_overridden?
+            )
           end
         rescue TransactionSource::Attach::MismatchedTransaction
           next
