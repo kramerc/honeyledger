@@ -1066,7 +1066,207 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
     assert_nil off_by_one
   end
 
+  test "adopts a stale orphan whose description masks the account digits (#221)" do
+    orphan_description = "TRANSFER FROM LINKED ACCOUNT VS. AXX-XXX123-4 (Cash)"
+    importing_description = "TRANSFER FROM LINKED ACCOUNT VS. A01-234123-4 (Cash)"
+
+    orphan = create_masked_orphan(remote_id: "masked_account", description: orphan_description)
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: importing_description
+    )
+
+    # Masking is mid-string, so neither description is a prefix of the other; only the
+    # normalized comparison can reach this row.
+    assert_equal orphan, candidate
+  end
+
+  test "adopts a stale orphan whose description masks an embedded date (#221)" do
+    orphan = create_masked_orphan(
+      remote_id: "masked_date",
+      description: "PAYMENT TO LENDER as of XXXX-07-03 (Cash)"
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "PAYMENT TO LENDER as of 2026-07-03 (Cash)"
+    )
+
+    assert_equal orphan, candidate
+  end
+
+  test "abstains when two orphans differ only in their masked digits (#221)" do
+    # The over-normalization failure mode: collapsing digit runs makes two genuinely
+    # distinct transfers look alike. Reconcile must abstain and leave a duplicate rather
+    # than attach the incoming row to an arbitrary one of them.
+    create_masked_orphan(remote_id: "masked_amb_a", description: "TRANSFER TO SAVINGS VS. A01-234123-4 (Cash)")
+    create_masked_orphan(remote_id: "masked_amb_b", description: "TRANSFER TO SAVINGS VS. A99-887766-4 (Cash)")
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "TRANSFER TO SAVINGS VS. AXX-XXXXXX-4 (Cash)"
+    )
+
+    assert_nil candidate
+  end
+
+  test "manual-entry orphans are not reached by masked-digit normalization (#221)" do
+    # #117: a manual placeholder keeps its exact-description rule, so it cannot be scooped
+    # up by an aggregator row that differs only in an account number.
+    Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 5000, currency: @currency,
+      description: "PAYMENT TO LENDER as of XXXX-07-03 (Cash)",
+      transacted_at: 2.days.ago
+    )
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "PAYMENT TO LENDER as of 2026-07-03 (Cash)"
+    )
+
+    assert_nil candidate
+  end
+
+  test "does not normalize away a single differing digit (#221)" do
+    # Runs of one are left alone, so a lone digit still distinguishes two descriptions.
+    create_masked_orphan(remote_id: "single_digit", description: "PAYMENT 1")
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "PAYMENT 2"
+    )
+
+    assert_nil candidate
+  end
+
+  test "keeps the raw prefix match for truncations that land mid-digit-run (#221)" do
+    # "VENDOR CHARGE 1" is a raw prefix of the importing description but normalizes to
+    # "vendor charge 1" against "vendor charge ~ extra detail", which is not a prefix.
+    # Only the raw branch reaches this row — it would regress if normalization replaced
+    # the prefix match instead of being OR'd onto it.
+    orphan = create_masked_orphan(remote_id: "truncated_run", description: "VENDOR CHARGE 1")
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "VENDOR CHARGE 12 EXTRA DETAIL"
+    )
+
+    assert_equal orphan, candidate
+  end
+
+  test "treats a literal hash in a description as distinguishing, not as a mask (#221)" do
+    # `#` is a store-number marker in real feeds, not a redaction glyph, so it stays
+    # outside the maskable class — and it is not the placeholder either, which is what
+    # keeps "STORE #12" from normalizing onto "STORE 12".
+    create_masked_orphan(remote_id: "literal_hash", description: "STORE #12 PURCHASE")
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "STORE 12 PURCHASE"
+    )
+
+    assert_nil candidate
+  end
+
+  test "treats regex metacharacters in the importing description literally (#221)" do
+    # If the importing value were ever interpolated into the normalization pattern, this
+    # shape would match the stored description as a regex. It must compare as literal text.
+    create_masked_orphan(remote_id: "regex_metachar", description: "PROMO BIG SALE")
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 5000,
+      currency_id: @currency.id,
+      transacted_at: 2.days.ago,
+      description: "PROMO .* SALE"
+    )
+
+    assert_nil candidate
+  end
+
+  test "attaches a masked-digit variant onto an auto-merged original (#221)" do
+    bank_b = accounts(:asset_account)
+    merge_day = Time.zone.parse("2026-04-15 12:00:00")
+    orphan_description = "TRANSFER FROM LINKED ACCOUNT VS. AXX-XXX123-4 (Cash)"
+
+    stale_simplefin_transaction = Simplefin::Transaction.create!(
+      account: @stale_simplefin_account, remote_id: "masked_merged_orig",
+      amount: "-14.06", description: orphan_description,
+      transacted_at: merge_day, posted: merge_day
+    )
+    original = create_sourced_transaction(
+      user: @user, src_account: @ledger_account, dest_account: @counterpart,
+      amount_minor: 1406, currency: @currency, description: orphan_description,
+      transacted_at: merge_day, sourceable: stale_simplefin_transaction
+    )
+    counterpart_side = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account), dest_account: bank_b,
+      amount_minor: 1406, currency: @currency, description: orphan_description,
+      transacted_at: merge_day
+    )
+    merger = Transaction::Merge.new(original, counterpart_side, user: @user)
+    assert merger.call, merger.errors.inspect
+    head = merger.merged_transaction
+
+    candidate = Transaction::Reconcile.call(
+      ledger_account: @ledger_account,
+      ledger_side: :src,
+      amount_minor: 1406,
+      currency_id: @currency.id,
+      transacted_at: merge_day,
+      description: "TRANSFER FROM LINKED ACCOUNT VS. A01-234123-4 (Cash)"
+    )
+
+    assert_equal original, candidate
+    assert_equal head.id, candidate.merged_into_id
+  end
+
   private
+
+    def create_masked_orphan(remote_id:, description:, amount_minor: 5000, transacted_at: 2.days.ago)
+      stale_simplefin_transaction = Simplefin::Transaction.create!(
+        account: @stale_simplefin_account, remote_id: remote_id,
+        amount: "-50.00", description: description,
+        transacted_at: transacted_at, posted: transacted_at
+      )
+
+      create_sourced_transaction(
+        user: @user, src_account: @ledger_account, dest_account: @counterpart,
+        amount_minor: amount_minor, currency: @currency, description: description,
+        transacted_at: transacted_at, sourceable: stale_simplefin_transaction
+      )
+    end
 
     def create_csv_sourced_orphan(transacted_at:, description:, amount_minor: 5000)
       import = Csv::Import.new(user: @user, account: @ledger_account, state: "imported")
