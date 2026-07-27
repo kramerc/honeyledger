@@ -5,6 +5,41 @@ class Transaction::Reconcile
   # rule, #117). Start at 3 and tune later (#158).
   RECONCILE_TRANSACTED_AT_WINDOW_DAYS = 3
 
+  # Aggregators mask embedded digit runs differently, and masking happens mid-string, so
+  # neither description is a prefix of the other and the raw prefix match fails on rows that
+  # describe the same event (#221). Collapsing digit-or-X runs to a common token on both sides
+  # makes them comparable again.
+  #
+  # Deliberately narrow, each part chosen against the descriptions actually in the ledger:
+  #
+  #   * Digits and X only. `*` never appears in a run of two or more — it shows up as a
+  #     descriptor separator (letter-then-star), including on an imported card account, so
+  #     there is no evidence of asterisk redaction to handle. `#` is a store-number marker
+  #     (`#` followed by digits in nearly every occurrence), so folding it in would erase a
+  #     character that legitimately distinguishes two stores.
+  #   * Runs of two or more, never one. A lone digit is a real distinction: it keeps
+  #     "PAYMENT 1" and "PAYMENT 2" apart.
+  #   * `~` as the placeholder because it appears nowhere in any feed. `#` would be wrong
+  #     here for the same reason it is excluded above — it occurs literally, so `A#B` would
+  #     normalize onto `A12B`.
+  #
+  # One constant each, so widening the class later (an asterisk-masked card descriptor, say)
+  # is a one-line change plus a test.
+  MASKED_RUN_PATTERN = "[0-9x]{2,}"
+  MASKED_RUN_PLACEHOLDER = "~"
+
+  # Collapsing digit runs is only safe when one of the two descriptions is actually redacted.
+  # Two unmasked rows whose digits genuinely differ — an account number ending 01-234123-4
+  # against one ending 99-887766-4 — normalize to the same string, and with a single candidate
+  # in play the two-candidate ambiguity guard cannot catch it: the incoming source would attach
+  # to the wrong ledger event. Requiring mask evidence on at least one side keeps the
+  # masked-against-unmasked case working and leaves digits that both feeds report verbatim to
+  # the raw comparison, where a differing digit still separates them.
+  #
+  # Any run of two or more X's contains "xx", so a substring test is equivalent to the run
+  # pattern and needs no regex operator on the column.
+  MASK_EVIDENCE = "xx"
+
   def self.call(**kwargs)
     new(**kwargs).call
   end
@@ -120,7 +155,20 @@ class Transaction::Reconcile
       has_any_source_node
         .and(sourced_date_window(table))
         .and(Arel::Nodes::Not.new(live_collision_subquery(ts_table)))
-        .and(prefix_match(table[:description], @description))
+        .and(description_match(table[:description], @description))
+    end
+
+    # The normalized comparison is OR'd onto the raw one rather than replacing it, because it
+    # is not strictly weaker: "PAY 1" is a raw prefix of "PAY 12" but normalizes to "pay 1"
+    # vs "pay ~", which is not a prefix. Truncation can land mid-run, so the raw branch has to
+    # survive for the case prefix_match was built for. OR-ing also makes #221 purely additive —
+    # nothing that reconciles today can stop reconciling.
+    #
+    # Sourced candidates only. manual_entry_clause keeps its exact-match rule (#117): collapsing
+    # digit runs would let a user's manual placeholder be scooped up by an aggregator row that
+    # differs only in an account number.
+    def description_match(column, value)
+      prefix_match(column, value).or(normalized_prefix_match(column, value))
     end
 
     # Aggregator-sourced (SimpleFIN/Lunch Flow) candidates widen to ±N days to absorb
@@ -238,6 +286,52 @@ class Transaction::Reconcile
         .and(left_function(value_lower, length_function(column_lower)).eq(column_lower))
 
       column_starts_with_value.or(value_starts_with_column)
+    end
+
+    # prefix_match over descriptions with their masked digit runs collapsed (#221).
+    #
+    # Both sides are normalized in SQL rather than normalizing the value in Ruby, so the column
+    # and the value pass through the same regex engine and the same collation — there is no way
+    # for Ruby's downcase/gsub to disagree with Postgres's LOWER/REGEXP_REPLACE on some input.
+    # That makes the prefix lengths LENGTH() nodes instead of Ruby integers; left_function
+    # already accepts a node there.
+    #
+    # The non-empty-column guard carries over from prefix_match for the same reason: without it
+    # a blank stored description would be adopted under any nonblank importing one. Normalizing
+    # cannot introduce a new blank — a nonblank input always yields a nonblank output, since a
+    # collapsed run is replaced by a character rather than removed.
+    #
+    # Gated on MASK_EVIDENCE: the whole comparison only applies when one of the two sides is
+    # actually redacted. When the incoming value carries the mask the gate is satisfied in Ruby
+    # and no column predicate is emitted at all.
+    def normalized_prefix_match(column, value)
+      column_normalized = normalized(lower_col(column))
+      value_normalized = normalized(lower_quoted(value))
+
+      column_starts_with_value = left_function(column_normalized, length_function(value_normalized))
+        .eq(value_normalized)
+      value_starts_with_column = length_function(column_normalized).gt(0)
+        .and(left_function(value_normalized, length_function(column_normalized)).eq(column_normalized))
+
+      match = column_starts_with_value.or(value_starts_with_column)
+      return match if value.downcase.include?(MASK_EVIDENCE)
+
+      column_is_masked(column).and(match)
+    end
+
+    def column_is_masked(column)
+      lower_col(column).matches("%#{MASK_EVIDENCE}%")
+    end
+
+    # The pattern is a constant and the value side is a quoted string literal, never a pattern,
+    # so no caller-supplied text is ever interpreted as a regular expression here.
+    def normalized(node)
+      Arel::Nodes::NamedFunction.new("REGEXP_REPLACE", [
+        node,
+        Arel::Nodes::Quoted.new(MASKED_RUN_PATTERN),
+        Arel::Nodes::Quoted.new(MASKED_RUN_PLACEHOLDER),
+        Arel::Nodes::Quoted.new("g")
+      ])
     end
 
     def left_function(node, length)
