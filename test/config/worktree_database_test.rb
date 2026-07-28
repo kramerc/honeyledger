@@ -56,6 +56,30 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     end
   end
 
+  # A worktree's directory name is only a label and repeats freely. Two valid
+  # checkouts sharing one would otherwise get identical databases and ports --
+  # the exact clobbering this change exists to prevent.
+  test "worktrees sharing a directory name get separate databases and ports" do
+    Dir.mktmpdir do |base|
+      roots = [ "#{base}/session-a/feature", "#{base}/session-b/feature" ].each do |path|
+        FileUtils.mkdir_p(path)
+        File.write(File.join(path, ".git"), "gitdir: elsewhere\n")
+      end
+
+      assert_equal "feature", WorktreeDatabase.identity(roots.first, override: nil)
+      assert_not_equal WorktreeDatabase.suffix(roots.first, override: nil),
+        WorktreeDatabase.suffix(roots.last, override: nil)
+      assert_not_equal WorktreeDatabase.preferred_port(roots.first, override: nil),
+        WorktreeDatabase.preferred_port(roots.last, override: nil)
+    end
+  end
+
+  test "a checkout's suffix is stable across calls" do
+    with_checkout(linked: true, relative_path: "feature") do |root|
+      assert_equal WorktreeDatabase.suffix(root, override: nil), WorktreeDatabase.suffix(root, override: nil)
+    end
+  end
+
   test "slugs are stable across calls" do
     assert_equal WorktreeDatabase.slug("feature/x"), WorktreeDatabase.slug("feature/x")
   end

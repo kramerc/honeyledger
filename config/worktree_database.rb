@@ -44,29 +44,41 @@ module WorktreeDatabase
     # The suffix appended to the development and test database names.
     def suffix(application_root, **options)
       name = identity(application_root, **options)
-      name ? "_#{slug(name)}" : ""
+      name ? "_#{slug(name, uniqueness_key(application_root, **options))}" : ""
     end
 
-    # Normalized for PostgreSQL and made collision-proof. Both normalization
-    # and truncation lose information, so "feature-a" and "feature_a", or any
-    # two names sharing a long prefix, would otherwise resolve to the same
-    # databases and corrupt each other. The digest is taken over the full name,
-    # so distinct names always produce distinct slugs.
-    def slug(name)
+    # What actually distinguishes one checkout from another. The identity is
+    # only a label and repeats freely -- worktrees at /tmp/session-a/feature and
+    # /tmp/session-b/feature are both called "feature" -- so uniqueness comes
+    # from the full path instead. An override is deliberately shareable and
+    # stands for itself.
+    def uniqueness_key(application_root, override: ENV["HONEYLEDGER_DB_SUFFIX"])
+      override || application_root
+    end
+
+    # A readable label plus a digest that makes it collision-proof. Normalization
+    # and truncation both lose information, so "feature-a" and "feature_a", or
+    # any two names sharing a long prefix, would otherwise resolve to the same
+    # databases and corrupt each other.
+    #
+    # The digest is taken over `digest_source`, which defaults to the name but is
+    # the full checkout path when called from suffix/preferred_port, so two
+    # worktrees that merely share a directory name stay separate.
+    def slug(name, digest_source = name)
       normalized = name.downcase.gsub(/[^a-z0-9]+/, "_").delete_prefix("_").delete_suffix("_")
       normalized = "worktree" if normalized.empty?
 
-      "#{normalized[0, MAX_SLUG_LENGTH]}_#{Digest::SHA256.hexdigest(name)[0, DIGEST_LENGTH]}"
+      "#{normalized[0, MAX_SLUG_LENGTH]}_#{Digest::SHA256.hexdigest(digest_source)[0, DIGEST_LENGTH]}"
     end
 
     # A stable port per checkout, so servers started from different worktrees
     # do not all race for 3000 and each worktree keeps the same URL between
     # runs. The primary checkout always prefers 3000.
     def preferred_port(application_root, base: 3000, span: 200, **options)
-      name = identity(application_root, **options)
-      return base unless name
+      return base unless identity(application_root, **options)
 
-      base + (Digest::SHA256.hexdigest(name)[0, 8].to_i(16) % span)
+      key = uniqueness_key(application_root, **options)
+      base + (Digest::SHA256.hexdigest(key)[0, 8].to_i(16) % span)
     end
 
     # A linked worktree's `.git` is a file pointing back at the main
