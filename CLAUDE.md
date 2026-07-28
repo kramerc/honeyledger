@@ -40,17 +40,26 @@ review, merging, and anything that must see `main`.
 **What is isolated automatically:**
 
 - **Databases.** `config/database.yml` appends a per-worktree suffix to the
-  development and test database names (`honeyledger_test_<worktree>`), derived
-  from the worktree directory. The primary checkout keeps the plain, unsuffixed
-  names. Two sessions can run `bin/rails test` simultaneously without clobbering
-  each other's fixtures, and a migration on one branch cannot break another.
-  Override with `HONEYLEDGER_DB_SUFFIX`; production is never suffixed.
+  development and test database names (`honeyledger_test_<worktree>_<digest>`).
+  The primary checkout keeps the plain, unsuffixed names. Two sessions can run
+  `bin/rails test` simultaneously without clobbering each other's fixtures, and
+  a migration on one branch cannot break another. Override with
+  `HONEYLEDGER_DB_SUFFIX`; production is never suffixed.
+
+  `config/worktree_database.rb` owns the derivation and is the single source of
+  truth — `database.yml`, `bin/dev`, `bin/worktree-setup` and
+  `bin/worktree-clean` all load it, because a cleanup script that derived
+  suffixes even slightly differently would mistake a live worktree's database
+  for an orphan. The trailing digest is what keeps names that normalize or
+  truncate alike (`feature-a` and `feature_a`) on separate databases.
 - **Secrets and local settings.** `bin/worktree-setup` runs as a `SessionStart`
   hook. In a worktree it symlinks the gitignored `config/master.key` and
   `.claude/settings.local.json` from the primary checkout and prepares that
   worktree's databases. It is idempotent and a no-op in the primary checkout.
-- **Ports.** `bin/dev` claims the first free port at or above 3000, so servers
-  from different worktrees coexist. Set `PORT` to pin one.
+- **Ports.** `bin/dev` starts on a port derived from the checkout, so each
+  worktree keeps a stable URL and servers coexist. The primary checkout prefers
+  3000. Two worktrees can still hash to the same port, in which case the second
+  falls forward to the next free one. Set `PORT` to pin one.
 - **Logs, tmp, and coverage** are per-worktree already.
 
 **What is still shared** — coordinate before touching these: the `main` branch
@@ -58,8 +67,11 @@ and remote, the `honeyledger_development` database in the primary checkout, and
 any real aggregator API credentials.
 
 **Cleaning up.** `git worktree remove` does not drop the databases the worktree
-created. Run `bin/worktree-clean` to list orphaned databases and
-`bin/worktree-clean --drop` to reclaim them.
+created. Run `bin/worktree-clean` from the primary checkout to list orphaned
+databases and `bin/worktree-clean --drop` to reclaim them. It only considers
+databases `bin/worktree-setup` recorded in `tmp/worktree_databases.json` when it
+created them, so a database made any other way — including by setting
+`HONEYLEDGER_DB_SUFFIX` by hand — is never dropped.
 
 Test parallelism within a single worktree stays disabled (see
 `test/test_helper.rb`) because it conflicts with SimpleCov; with several

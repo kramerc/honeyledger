@@ -15,31 +15,12 @@
 <%
   # Give every git worktree its own development and test databases, so parallel
   # sessions (multiple Claude Code instances, background agents, or a human
-  # alongside them) never share a schema or clobber each other's fixtures.
-  #
-  # A linked worktree has a `.git` *file* pointing back at the main repository;
-  # the primary checkout has a `.git` *directory* and keeps the plain, unsuffixed
-  # names it has always used. Production is never suffixed.
-  #
-  # Set HONEYLEDGER_DB_SUFFIX to override (empty string forces the plain names).
-  application_root = Rails.root.to_s
+  # alongside them) never share a schema or clobber each other's fixtures. The
+  # primary checkout keeps the plain, unsuffixed names; production is never
+  # suffixed. See config/worktree_database.rb for the derivation.
+  require Rails.root.join("config", "worktree_database").to_s
 
-  database_suffix =
-    if (override = ENV["HONEYLEDGER_DB_SUFFIX"])
-      override.empty? ? "" : "_#{override}"
-    elsif File.file?(File.join(application_root, ".git"))
-      worktree_name =
-        if application_root.include?("/.claude/worktrees/")
-          application_root.split("/.claude/worktrees/", 2).last
-        else
-          File.basename(application_root)
-        end
-
-      # PostgreSQL identifiers cap at 63 bytes; "honeyledger_development_" is 24.
-      "_#{worktree_name.downcase.gsub(/[^a-z0-9]+/, "_").delete_prefix("_").delete_suffix("_")[0, 30]}"
-    else
-      ""
-    end
+  database_suffix = WorktreeDatabase.suffix(Rails.root.to_s)
 %>
 default: &default
   adapter: postgresql

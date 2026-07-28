@@ -19,6 +19,8 @@ require "shellwords"
 APP_ROOT = File.expand_path("..", __dir__)
 MARKER = File.join(APP_ROOT, "tmp", "worktree_bootstrapped")
 
+require File.join(APP_ROOT, "config", "worktree_database")
+
 # Gitignored paths a worktree needs from the primary checkout. Each is
 # symlinked so that rotating a credential in the primary checkout, or adding a
 # permission to the allowlist, immediately applies everywhere.
@@ -26,12 +28,6 @@ LINKED_PATHS = [
   "config/master.key",
   ".claude/settings.local.json"
 ].freeze
-
-# A linked worktree's `.git` is a file (`gitdir: ...`); the primary checkout's
-# is a directory.
-def worktree?
-  File.file?(File.join(APP_ROOT, ".git"))
-end
 
 # `git worktree list --porcelain` always reports the primary checkout first.
 def primary_checkout
@@ -62,28 +58,49 @@ end
 def prepare_databases
   # db:prepare creates the database and loads the schema when it is missing,
   # and is a cheap no-op once it exists.
-  system("bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL) &&
-    system("bin/rails", "db:test:prepare", chdir: APP_ROOT, out: File::NULL)
+  # Quiet on failure too: the message points at the command to run by hand,
+  # which reports the underlying error properly.
+  system("bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL) &&
+    system("bin/rails", "db:test:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
 end
 
-exit 0 unless worktree?
+# Record which databases this worktree owns, in the primary checkout, so that
+# bin/worktree-clean only ever drops databases it can prove were created here.
+# Anything created by other means is left alone.
+def register_databases(source_root, suffix)
+  registry_path = File.join(source_root, "tmp", "worktree_databases.json")
+  registry = JSON.parse(File.read(registry_path)) rescue {}
+  registry[APP_ROOT] = suffix
+
+  FileUtils.mkdir_p(File.dirname(registry_path))
+  File.write(registry_path, JSON.pretty_generate(registry))
+end
+
+exit 0 unless WorktreeDatabase.linked_worktree?(APP_ROOT)
 exit 0 if File.exist?(MARKER) && !ARGV.include?("--force")
 
 source_root = primary_checkout
 exit 0 if source_root.nil? || source_root == APP_ROOT
 
 linked = link_shared_paths(source_root)
-prepared = prepare_databases
+
+unless prepare_databases
+  # Leave the marker absent so a later session retries; PostgreSQL may simply
+  # not have been up yet.
+  puts JSON.generate(
+    systemMessage: "Could not prepare this worktree's databases — is PostgreSQL running? " \
+                   "Re-run bin/worktree-setup, or bin/rails db:prepare db:test:prepare."
+  )
+  exit 0
+end
+
+register_databases(source_root, WorktreeDatabase.suffix(APP_ROOT))
 
 FileUtils.mkdir_p(File.dirname(MARKER))
 FileUtils.touch(MARKER)
 
 summary = []
 summary << "linked #{linked.join(", ")} from the primary checkout" if linked.any?
-summary << if prepared
-  "prepared this worktree's own development and test databases"
-else
-  "could not prepare databases automatically — run bin/rails db:prepare db:test:prepare"
-end
+summary << "prepared this worktree's own development and test databases"
 
 puts JSON.generate(systemMessage: "Worktree ready: #{summary.join("; ")}.")

@@ -7,40 +7,64 @@
 #
 #   bin/worktree-clean           # list what would be dropped
 #   bin/worktree-clean --drop    # drop them
+#
+# Only databases recorded in tmp/worktree_databases.json when bin/worktree-setup
+# created them are eligible. Databases created any other way -- including by
+# setting HONEYLEDGER_DB_SUFFIX by hand -- are never touched, so an unrecognized
+# database is always left in place rather than guessed at.
 
+require "json"
 require "shellwords"
 
 APP_ROOT = File.expand_path("..", __dir__)
+REGISTRY_PATH = File.join(APP_ROOT, "tmp", "worktree_databases.json")
 
-live_suffixes = `git -C #{APP_ROOT.shellescape} worktree list --porcelain`
-  .lines
-  .filter_map { |line| line[/\Aworktree (.+)/, 1]&.strip }
-  .drop(1) # the primary checkout owns the unsuffixed databases
-  .map do |path|
-    name = path.include?("/.claude/worktrees/") ? path.split("/.claude/worktrees/", 2).last : File.basename(path)
-    name.downcase.gsub(/[^a-z0-9]+/, "_").delete_prefix("_").delete_suffix("_")[0, 30]
-  end
+abort "Run bin/worktree-clean from the primary checkout." if File.file?(File.join(APP_ROOT, ".git"))
 
-query = "SELECT datname FROM pg_database WHERE datname LIKE 'honeyledger_development\\_%' " \
-        "OR datname LIKE 'honeyledger_test\\_%' ORDER BY 1"
-databases = `psql -tAc #{query.shellescape} postgres`.split("\n").map(&:strip).reject(&:empty?)
-
-orphaned = databases.reject do |database|
-  suffix = database.sub(/\Ahoneyledger_(development|test)_/, "")
-  live_suffixes.include?(suffix)
+registry = begin
+  JSON.parse(File.read(REGISTRY_PATH))
+rescue Errno::ENOENT, JSON::ParserError
+  {}
 end
 
-if orphaned.empty?
+live_worktrees = `git -C #{APP_ROOT.shellescape} worktree list --porcelain`
+  .lines
+  .filter_map { |line| line[/\Aworktree (.+)/, 1]&.strip }
+
+orphaned = registry.reject { |worktree_path, _suffix| live_worktrees.include?(worktree_path) }
+
+existing_databases = `psql -tAc #{"SELECT datname FROM pg_database".shellescape} postgres`
+  .split("\n")
+  .map(&:strip)
+
+droppable = orphaned.flat_map do |worktree_path, suffix|
+  %W[honeyledger_development#{suffix} honeyledger_test#{suffix}]
+    .select { |database| existing_databases.include?(database) }
+    .map { |database| [ worktree_path, database ] }
+end
+
+if droppable.empty?
+  # Still forget worktrees whose databases are already gone.
+  if orphaned.any?
+    File.write(REGISTRY_PATH, JSON.pretty_generate(registry.except(*orphaned.keys)))
+  end
+
   puts "No orphaned worktree databases."
   exit 0
 end
 
-if ARGV.include?("--drop")
-  orphaned.each do |database|
-    system("dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
-    puts "Dropped #{database}"
-  end
-else
+unless ARGV.include?("--drop")
   puts "Orphaned worktree databases (re-run with --drop to remove):"
-  orphaned.each { |database| puts "  #{database}" }
+  droppable.each { |worktree_path, database| puts "  #{database}  (was #{worktree_path})" }
+  exit 0
 end
+
+dropped_worktrees = []
+
+droppable.each do |worktree_path, database|
+  system("dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
+  puts "Dropped #{database}"
+  dropped_worktrees << worktree_path
+end
+
+File.write(REGISTRY_PATH, JSON.pretty_generate(registry.except(*dropped_worktrees.uniq)))
