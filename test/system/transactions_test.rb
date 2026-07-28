@@ -150,6 +150,53 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_no_selector "##{ActionView::RecordIdentifier.dom_id(leg_b)}"
   end
 
+  test "creating a transaction on an account-filtered index inserts the row in place" do
+    account = accounts(:asset_account)
+    # Newer than every row in the account's list, but on neither of its sides.
+    # It is the row the unscoped anchor query used to pick, and it is not on the
+    # page, so the insertion used to be dropped silently.
+    Transaction.create!(
+      user: @user, src_account: accounts(:liability_account), dest_account: accounts(:expense_account),
+      amount_minor: 100, currency: currencies(:usd), description: "Off-list row",
+      transacted_at: 1.day.ago
+    )
+
+    visit account_transactions_path(account)
+    assert_selector "#transactions .transaction", count: 2
+    assert_no_text "Off-list row"
+
+    fill_in "transaction[description]", with: "Filtered live create"
+    select account.name, from: "transaction[src_account_id]"
+    select accounts(:expense_account).name, from: "transaction[dest_account_id]"
+    fill_in "transaction[amount]", with: "31.00"
+    click_button "Create"
+
+    assert_text "Filtered live create"
+    assert_selector "#transactions .transaction", count: 3
+    created = Transaction.find_by!(description: "Filtered live create")
+    assert_equal ActionView::RecordIdentifier.dom_id(created),
+                 first("#transactions > turbo-frame")[:id],
+                 "the newest transaction should be inserted at the top of the list"
+  end
+
+  test "creating a transaction on the unfiltered index inserts the row in place" do
+    visit transactions_path
+    assert_selector "#transactions .transaction", count: 2
+
+    fill_in "transaction[description]", with: "Unfiltered live create"
+    select accounts(:asset_account).name, from: "transaction[src_account_id]"
+    select accounts(:expense_account).name, from: "transaction[dest_account_id]"
+    fill_in "transaction[amount]", with: "31.00"
+    click_button "Create"
+
+    assert_text "Unfiltered live create"
+    assert_selector "#transactions .transaction", count: 3
+    created = Transaction.find_by!(description: "Unfiltered live create")
+    assert_equal ActionView::RecordIdentifier.dom_id(created),
+                 first("#transactions > turbo-frame")[:id],
+                 "the newest transaction should be inserted at the top of the list"
+  end
+
   test "sidebar active state survives a live update" do
     account = accounts(:asset_account)
     other = accounts(:expense_account)

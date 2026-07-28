@@ -120,6 +120,121 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "create anchors the new row to the newest transaction on the unfiltered index" do
+    # asset_account -> expense_account, 2 days ago; the newest row user one owns.
+    newest = transactions(:one)
+
+    post transactions_url, params: { transaction: {
+      transacted_at: Time.current,
+      src_account_id: accounts(:asset_account).id,
+      dest_account_id: accounts(:expense_account).id,
+      description: "Unfiltered create",
+      amount: "10.00"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="before" target="#{ActionView::RecordIdentifier.dom_id(newest)}")
+  end
+
+  test "create on an account-filtered index anchors to a row in that account's list" do
+    account = accounts(:asset_account)
+    # Newer than every row in the account's list, but touching neither of its
+    # sides — the anchor the unfiltered query would have picked.
+    unrelated = Transaction.create!(user: @user, src_account: accounts(:liability_account),
+                                    dest_account: accounts(:expense_account), amount_minor: 100,
+                                    currency: currencies(:usd), description: "Unrelated row",
+                                    transacted_at: 1.day.ago)
+
+    post transactions_url, params: { account_id: account.id, transaction: {
+      transacted_at: Time.current,
+      src_account_id: account.id,
+      dest_account_id: accounts(:expense_account).id,
+      description: "Filtered create",
+      amount: "25.00"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="before" target="#{ActionView::RecordIdentifier.dom_id(transactions(:one))}")
+    assert_not_includes response.body, ActionView::RecordIdentifier.dom_id(unrelated)
+  end
+
+  test "create on an account-filtered index with an empty list appends the row" do
+    account = accounts(:liability_account)
+    assert_empty @user.transactions.where(src_account: account).or(@user.transactions.where(dest_account: account))
+
+    post transactions_url, params: { account_id: account.id, transaction: {
+      transacted_at: Time.current,
+      src_account_id: account.id,
+      dest_account_id: accounts(:expense_account).id,
+      description: "First row for this account",
+      amount: "25.00"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="append" target="transactions")
+    assert_includes response.body, "First row for this account"
+  end
+
+  test "create on an account-filtered index emits no row for a transaction outside the filter" do
+    post transactions_url, params: { account_id: accounts(:liability_account).id, transaction: {
+      transacted_at: Time.current,
+      src_account_id: accounts(:asset_account).id,
+      dest_account_id: accounts(:expense_account).id,
+      description: "Belongs to another account",
+      amount: "25.00"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    # The form is still reset, but nothing is inserted into the filtered list.
+    assert_includes response.body, %(action="replace" target="new_transaction")
+    assert_not_includes response.body, "Belongs to another account"
+    assert_not_includes response.body, %(action="before")
+    assert_not_includes response.body, %(action="append")
+  end
+
+  test "create appends a transaction older than every row in the list" do
+    post transactions_url, params: { transaction: {
+      transacted_at: 10.days.ago,
+      src_account_id: accounts(:asset_account).id,
+      dest_account_id: accounts(:expense_account).id,
+      description: "Backdated create",
+      amount: "25.00"
+    } }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="append" target="transactions")
+    assert_not_includes response.body, %(action="before")
+  end
+
+  test "create rejects an account_id belonging to another user" do
+    assert_no_difference("Transaction.count") do
+      post transactions_url, params: { account_id: accounts(:two).id, transaction: {
+        transacted_at: Time.current,
+        src_account_id: accounts(:asset_account).id,
+        dest_account_id: accounts(:expense_account).id,
+        description: "Foreign account filter",
+        amount: "25.00"
+      } }, as: :turbo_stream
+    end
+
+    assert_response :not_found
+  end
+
+  test "merge rejects an account_id belonging to another user" do
+    post merge_transactions_url, params: {
+      account_id: accounts(:two).id,
+      transaction_ids: [ transactions(:one).id, transactions(:two).id ]
+    }, as: :turbo_stream
+
+    assert_response :not_found
+  end
+
+  test "unmerge rejects an account_id belonging to another user" do
+    post unmerge_transaction_url(@transaction), params: { account_id: accounts(:two).id }, as: :turbo_stream
+
+    assert_response :not_found
+  end
+
   test "should update transaction with turbo_stream" do
     patch transaction_url(@transaction), params: { transaction: {
       description: "Updated description",
@@ -338,6 +453,86 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_nil deposit.merged_into_id
     assert_equal 500, withdrawal.amount_minor
     assert_equal 500, deposit.amount_minor
+  end
+
+  test "merge on an account-filtered index anchors to a row in that account's list" do
+    currency = currencies(:usd)
+    bank = accounts(:asset_account)
+    other_bank = accounts(:linked_asset)
+    # Newer than every row in the account's list, but touching neither of its
+    # sides — the anchor the unfiltered query would have picked.
+    unrelated = Transaction.create!(user: @user, src_account: accounts(:liability_account),
+                                    dest_account: accounts(:expense_account), amount_minor: 100,
+                                    currency: currency, description: "Unrelated row",
+                                    transacted_at: 1.day.ago)
+    withdrawal = Transaction.create!(user: @user, src_account: bank, dest_account: accounts(:expense_account),
+                                     amount_minor: 1000, currency: currency, description: "Filtered merge",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: accounts(:revenue_account), dest_account: other_bank,
+                                  amount_minor: 1000, currency: currency, description: "Filtered merge",
+                                  transacted_at: Time.current)
+
+    post merge_transactions_url, params: {
+      account_id: bank.id,
+      transaction_ids: [ withdrawal.id, deposit.id ],
+      description: "Merged transfer"
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="before" target="#{ActionView::RecordIdentifier.dom_id(transactions(:one))}")
+    assert_not_includes response.body, %(target="#{ActionView::RecordIdentifier.dom_id(unrelated)}")
+  end
+
+  test "merge on an account-filtered index emits no row for a transfer outside the filter" do
+    currency = currencies(:usd)
+    withdrawal = Transaction.create!(user: @user, src_account: accounts(:asset_account),
+                                     dest_account: accounts(:expense_account), amount_minor: 1000,
+                                     currency: currency, description: "Offscreen merge",
+                                     transacted_at: Time.current)
+    deposit = Transaction.create!(user: @user, src_account: accounts(:revenue_account),
+                                  dest_account: accounts(:linked_asset), amount_minor: 1000,
+                                  currency: currency, description: "Offscreen merge",
+                                  transacted_at: Time.current)
+
+    post merge_transactions_url, params: {
+      account_id: accounts(:liability_account).id,
+      transaction_ids: [ withdrawal.id, deposit.id ],
+      description: "Merged offscreen transfer"
+    }, as: :turbo_stream
+
+    assert_response :success
+    # The originals are still removed from the list; nothing takes their place.
+    assert_includes response.body, %(action="remove" target="transaction_#{withdrawal.id}")
+    assert_not_includes response.body, "Merged offscreen transfer"
+    assert_not_includes response.body, %(action="before")
+    assert_not_includes response.body, %(action="append")
+  end
+
+  test "unmerge on an account-filtered index restores only the legs in that account's list" do
+    withdrawal, deposit, merged, unrelated = merged_pair_for_unmerge
+
+    post unmerge_transaction_url(merged), params: { account_id: accounts(:asset_account).id }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, "Unmerge withdrawal leg"
+    assert_not_includes response.body, "Unmerge deposit leg"
+    assert_not_includes response.body, ActionView::RecordIdentifier.dom_id(deposit)
+    # Anchored to the nearest newer row in the account's list, not to the newer
+    # transaction that belongs to a different account.
+    assert_includes response.body, %(action="after" target="#{ActionView::RecordIdentifier.dom_id(transactions(:one))}")
+    assert_not_includes response.body, %(target="#{ActionView::RecordIdentifier.dom_id(unrelated)}")
+    assert_nil withdrawal.reload.merged_into_id
+  end
+
+  test "unmerge on the unfiltered index restores both legs" do
+    _withdrawal, _deposit, merged, unrelated = merged_pair_for_unmerge
+
+    post unmerge_transaction_url(merged), as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, "Unmerge withdrawal leg"
+    assert_includes response.body, "Unmerge deposit leg"
+    assert_includes response.body, %(action="after" target="#{ActionView::RecordIdentifier.dom_id(unrelated)}")
   end
 
   test "unmerge on non-merged transaction returns error" do
@@ -900,4 +1095,31 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
       post bulk_unexclude_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
     end
   end
+
+  private
+
+    # A merged transfer whose two legs touch different banks, plus a row that is
+    # newer than both legs but touches neither bank. The unfiltered index anchors
+    # the restored rows to that row; an index filtered to :asset_account must
+    # anchor to transactions(:one) and restore only the withdrawal leg.
+    def merged_pair_for_unmerge
+      currency = currencies(:usd)
+      withdrawal = Transaction.create!(user: @user, src_account: accounts(:asset_account),
+                                       dest_account: accounts(:expense_account), amount_minor: 500,
+                                       currency: currency, description: "Unmerge withdrawal leg",
+                                       transacted_at: 3.days.ago)
+      deposit = Transaction.create!(user: @user, src_account: accounts(:revenue_account),
+                                    dest_account: accounts(:linked_asset), amount_minor: 500,
+                                    currency: currency, description: "Unmerge deposit leg",
+                                    transacted_at: 3.days.ago)
+      unrelated = Transaction.create!(user: @user, src_account: accounts(:liability_account),
+                                      dest_account: accounts(:expense_account), amount_minor: 100,
+                                      currency: currency, description: "Unrelated row",
+                                      transacted_at: 60.hours.ago)
+
+      merger = Transaction::Merge.new(withdrawal, deposit, user: @user)
+      merger.call
+
+      [ withdrawal, deposit, merger.merged_transaction, unrelated ]
+    end
 end
