@@ -358,7 +358,54 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_no_selector "##{ActionView::RecordIdentifier.dom_id(deposit)}"
   end
 
+  test "validation error is visible without scrolling the transactions table" do
+    # Worst case for the old absolutely positioned card: nothing below the form row.
+    Transaction.where(user: @user).destroy_all
+
+    visit transactions_path
+
+    fill_in "transaction[description]", with: "No accounts picked"
+    fill_in "transaction[amount]", with: "5.00"
+    click_button "Create"
+
+    assert_selector ".transactions form .error", text: "Transaction could not be saved:"
+    assert_error_card_inside_table
+  end
+
+  test "validation error on the last row stays inside the transactions table" do
+    Transaction.where(user: @user).destroy_all
+    transaction = manual_transaction("Editable row", 1234)
+
+    visit transactions_path
+
+    within "##{ActionView::RecordIdentifier.dom_id(transaction)}" do
+      click_link "Edit"
+      # A blank date fails the `transacted_at` presence validation.
+      find("input[name='transaction[transacted_at]']").set("")
+      click_button "Save"
+
+      assert_selector ".error", text: "Transaction could not be saved:"
+    end
+
+    assert_error_card_inside_table
+  end
+
   private
+
+  # `.transactions` sets `overflow-x: auto`, which makes it a scroll container on both
+  # axes. An error card laid out past the container's content box is clipped and only
+  # reachable by scrolling, so assert it sits inside the box.
+  def assert_error_card_inside_table
+    overhang = page.evaluate_script(<<~JS)
+      (() => {
+        const table = document.querySelector(".transactions");
+        const error = document.querySelector(".transactions .error");
+        return error.getBoundingClientRect().bottom - table.getBoundingClientRect().bottom;
+      })()
+    JS
+    assert overhang <= 0,
+      "error card hangs #{overhang}px below .transactions and can only be reached by scrolling"
+  end
 
   def manual_transaction(description, amount_minor)
     Transaction.create!(

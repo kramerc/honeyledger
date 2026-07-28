@@ -68,18 +68,18 @@
         <%= form.submit "Save" %>
         <a href="#" data-action="transactions--row#cancelEdit transactions--form#clearError">Cancel</a>
       <% end %>
-
-      <% if transaction.errors.any? %>
-        <div class="error" data-controller="error" data-transactions--form-target="error">
-          <button data-action="error#close" class="close">&times;</button>
-          <h4>Transaction could not be saved:</h4>
-          <ul>
-            <% transaction.errors.full_messages.each do |message| %>
-              <li><%= message %></li>
-            <% end %>
-          </ul>
-        </div>
-      <% end %>
     </div>
   </div>
+
+  <% if transaction.errors.any? %>
+    <div class="error" role="alert" data-controller="error" data-transactions--form-target="error">
+      <button data-action="error#close" class="close">&times;</button>
+      <h4>Transaction could not be saved:</h4>
+      <ul>
+        <% transaction.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
 <% end %>

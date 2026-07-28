@@ -205,13 +205,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Error messages */
+/* Error messages
+   Kept in normal flow: .transactions is a scroll container (overflow-x: auto forces
+   overflow-y to compute to auto), so an absolutely positioned card hanging below the
+   form row becomes scrollable overflow instead of painted content. position: relative
+   is still needed as the containing block for .close below. */
 .transactions form .error {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  position: relative;
   width: 280px;
-  z-index: 10;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  margin: 8px 8px 8px auto;
 
   background-color: var(--bg-error);
   color: var(--text-error);
