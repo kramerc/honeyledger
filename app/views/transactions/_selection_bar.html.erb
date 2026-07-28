@@ -49,21 +49,26 @@
   </button>
 </div>
 
-<%# Bulk action forms; the controller injects transaction_ids before submit. %>
+<%# Bulk action forms; the controller injects transaction_ids before submit.
+    account_id carries the index's account filter so the response can scope its
+    Turbo Stream targets to the list on screen. %>
 <%= form_with url: bulk_destroy_transactions_path, method: :delete,
       data: { transactions__selection_target: "deleteForm",
               action: "turbo:submit-end->transactions--selection#cancel" } do %>
+  <%= hidden_field_tag :account_id, filter_account.id if filter_account %>
 <% end %>
 
 <%= form_with url: bulk_exclude_transactions_path, method: :post,
       data: { transactions__selection_target: "excludeForm",
               action: "turbo:submit-end->transactions--selection#cancel" } do %>
+  <%= hidden_field_tag :account_id, filter_account.id if filter_account %>
 <% end %>
 
 <% if show_excluded %>
   <%= form_with url: bulk_unexclude_transactions_path, method: :post,
         data: { transactions__selection_target: "restoreForm",
                 action: "turbo:submit-end->transactions--selection#cancel" } do %>
+    <%= hidden_field_tag :account_id, filter_account.id if filter_account %>
   <% end %>
 <% end %>
 
@@ -76,6 +81,7 @@
     <%= form_with url: merge_transactions_path, method: :post, data: { action: "turbo:submit-end->transactions--selection#cancel" } do %>
       <input type="hidden" name="transaction_ids[]" value="" data-slot="a">
       <input type="hidden" name="transaction_ids[]" value="" data-slot="b">
+      <%= hidden_field_tag :account_id, filter_account.id if filter_account %>
 
       <div class="selection-confirmation__field">
         <label for="merge_description">Description</label>
@@ -123,6 +129,7 @@
           data: { transactions__selection_target: "combineForm",
                   action: "turbo:submit-end->transactions--selection#cancel" } do %>
       <input type="hidden" name="survivor_id" value="" data-transactions--selection-target="combineSurvivorId">
+      <%= hidden_field_tag :account_id, filter_account.id if filter_account %>
 
       <div class="selection-confirmation__actions">
         <button type="button" class="selection-bar__btn selection-bar__btn--primary"

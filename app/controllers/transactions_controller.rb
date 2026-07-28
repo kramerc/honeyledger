@@ -1,5 +1,6 @@
 class TransactionsController < ApplicationController
   before_action :authenticate_user!
+  before_action :set_filter_account
   before_action :set_transaction, only: %i[ show edit update destroy ]
   before_action :set_form_collections, only: %i[ index new create edit update show ]
 
@@ -8,14 +9,9 @@ class TransactionsController < ApplicationController
     @new_transaction = build_new_transaction
 
     @show_excluded = params[:show_excluded] == "1"
-    scope = current_user.transactions.unmerged
-    scope = scope.unexcluded unless @show_excluded
-    @transactions = scope.includes(:category, :src_account, :dest_account, :currency, :fx_currency, transaction_sources: :sourceable, merged_sources: [ :src_account, :dest_account, { transaction_sources: :sourceable } ]).order(transacted_at: :desc, created_at: :desc)
-    account_id = params.fetch(:account_id, nil)
-    if account_id.present?
-      @account = current_user.accounts.find(account_id)
-      @transactions = @transactions.where(src_account_id: @account.id).or(@transactions.where(dest_account_id: @account.id))
-    end
+    @transactions = visible_transactions(show_excluded: @show_excluded)
+      .includes(:category, :src_account, :dest_account, :currency, :fx_currency, transaction_sources: :sourceable, merged_sources: [ :src_account, :dest_account, { transaction_sources: :sourceable } ])
+      .order(transacted_at: :desc, created_at: :desc)
   end
 
   # GET /transactions/1 or /transactions/1.json
@@ -34,7 +30,8 @@ class TransactionsController < ApplicationController
     respond_to do |format|
       if @transaction.save
         format.turbo_stream do
-          @last_transaction = find_preceding_transaction(@transaction)
+          @row_visible = row_visible?(@transaction)
+          @last_transaction = find_preceding_transaction(@transaction) if @row_visible
           @new_transaction = build_new_transaction
         end
         format.html { redirect_to @transaction, notice: "Transaction was successfully created." }
@@ -73,16 +70,23 @@ class TransactionsController < ApplicationController
 
     respond_to do |format|
       if unmerger.call
-        @restored_transactions = unmerger.restored_transactions
+        scope = visible_transactions(show_excluded: show_excluded?)
+        restored = unmerger.restored_transactions
           .sort_by { |t| [ t.transacted_at, t.created_at ] }.reverse
+        # Only legs that belong in the list being rendered can be inserted; an
+        # account-filtered index may exclude some or all of them.
+        visible_ids = scope.where(id: restored.map(&:id)).pluck(:id)
+        @restored_transactions = restored.select { |t| visible_ids.include?(t.id) }
+
         # Find the nearest transaction that's newer (appears above in the list) to insert after.
         # This element is already in the DOM, unlike older ones which may be off-screen or absent.
         newest = @restored_transactions.first
-        @after_transaction = current_user.transactions.unmerged.unexcluded
-          .where.not(id: @restored_transactions.map(&:id))
-          .where("transacted_at > :at OR (transacted_at = :at AND created_at > :cat)",
-                 at: newest.transacted_at, cat: newest.created_at)
-          .order(transacted_at: :asc, created_at: :asc).first
+        @after_transaction = if newest
+          scope.where.not(id: restored.map(&:id))
+            .where("transacted_at > :at OR (transacted_at = :at AND created_at > :cat)",
+                   at: newest.transacted_at, cat: newest.created_at)
+            .order(transacted_at: :asc, created_at: :asc).first
+        end
         @removed_id = @transaction.id
         format.turbo_stream
       else
@@ -117,7 +121,8 @@ class TransactionsController < ApplicationController
     respond_to do |format|
       if merger.call
         @merged_transaction = merger.merged_transaction
-        @last_transaction = find_preceding_transaction(@merged_transaction)
+        @row_visible = row_visible?(@merged_transaction)
+        @last_transaction = find_preceding_transaction(@merged_transaction) if @row_visible
         @removed_ids = [ transaction_a.id, transaction_b.id ]
         format.turbo_stream
       else
@@ -296,6 +301,13 @@ class TransactionsController < ApplicationController
       @transaction = current_user.transactions.find(params.expect(:id))
     end
 
+    # The account the index is filtered to, threaded through mutating requests by
+    # a hidden field so Turbo Stream insertions can be scoped to the same list.
+    def set_filter_account
+      account_id = params[:account_id]
+      @account = current_user.accounts.find(account_id) if account_id.present?
+    end
+
     def bulk_transaction_ids
       Array(params[:transaction_ids]).uniq
     end
@@ -321,10 +333,30 @@ class TransactionsController < ApplicationController
       ])
     end
 
-    def find_preceding_transaction(transaction)
+    # The rows the index is currently rendering. Turbo Stream insertions must be
+    # anchored inside this same scope, or they target a DOM id that isn't on the
+    # page and Turbo drops them silently.
+    def visible_transactions(show_excluded:)
       scope = current_user.transactions.unmerged
-      scope = scope.unexcluded unless show_excluded?
-      scope.where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
+      scope = scope.unexcluded unless show_excluded
+      if @account
+        scope = scope.where(src_account_id: @account.id).or(scope.where(dest_account_id: @account.id))
+      end
+      scope
+    end
+
+    def row_visible?(transaction)
+      visible_transactions(show_excluded: show_excluded?).exists?(id: transaction.id)
+    end
+
+    # The nearest row that sorts below `transaction`, i.e. the one it must be
+    # inserted before. The predicate mirrors the (transacted_at, created_at)
+    # sort order exactly, so a row older by date but newer by creation still
+    # counts as below.
+    def find_preceding_transaction(transaction)
+      visible_transactions(show_excluded: show_excluded?)
+        .where("transacted_at < :at OR (transacted_at = :at AND created_at < :cat)",
+               at: transaction.transacted_at, cat: transaction.created_at)
         .order(transacted_at: :desc, created_at: :desc).first
     end
 

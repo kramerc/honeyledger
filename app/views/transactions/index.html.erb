@@ -34,7 +34,8 @@
       <%= render partial: 'form', locals: {
         transaction: @new_transaction,
         accounts: @accounts,
-        categories: @categories
+        categories: @categories,
+        filter_account: @account
       } %>
     <% end %>
 
@@ -43,5 +44,5 @@
     <% end %>
   </div>
 
-  <%= render "selection_bar", categories: @categories, show_excluded: @show_excluded %>
+  <%= render "selection_bar", categories: @categories, show_excluded: @show_excluded, filter_account: @account %>
 </div>

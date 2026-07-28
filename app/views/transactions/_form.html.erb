@@ -3,6 +3,12 @@
   action: "transactions--form#clearError",
   transactions__row_target: "form"
 }, html: { autocomplete: "off" }) do |form| %>
+  <%# Tells the create action which account's list is on screen, so the new row is
+      anchored inside that list instead of the user's full transaction history. %>
+  <% if local_assigns[:filter_account] %>
+    <%= hidden_field_tag :account_id, local_assigns[:filter_account].id %>
+  <% end %>
+
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
     <div class="select"></div>
     <div>
