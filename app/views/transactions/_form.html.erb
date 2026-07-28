@@ -73,7 +73,7 @@
 
   <% if transaction.errors.any? %>
     <div class="error" role="alert" data-controller="error" data-transactions--form-target="error">
-      <button data-action="error#close" class="close">&times;</button>
+      <button type="button" aria-label="Dismiss error" data-action="error#close" class="close">&times;</button>
       <h4>Transaction could not be saved:</h4>
       <ul>
         <% transaction.errors.full_messages.each do |message| %>

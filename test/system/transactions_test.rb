@@ -372,6 +372,24 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_error_card_inside_table
   end
 
+  test "dismissing the error card does not resubmit the form" do
+    Transaction.where(user: @user).destroy_all
+
+    visit transactions_path
+
+    fill_in "transaction[description]", with: "No accounts picked"
+    fill_in "transaction[amount]", with: "5.00"
+    click_button "Create"
+    assert_selector ".transactions form .error"
+
+    # The close button lives inside the form, so it must not act as a submit button.
+    find(".transactions form .error .close").click
+
+    assert_no_selector ".transactions form .error"
+    assert_field "transaction[description]", with: "No accounts picked"
+    assert_equal 0, Transaction.where(user: @user).count
+  end
+
   test "validation error on the last row stays inside the transactions table" do
     Transaction.where(user: @user).destroy_all
     transaction = manual_transaction("Editable row", 1234)
@@ -403,8 +421,10 @@ class TransactionsTest < ApplicationSystemTestCase
         return error.getBoundingClientRect().bottom - table.getBoundingClientRect().bottom;
       })()
     JS
-    assert overhang <= 0,
-      "error card hangs #{overhang}px below .transactions and can only be reached by scrolling"
+    # 1px of slack absorbs sub-pixel rounding from getBoundingClientRect; a genuinely
+    # clipped card overhangs by tens of pixels, so the guard stays sharp.
+    assert overhang <= 1,
+      "error card hangs #{overhang.round}px below .transactions and can only be reached by scrolling"
   end
 
   def manual_transaction(description, amount_minor)
