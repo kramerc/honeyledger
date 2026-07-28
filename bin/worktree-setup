@@ -66,14 +66,12 @@ end
 
 # Record which databases this worktree owns, in the primary checkout, so that
 # bin/worktree-clean only ever drops databases it can prove were created here.
-# Anything created by other means is left alone.
+# Anything created by other means is left alone. The update is locked because
+# several worktrees may be bootstrapping at once.
 def register_databases(source_root, suffix)
-  registry_path = File.join(source_root, "tmp", "worktree_databases.json")
-  registry = JSON.parse(File.read(registry_path)) rescue {}
-  registry[APP_ROOT] = suffix
-
-  FileUtils.mkdir_p(File.dirname(registry_path))
-  File.write(registry_path, JSON.pretty_generate(registry))
+  WorktreeDatabase::Registry.update(source_root) do |registry|
+    registry[APP_ROOT] = suffix
+  end
 end
 
 exit 0 unless WorktreeDatabase.linked_worktree?(APP_ROOT)

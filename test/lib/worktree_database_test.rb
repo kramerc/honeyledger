@@ -78,18 +78,76 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     assert_match(/\Aworktree_[0-9a-f]{6}\z/, WorktreeDatabase.slug("---"))
   end
 
+  # override: nil throughout, so the port assertions describe the checkout
+  # rather than whatever HONEYLEDGER_DB_SUFFIX happens to be set to.
   test "the primary checkout prefers port 3000" do
     with_checkout(linked: false) do |root|
-      assert_equal 3000, WorktreeDatabase.preferred_port(root)
+      assert_equal 3000, WorktreeDatabase.preferred_port(root, override: nil)
     end
   end
 
   test "a worktree prefers a stable port inside the scan range" do
     with_checkout(linked: true, relative_path: "import-rules") do |root|
-      port = WorktreeDatabase.preferred_port(root)
+      port = WorktreeDatabase.preferred_port(root, override: nil)
 
-      assert_equal port, WorktreeDatabase.preferred_port(root)
+      assert_equal port, WorktreeDatabase.preferred_port(root, override: nil)
       assert_includes 3000...3200, port
+    end
+  end
+
+  test "preferred_port honours an override the same way suffix does" do
+    with_checkout(linked: false) do |root|
+      assert_not_equal 3000, WorktreeDatabase.preferred_port(root, override: "alice")
+    end
+  end
+end
+
+class WorktreeDatabaseRegistryTest < ActiveSupport::TestCase
+  def with_primary_checkout
+    Dir.mktmpdir { |root| yield root }
+  end
+
+  test "reading a registry that does not exist yields no entries" do
+    with_primary_checkout { |root| assert_empty WorktreeDatabase::Registry.read(root) }
+  end
+
+  test "reading a corrupt registry yields no entries rather than raising" do
+    with_primary_checkout do |root|
+      FileUtils.mkdir_p(File.join(root, "tmp"))
+      File.write(WorktreeDatabase::Registry.path(root), "{not json")
+
+      assert_empty WorktreeDatabase::Registry.read(root)
+    end
+  end
+
+  test "updates round-trip through the registry file" do
+    with_primary_checkout do |root|
+      WorktreeDatabase::Registry.update(root) { |registry| registry["/a"] = "_a_000001" }
+      WorktreeDatabase::Registry.update(root) { |registry| registry["/b"] = "_b_000002" }
+
+      assert_equal({ "/a" => "_a_000001", "/b" => "_b_000002" }, WorktreeDatabase::Registry.read(root))
+    end
+  end
+
+  # Worktrees are bootstrapped concurrently by design. Without the lock, one
+  # process's entry overwrites another's and the loser's databases can never be
+  # reclaimed, so this exercises real concurrent processes rather than threads.
+  test "concurrent updates from separate processes do not lose entries" do
+    with_primary_checkout do |root|
+      worktree_count = 8
+
+      pids = worktree_count.times.map do |index|
+        fork do
+          WorktreeDatabase::Registry.update(root) { |registry| registry["/worktree-#{index}"] = "_w#{index}_000000" }
+          exit!(0)
+        end
+      end
+
+      pids.each { |pid| Process.wait(pid) }
+
+      registry = WorktreeDatabase::Registry.read(root)
+      assert_equal worktree_count, registry.size
+      worktree_count.times { |index| assert_includes registry, "/worktree-#{index}" }
     end
   end
 end

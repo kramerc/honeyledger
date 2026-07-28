@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "digest"
+require "fileutils"
+require "json"
 
 # Identifies the checkout a process is running from, so parallel git worktrees
 # can be given their own databases and development server ports.
@@ -54,8 +56,8 @@ module WorktreeDatabase
     # A stable port per checkout, so servers started from different worktrees
     # do not all race for 3000 and each worktree keeps the same URL between
     # runs. The primary checkout always prefers 3000.
-    def preferred_port(application_root, base: 3000, span: 200)
-      name = identity(application_root)
+    def preferred_port(application_root, base: 3000, span: 200, **options)
+      name = identity(application_root, **options)
       return base unless name
 
       base + (Digest::SHA256.hexdigest(name)[0, 8].to_i(16) % span)
@@ -65,6 +67,45 @@ module WorktreeDatabase
     # repository; the primary checkout's is a directory.
     def linked_worktree?(application_root)
       File.file?(File.join(application_root, ".git"))
+    end
+  end
+
+  # Records which databases were created for which worktree, so bin/worktree-clean
+  # only ever drops databases it can prove bin/worktree-setup created. It lives in
+  # the primary checkout and is keyed by worktree path.
+  module Registry
+    class << self
+      def path(primary_checkout)
+        File.join(primary_checkout, "tmp", "worktree_databases.json")
+      end
+
+      def read(primary_checkout)
+        JSON.parse(File.read(path(primary_checkout)))
+      rescue Errno::ENOENT, JSON::ParserError
+        {}
+      end
+
+      # Read-modify-write under an exclusive lock, replacing the file atomically.
+      # Worktrees are bootstrapped concurrently by design, so an unguarded
+      # read-then-write would let one worktree's entry overwrite another's, and
+      # the loser's databases could never be reclaimed.
+      def update(primary_checkout)
+        registry_path = path(primary_checkout)
+        FileUtils.mkdir_p(File.dirname(registry_path))
+
+        File.open("#{registry_path}.lock", File::RDWR | File::CREAT, 0o644) do |lock|
+          lock.flock(File::LOCK_EX)
+
+          registry = read(primary_checkout)
+          yield registry
+
+          temporary_path = "#{registry_path}.#{Process.pid}.tmp"
+          File.write(temporary_path, JSON.pretty_generate(registry))
+          File.rename(temporary_path, registry_path)
+
+          registry
+        end
+      end
     end
   end
 end
