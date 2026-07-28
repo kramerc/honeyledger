@@ -82,6 +82,23 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     assert_match(/\Aworktree_[0-9a-f]{6}\z/, WorktreeDatabase.slug("---"))
   end
 
+  # Only a path-derived suffix proves exclusive ownership. An override may be
+  # exported for the primary checkout or another worktree, so databases created
+  # under one are never registered as reclaimable.
+  test "a worktree owns its databases only when the suffix comes from its path" do
+    with_checkout(linked: true) do |root|
+      assert WorktreeDatabase.path_derived?(root, override: nil)
+      assert_not WorktreeDatabase.path_derived?(root, override: "alice")
+      assert_not WorktreeDatabase.path_derived?(root, override: "")
+    end
+  end
+
+  test "the primary checkout never owns worktree databases" do
+    with_checkout(linked: false) do |root|
+      assert_not WorktreeDatabase.path_derived?(root, override: nil)
+    end
+  end
+
   # override: nil throughout, so the port assertions describe the checkout
   # rather than whatever HONEYLEDGER_DB_SUFFIX happens to be set to.
   test "the primary checkout prefers port 3000" do

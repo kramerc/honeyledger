@@ -74,6 +74,17 @@ module WorktreeDatabase
     def linked_worktree?(application_root)
       File.file?(File.join(application_root, ".git"))
     end
+
+    # True when the suffix derives from the worktree path alone, which is the
+    # only case where a worktree exclusively owns its databases.
+    #
+    # An override is user-supplied and says nothing about ownership: the same
+    # value may be exported for the primary checkout or for another worktree,
+    # and the primary checkout is never registered at all. Databases created
+    # under an override are therefore never recorded as reclaimable.
+    def path_derived?(application_root, override: ENV["HONEYLEDGER_DB_SUFFIX"])
+      override.nil? && linked_worktree?(application_root)
+    end
   end
 
   # Records which databases were created for which worktree, so bin/worktree-clean

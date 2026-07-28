@@ -92,7 +92,12 @@ unless prepare_databases
   exit 0
 end
 
-register_databases(source_root, WorktreeDatabase.suffix(APP_ROOT))
+# Only databases this worktree exclusively owns are recorded. Under a manual
+# HONEYLEDGER_DB_SUFFIX the same databases may belong to the primary checkout or
+# another worktree, so they stay unregistered and bin/worktree-clean leaves them
+# alone -- reclaiming them is then the caller's business.
+exclusively_owned = WorktreeDatabase.path_derived?(APP_ROOT)
+register_databases(source_root, WorktreeDatabase.suffix(APP_ROOT)) if exclusively_owned
 
 FileUtils.mkdir_p(File.dirname(MARKER))
 FileUtils.touch(MARKER)
@@ -100,5 +105,6 @@ FileUtils.touch(MARKER)
 summary = []
 summary << "linked #{linked.join(", ")} from the primary checkout" if linked.any?
 summary << "prepared this worktree's own development and test databases"
+summary << "left them unregistered because HONEYLEDGER_DB_SUFFIX is set, so bin/worktree-clean will not reclaim them" unless exclusively_owned
 
 puts JSON.generate(systemMessage: "Worktree ready: #{summary.join("; ")}.")

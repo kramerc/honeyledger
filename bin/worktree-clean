@@ -36,9 +36,19 @@ def live_worktrees
   paths
 end
 
+# config/database.yml honours DB_HOST (the devcontainer sets it), but psql and
+# dropdb would otherwise fall back to libpq's defaults and read or delete from a
+# different cluster than the one Rails uses.
+PSQL_ENVIRONMENT =
+  if ENV["DB_HOST"]
+    { "PGHOST" => ENV["DB_HOST"], "PGUSER" => "postgres", "PGPASSWORD" => "postgres" }
+  else
+    {}
+  end
+
 # Likewise, a failed enumeration would look like "none of these databases exist".
 def existing_databases
-  listing = `psql -tAc #{"SELECT datname FROM pg_database".shellescape} postgres`
+  listing = IO.popen(PSQL_ENVIRONMENT, [ "psql", "-tAc", "SELECT datname FROM pg_database", "postgres" ], &:read)
   abort "Could not query PostgreSQL for existing databases; is it running?" unless $?.success?
 
   listing.split("\n").map(&:strip).reject(&:empty?)
@@ -78,7 +88,7 @@ WorktreeDatabase::Registry.with_lock(APP_ROOT) do
   droppable = databases_for(reclaimable, existing_databases)
 
   droppable.each do |_worktree_path, database|
-    system("dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
+    system(PSQL_ENVIRONMENT, "dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
     puts "Dropped #{database}"
   end
 
