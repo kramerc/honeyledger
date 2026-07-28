@@ -42,3 +42,6 @@
 # Ignore local Claude Code settings and runtime artifacts.
 /.claude/settings.local.json
 /.claude/*.lock
+
+# Ignore worktrees created for parallel sessions.
+/.claude/worktrees/

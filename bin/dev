@@ -1,2 +1,23 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Claim the first free port at or above 3000 so that servers started from
+# parallel worktrees do not collide. The primary checkout still lands on 3000
+# whenever nothing else holds it. Set PORT to pin one explicitly.
+unless ENV["PORT"] || ARGV.any? { |argument| argument.start_with?("-p", "--port") }
+  require "socket"
+
+  port = (3000..3050).find do |candidate|
+    TCPServer.new("127.0.0.1", candidate).close
+    true
+  rescue Errno::EADDRINUSE, Errno::EACCES
+    false
+  end
+
+  if port
+    ENV["PORT"] = port.to_s
+    warn "=> Port 3000 is taken; starting on #{port}" unless port == 3000
+  end
+end
+
 exec "./bin/rails", "server", *ARGV

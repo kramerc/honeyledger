@@ -22,8 +22,49 @@ bin/bundler-audit                                # Security scan (gems)
 bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
 bin/rails db:create db:migrate                   # Set up database
+bin/worktree-clean --drop                        # Drop databases left by deleted worktrees
 kamal deploy                                     # Deploy to production
 ```
+
+## Parallel Development
+
+Several Claude Code sessions and agents work this repo at once. Each concurrent
+line of work gets its own git worktree, and each worktree is isolated so that
+sessions never share a database, a port, or a branch.
+
+**Start isolated work in a worktree**, not in the primary checkout — use the
+`EnterWorktree` tool, or `git worktree add .claude/worktrees/<name> -b <branch>`.
+Reserve the primary checkout at `/home/kramer/Dev/Honeyledger/honeyledger` for
+review, merging, and anything that must see `main`.
+
+**What is isolated automatically:**
+
+- **Databases.** `config/database.yml` appends a per-worktree suffix to the
+  development and test database names (`honeyledger_test_<worktree>`), derived
+  from the worktree directory. The primary checkout keeps the plain, unsuffixed
+  names. Two sessions can run `bin/rails test` simultaneously without clobbering
+  each other's fixtures, and a migration on one branch cannot break another.
+  Override with `HONEYLEDGER_DB_SUFFIX`; production is never suffixed.
+- **Secrets and local settings.** `bin/worktree-setup` runs as a `SessionStart`
+  hook. In a worktree it symlinks the gitignored `config/master.key` and
+  `.claude/settings.local.json` from the primary checkout and prepares that
+  worktree's databases. It is idempotent and a no-op in the primary checkout.
+- **Ports.** `bin/dev` claims the first free port at or above 3000, so servers
+  from different worktrees coexist. Set `PORT` to pin one.
+- **Logs, tmp, and coverage** are per-worktree already.
+
+**What is still shared** — coordinate before touching these: the `main` branch
+and remote, the `honeyledger_development` database in the primary checkout, and
+any real aggregator API credentials.
+
+**Cleaning up.** `git worktree remove` does not drop the databases the worktree
+created. Run `bin/worktree-clean` to list orphaned databases and
+`bin/worktree-clean --drop` to reclaim them.
+
+Test parallelism within a single worktree stays disabled (see
+`test/test_helper.rb`) because it conflicts with SimpleCov; with several
+sessions running suites concurrently the cores are better spent across
+worktrees anyway.
 
 ## Architecture
 

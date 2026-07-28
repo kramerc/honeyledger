@@ -1,0 +1,89 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Prepares a git worktree for use as an isolated development checkout.
+#
+# Two things do not come along when git creates a worktree: files that are
+# gitignored (credentials, local Claude Code settings) and databases. This
+# script supplies both, so a session that starts in a fresh worktree can run
+# the suite immediately.
+#
+# It is idempotent and exits immediately in the primary checkout, which makes
+# it safe to wire up as a SessionStart hook. Pass --force to re-run the
+# database preparation in a worktree that has already been bootstrapped.
+
+require "fileutils"
+require "json"
+require "shellwords"
+
+APP_ROOT = File.expand_path("..", __dir__)
+MARKER = File.join(APP_ROOT, "tmp", "worktree_bootstrapped")
+
+# Gitignored paths a worktree needs from the primary checkout. Each is
+# symlinked so that rotating a credential in the primary checkout, or adding a
+# permission to the allowlist, immediately applies everywhere.
+LINKED_PATHS = [
+  "config/master.key",
+  ".claude/settings.local.json"
+].freeze
+
+# A linked worktree's `.git` is a file (`gitdir: ...`); the primary checkout's
+# is a directory.
+def worktree?
+  File.file?(File.join(APP_ROOT, ".git"))
+end
+
+# `git worktree list --porcelain` always reports the primary checkout first.
+def primary_checkout
+  listing = `git -C #{APP_ROOT.shellescape} worktree list --porcelain 2>/dev/null`
+  return nil unless $?.success?
+
+  listing.lines.first.to_s[/\Aworktree (.+)/, 1]&.strip
+end
+
+def link_shared_paths(source_root)
+  linked = []
+
+  LINKED_PATHS.each do |relative_path|
+    source = File.join(source_root, relative_path)
+    destination = File.join(APP_ROOT, relative_path)
+
+    next unless File.exist?(source)
+    next if File.symlink?(destination) || File.exist?(destination)
+
+    FileUtils.mkdir_p(File.dirname(destination))
+    FileUtils.ln_s(source, destination)
+    linked << relative_path
+  end
+
+  linked
+end
+
+def prepare_databases
+  # db:prepare creates the database and loads the schema when it is missing,
+  # and is a cheap no-op once it exists.
+  system("bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL) &&
+    system("bin/rails", "db:test:prepare", chdir: APP_ROOT, out: File::NULL)
+end
+
+exit 0 unless worktree?
+exit 0 if File.exist?(MARKER) && !ARGV.include?("--force")
+
+source_root = primary_checkout
+exit 0 if source_root.nil? || source_root == APP_ROOT
+
+linked = link_shared_paths(source_root)
+prepared = prepare_databases
+
+FileUtils.mkdir_p(File.dirname(MARKER))
+FileUtils.touch(MARKER)
+
+summary = []
+summary << "linked #{linked.join(", ")} from the primary checkout" if linked.any?
+summary << if prepared
+  "prepared this worktree's own development and test databases"
+else
+  "could not prepare databases automatically — run bin/rails db:prepare db:test:prepare"
+end
+
+puts JSON.generate(systemMessage: "Worktree ready: #{summary.join("; ")}.")
