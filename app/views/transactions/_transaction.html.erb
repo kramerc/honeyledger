@@ -93,7 +93,9 @@
     </div>
 
     <!-- Edit -->
-    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction), loading: "lazy", class: "edit" do %>
+    <%# account_id rides along so the edit form posts it back and the replaced row
+        keeps its action links scoped to the list on screen. %>
+    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction, account_id: @account&.id), loading: "lazy", class: "edit" do %>
       <div class="row">
         <div class="loading">Loading...</div>
       </div>

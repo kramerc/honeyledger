@@ -349,9 +349,14 @@ class TransactionsController < ApplicationController
       visible_transactions(show_excluded: show_excluded?).exists?(id: transaction.id)
     end
 
+    # The nearest row that sorts below `transaction`, i.e. the one it must be
+    # inserted before. The predicate mirrors the (transacted_at, created_at)
+    # sort order exactly, so a row older by date but newer by creation still
+    # counts as below.
     def find_preceding_transaction(transaction)
       visible_transactions(show_excluded: show_excluded?)
-        .where("transacted_at <= ? AND created_at < ?", transaction.transacted_at, transaction.created_at)
+        .where("transacted_at < :at OR (transacted_at = :at AND created_at < :cat)",
+               at: transaction.transacted_at, cat: transaction.created_at)
         .order(transacted_at: :desc, created_at: :desc).first
     end
 

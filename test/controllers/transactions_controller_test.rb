@@ -206,6 +206,37 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, %(action="before")
   end
 
+  test "account-filtered index keeps the filter on each row's lazy edit frame" do
+    account = accounts(:asset_account)
+
+    get account_transactions_url(account)
+
+    assert_response :success
+    assert_includes response.body, edit_transaction_path(transactions(:one), account_id: account.id)
+  end
+
+  test "edit renders the form with the account filter" do
+    account = accounts(:asset_account)
+
+    get edit_transaction_url(@transaction, account_id: account.id)
+
+    assert_response :success
+    assert_select "input[type=hidden][name=?][value=?]", "account_id", account.id.to_s
+  end
+
+  test "update on an account-filtered index keeps the filter on the row's action links" do
+    _withdrawal, _deposit, merged, _unrelated = merged_pair_for_unmerge
+    account = accounts(:asset_account)
+
+    patch transaction_url(merged), params: {
+      account_id: account.id,
+      transaction: { description: "Renamed transfer" }
+    }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, unmerge_transaction_path(merged, account_id: account.id)
+  end
+
   test "create rejects an account_id belonging to another user" do
     assert_no_difference("Transaction.count") do
       post transactions_url, params: { account_id: accounts(:two).id, transaction: {
