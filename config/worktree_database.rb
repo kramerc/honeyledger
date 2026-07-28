@@ -10,8 +10,14 @@ require "json"
 # config/database.yml, bin/dev, bin/worktree-setup and bin/worktree-clean must
 # all agree on this derivation: if bin/worktree-clean computed a suffix even
 # slightly differently from database.yml it would mistake a live worktree's
-# database for an orphan. It lives in config/ rather than lib/ because
-# database.yml loads it long before Zeitwerk is set up.
+# database for an orphan.
+#
+# This is boot configuration rather than application code, which is why it lives
+# in config/ and not lib/. Every caller requires it directly: database.yml is
+# evaluated before the autoloader exists, and the bin/ scripts run outside Rails
+# entirely. Under lib/ it would need excluding from autoload_lib (Zeitwerk must
+# not also own a hand-loaded file) and from SimpleCov (it is loaded during boot,
+# before Coverage starts, so it can never be measured); config/ needs neither.
 module WorktreeDatabase
   WORKTREE_DIRECTORY = "/.claude/worktrees/"
 

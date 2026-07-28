@@ -1,6 +1,10 @@
 require "test_helper"
 require "tmpdir"
 
+# Required explicitly rather than autoloaded: config/ is not on the autoload
+# path, and config/database.yml and the bin/ scripts load this by hand too.
+require Rails.root.join("config", "worktree_database").to_s
+
 class WorktreeDatabaseTest < ActiveSupport::TestCase
   # A linked worktree is identified by `.git` being a file rather than a
   # directory, so the fixtures below only need to create the right kind of entry.
