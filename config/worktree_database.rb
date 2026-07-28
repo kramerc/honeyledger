@@ -91,26 +91,54 @@ module WorktreeDatabase
         {}
       end
 
-      # Read-modify-write under an exclusive lock, replacing the file atomically.
-      # Worktrees are bootstrapped concurrently by design, so an unguarded
-      # read-then-write would let one worktree's entry overwrite another's, and
-      # the loser's databases could never be reclaimed.
-      def update(primary_checkout)
+      # Runs the block holding the registry's exclusive lock. Registration and
+      # cleanup both take it, so a worktree cannot be bootstrapped while
+      # bin/worktree-clean is deciding what is safe to drop.
+      def with_lock(primary_checkout)
         registry_path = path(primary_checkout)
         FileUtils.mkdir_p(File.dirname(registry_path))
 
         File.open("#{registry_path}.lock", File::RDWR | File::CREAT, 0o644) do |lock|
           lock.flock(File::LOCK_EX)
+          yield
+        end
+      end
 
+      # Read-modify-write under that lock, replacing the file atomically.
+      # Worktrees are bootstrapped concurrently by design, so an unguarded
+      # read-then-write would let one worktree's entry overwrite another's, and
+      # the loser's databases could never be reclaimed.
+      def update(primary_checkout)
+        with_lock(primary_checkout) do
           registry = read(primary_checkout)
           yield registry
 
-          temporary_path = "#{registry_path}.#{Process.pid}.tmp"
-          File.write(temporary_path, JSON.pretty_generate(registry))
-          File.rename(temporary_path, registry_path)
-
+          write(primary_checkout, registry)
           registry
         end
+      end
+
+      def write(primary_checkout, registry)
+        registry_path = path(primary_checkout)
+        temporary_path = "#{registry_path}.#{Process.pid}.tmp"
+
+        File.write(temporary_path, JSON.pretty_generate(registry))
+        File.rename(temporary_path, registry_path)
+      end
+
+      # The registry entries whose databases are safe to drop: worktrees that
+      # are gone, minus anything another checkout still relies on.
+      #
+      # An empty suffix names the primary checkout's own databases, which is
+      # what a worktree bootstrapped under HONEYLEDGER_DB_SUFFIX="" records, and
+      # dropping those would destroy the main development database. A suffix
+      # shared with a live entry belongs to a worktree that is still using it.
+      # Ownership is per-suffix, not per-path, so neither is reclaimable.
+      def reclaimable(registry, live_worktree_paths)
+        gone = registry.reject { |worktree_path, _suffix| live_worktree_paths.include?(worktree_path) }
+        live_suffixes = (registry.keys - gone.keys).map { |worktree_path| registry[worktree_path] }
+
+        gone.reject { |_worktree_path, suffix| suffix.to_s.empty? || live_suffixes.include?(suffix) }
       end
     end
   end

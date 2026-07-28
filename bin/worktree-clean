@@ -44,39 +44,48 @@ def existing_databases
   listing.split("\n").map(&:strip).reject(&:empty?)
 end
 
-live = live_worktrees
-existing = existing_databases
-registry = WorktreeDatabase::Registry.read(APP_ROOT)
-
-orphaned = registry.reject { |worktree_path, _suffix| live.include?(worktree_path) }
-
-droppable = orphaned.flat_map do |worktree_path, suffix|
-  %W[honeyledger_development#{suffix} honeyledger_test#{suffix}]
-    .select { |database| existing.include?(database) }
-    .map { |database| [ worktree_path, database ] }
+def databases_for(reclaimable, existing)
+  reclaimable.flat_map do |worktree_path, suffix|
+    %W[honeyledger_development#{suffix} honeyledger_test#{suffix}]
+      .select { |database| existing.include?(database) }
+      .map { |database| [ worktree_path, database ] }
+  end.uniq { |_worktree_path, database| database } # several dead worktrees can share a suffix
 end
 
-unless ARGV.include?("--drop")
-  # A dry run reports and changes nothing at all, including the registry.
+def report(droppable)
   if droppable.empty?
     puts "No orphaned worktree databases."
   else
     puts "Orphaned worktree databases (re-run with --drop to remove):"
     droppable.each { |worktree_path, database| puts "  #{database}  (was #{worktree_path})" }
   end
+end
 
+# A dry run reports and changes nothing at all, including the registry.
+unless ARGV.include?("--drop")
+  reclaimable = WorktreeDatabase::Registry.reclaimable(WorktreeDatabase::Registry.read(APP_ROOT), live_worktrees)
+  report(databases_for(reclaimable, existing_databases))
   exit 0
 end
 
-droppable.each do |_worktree_path, database|
-  system("dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
-  puts "Dropped #{database}"
-end
+# Decide and act holding the registry lock, and read the live worktrees inside
+# it. bin/worktree-setup registers under the same lock, so without this a
+# worktree created after the listing was taken -- but registered before the
+# registry was read -- would look like an orphan and have its databases dropped.
+WorktreeDatabase::Registry.with_lock(APP_ROOT) do
+  registry = WorktreeDatabase::Registry.read(APP_ROOT)
+  reclaimable = WorktreeDatabase::Registry.reclaimable(registry, live_worktrees)
+  droppable = databases_for(reclaimable, existing_databases)
 
-# Forget every orphan whose databases are now gone, which includes orphans that
-# had none left to drop. Enumeration succeeded, so absence is trustworthy here.
-WorktreeDatabase::Registry.update(APP_ROOT) do |current|
-  current.reject! { |worktree_path, _suffix| orphaned.key?(worktree_path) }
-end
+  droppable.each do |_worktree_path, database|
+    system("dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
+    puts "Dropped #{database}"
+  end
 
-puts "No orphaned worktree databases." if droppable.empty?
+  # Forget every reclaimed worktree, including any whose databases were already
+  # gone. Enumeration succeeded, so absence is trustworthy here.
+  registry.reject! { |worktree_path, _suffix| reclaimable.key?(worktree_path) }
+  WorktreeDatabase::Registry.write(APP_ROOT, registry)
+
+  puts "No orphaned worktree databases." if droppable.empty?
+end

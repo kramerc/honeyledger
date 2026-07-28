@@ -133,6 +133,29 @@ class WorktreeDatabaseRegistryTest < ActiveSupport::TestCase
     end
   end
 
+  test "a removed worktree's suffix is reclaimable" do
+    registry = { "/gone" => "_gone_000001", "/live" => "_live_000002" }
+
+    assert_equal({ "/gone" => "_gone_000001" }, WorktreeDatabase::Registry.reclaimable(registry, [ "/live" ]))
+  end
+
+  # An empty suffix names the primary checkout's own databases, which is what a
+  # worktree bootstrapped under HONEYLEDGER_DB_SUFFIX="" records. Reclaiming it
+  # would drop honeyledger_development itself.
+  test "an empty suffix is never reclaimable" do
+    registry = { "/gone" => "" }
+
+    assert_empty WorktreeDatabase::Registry.reclaimable(registry, [])
+  end
+
+  # Ownership is per-suffix, not per-path: two worktrees sharing an override
+  # share databases, so removing one must not drop them from under the other.
+  test "a suffix still used by a live worktree is not reclaimable" do
+    registry = { "/gone" => "_shared_000001", "/live" => "_shared_000001" }
+
+    assert_empty WorktreeDatabase::Registry.reclaimable(registry, [ "/live" ])
+  end
+
   # Worktrees are bootstrapped concurrently by design. Without the lock, one
   # process's entry overwrites another's and the loser's databases can never be
   # reclaimed, so this exercises real concurrent processes rather than threads.
