@@ -1,7 +1,6 @@
 /* Transactions table */
 .transactions {
   width: 100%;
-  overflow-x: auto;
   border: 1px solid var(--divider);
   border-radius: 8px;
 }
