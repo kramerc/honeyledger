@@ -178,7 +178,7 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
 
     post apply_import_rules_url
     assert_redirected_to import_rules_path
-    assert_match(/reassigned/, flash[:notice])
+    assert_match(/updated/, flash[:notice])
   end
 
   test "should redirect with alert on apply error" do
@@ -199,9 +199,23 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to import_rules_path
   end
 
-  test "should get preview for a single rule" do
-    get preview_import_rule_url(@import_rule)
+  test "preview of an edited draft rule offers to save it" do
+    get preview_import_rules_url, params: {
+      pattern: "NOMATCH_PATTERN_XYZ", match_type: "contains", account_id: accounts(:expense_account).id
+    }
     assert_response :success
+    assert_match "saved yet", @response.body
+    assert_match "Save rule", @response.body
+  end
+
+  test "preview of an unchanged saved rule does not offer to save it" do
+    rule = import_rules(:fixture_rule_one)
+    get preview_import_rules_url, params: {
+      id: rule.id, pattern: rule.match_pattern, match_type: rule.match_type, account_id: rule.account_id, exclude: false
+    }
+    assert_response :success
+    assert_match "No changes needed", @response.body
+    assert_no_match "Save rule", @response.body
   end
 
   test "should create rule with asset account" do
@@ -216,4 +230,234 @@ class ImportRulesControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to import_rules_path
   end
+
+  test "should place a new rule at the top priority when none is given" do
+    top = current_user_top_priority
+    post import_rules_url, params: { import_rule: {
+      match_pattern: "TopOfStack",
+      match_type: "contains",
+      account_id: accounts(:expense_account).id
+    } }
+    assert_redirected_to import_rules_path
+    assert_equal top + 1, ImportRule.find_by(match_pattern: "TopOfStack").priority
+  end
+
+  test "should create import_rule via turbo_stream" do
+    assert_difference("ImportRule.count") do
+      post import_rules_url, params: { import_rule: {
+        match_pattern: "TurboNew", match_type: "contains", account_id: accounts(:expense_account).id
+      } }, as: :turbo_stream
+    end
+
+    assert_response :success
+    assert_match "ir_list", @response.body
+    assert_match "rule_editor", @response.body
+  end
+
+  test "should re-render the editor on invalid turbo_stream create" do
+    assert_no_difference("ImportRule.count") do
+      post import_rules_url, params: { import_rule: { match_pattern: "" } }, as: :turbo_stream
+    end
+
+    assert_response :unprocessable_entity
+    assert_match "rule_editor", @response.body
+  end
+
+  test "should update import_rule via turbo_stream" do
+    patch import_rule_url(@import_rule), params: { import_rule: { match_pattern: "TurboUpdated" } }, as: :turbo_stream
+    assert_response :success
+    assert_match "ir_list", @response.body
+    assert_equal "TurboUpdated", @import_rule.reload.match_pattern
+  end
+
+  test "should destroy import_rule via turbo_stream" do
+    assert_difference("ImportRule.count", -1) do
+      delete import_rule_url(@import_rule), as: :turbo_stream
+    end
+
+    assert_response :success
+    assert_match "ir_list", @response.body
+  end
+
+  test "should apply via turbo_stream" do
+    post apply_import_rules_url, as: :turbo_stream
+    assert_response :success
+  end
+
+  test "should reorder rules and reassign priority" do
+    first = import_rules(:fixture_rule_one)
+    second = import_rules(:fixture_rule_two)
+
+    post reorder_import_rules_url, params: { ids: [ second.id, first.id ] }
+
+    assert_response :no_content
+    assert_operator second.reload.priority, :>, first.reload.priority
+  end
+
+  test "should ignore another user's rules when reordering" do
+    other_user = users(:two)
+    other_account = Account.create!(user: other_user, currency: currencies(:usd), name: "Other Reorder", kind: :expense)
+    other_rule = ImportRule.create!(user: other_user, account: other_account, match_pattern: "OtherReorder")
+    original_priority = other_rule.priority
+
+    post reorder_import_rules_url, params: { ids: [ other_rule.id ] }
+
+    assert_response :no_content
+    assert_equal original_priority, other_rule.reload.priority
+  end
+
+  test "should return live matches from match_preview" do
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, currency: currencies(:usd), name: "MP Expense", kind: :expense)
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_mp_1",
+      amount: "-12.00", description: "MATCHPREVIEW COFFEE", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    create_sourced_transaction(
+      user: @user, src_account: bank, dest_account: expense, amount_minor: 1200,
+      currency: currencies(:usd), description: "MATCHPREVIEW COFFEE", transacted_at: 1.day.ago, sourceable: source
+    )
+
+    get match_preview_import_rules_url, params: { pattern: "MATCHPREVIEW", match_type: "contains" }
+
+    assert_response :success
+    # The matched substring is wrapped in <mark>, so assert on the highlight + plain remainder.
+    assert_match %r{<mark class="ir-mark">MATCHPREVIEW</mark> COFFEE}, @response.body
+  end
+
+  test "match_preview with a blank pattern prompts for input" do
+    get match_preview_import_rules_url, params: { pattern: "" }
+
+    assert_response :success
+    assert_match "Start typing", @response.body
+  end
+
+  test "match_preview lists already-excluded transactions" do
+    bank = accounts(:linked_asset)
+    expense = Account.create!(user: @user, currency: currencies(:usd), name: "Excl Cat", kind: :expense)
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_excl",
+      amount: "-3.00", description: "EXCLUDEDITEM SHOP", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    transaction = create_sourced_transaction(
+      user: @user, src_account: bank, dest_account: expense, amount_minor: 300,
+      currency: currencies(:usd), description: "EXCLUDEDITEM SHOP", transacted_at: 1.day.ago, sourceable: source
+    )
+    transaction.update_columns(excluded_at: Time.current)
+
+    get match_preview_import_rules_url, params: { pattern: "EXCLUDEDITEM", match_type: "contains", exclude: "true" }
+
+    assert_response :success
+    assert_match %r{<mark class="ir-mark">EXCLUDEDITEM</mark> SHOP}, @response.body
+    assert_match "ir-test__row--excluded", @response.body
+    assert_match "ir-test__excluded", @response.body
+  end
+
+  test "edit preloads the live preview with the rule's matches" do
+    rule = ImportRule.create!(user: @user, account: accounts(:expense_account), match_pattern: "PRELOADME", match_type: :contains)
+    expense = Account.create!(user: @user, currency: currencies(:usd), name: "Preload Cat", kind: :expense)
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_preload",
+      amount: "-5.00", description: "PRELOADME CAFE", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    create_sourced_transaction(
+      user: @user, src_account: accounts(:linked_asset), dest_account: expense, amount_minor: 500,
+      currency: currencies(:usd), description: "PRELOADME CAFE", transacted_at: 1.day.ago, sourceable: source
+    )
+
+    get edit_import_rule_url(rule)
+
+    assert_response :success
+    assert_match %r{<mark class="ir-mark">PRELOADME</mark> CAFE}, @response.body
+  end
+
+  test "should create a rule and apply it retroactively when flagged" do
+    bank = accounts(:linked_asset)
+    old_category = Account.create!(user: @user, currency: currencies(:usd), name: "Old Cat", kind: :expense)
+    new_category = Account.create!(user: @user, currency: currencies(:usd), name: "New Cat", kind: :expense)
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_apply_save",
+      amount: "-7.00", description: "SAVEAPPLY ITEM", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    transaction = create_sourced_transaction(
+      user: @user, src_account: bank, dest_account: old_category, amount_minor: 700,
+      currency: currencies(:usd), description: "SAVEAPPLY ITEM", transacted_at: 1.day.ago, sourceable: source
+    )
+
+    assert_difference("ImportRule.count") do
+      post import_rules_url, params: {
+        apply_after_save: "1",
+        import_rule: { match_pattern: "SAVEAPPLY", match_type: "contains", account_id: new_category.id }
+      }
+    end
+
+    assert_redirected_to import_rules_path
+    assert_match(/updated/, flash[:notice])
+    assert_equal new_category, transaction.reload.dest_account
+  end
+
+  test "should apply retroactively after updating a rule when flagged" do
+    bank = accounts(:linked_asset)
+    old_category = Account.create!(user: @user, currency: currencies(:usd), name: "Old Cat 2", kind: :expense)
+    target = @import_rule.account
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_update_apply",
+      amount: "-3.00", description: "UPDATEAPPLY ITEM", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    transaction = create_sourced_transaction(
+      user: @user, src_account: bank, dest_account: old_category, amount_minor: 300,
+      currency: currencies(:usd), description: "UPDATEAPPLY ITEM", transacted_at: 1.day.ago, sourceable: source
+    )
+
+    patch import_rule_url(@import_rule), params: {
+      apply_after_save: "1", import_rule: { match_pattern: "UPDATEAPPLY" }
+    }
+
+    assert_match(/updated/, flash[:notice])
+    assert_equal target, transaction.reload.dest_account
+  end
+
+  test "draft preview ignores another user's account_id" do
+    foreign = Account.create!(user: users(:two), currency: currencies(:eur), name: "Foreign Acct", kind: :expense)
+    bank = accounts(:linked_asset)
+    mine = Account.create!(user: @user, currency: currencies(:usd), name: "Mine Cat", kind: :expense)
+    source = Simplefin::Transaction.create!(
+      account: simplefin_accounts(:linked_one), remote_id: "ctrl_leak",
+      amount: "-2.00", description: "LEAKTEST ITEM", transacted_at: 1.day.ago, posted: 1.day.ago
+    )
+    create_sourced_transaction(
+      user: @user, src_account: bank, dest_account: mine, amount_minor: 200,
+      currency: currencies(:usd), description: "LEAKTEST ITEM", transacted_at: 1.day.ago, sourceable: source
+    )
+
+    get preview_import_rules_url, params: { pattern: "LEAKTEST", match_type: "contains", account_id: foreign.id }
+
+    assert_response :success
+    assert_no_match "Foreign Acct", @response.body
+  end
+
+  test "surfaces a failure from save-and-apply but keeps the rule saved" do
+    service_mock = Minitest::Mock.new
+    service_mock.expect(:apply, 0)
+    service_mock.expect(:errors, [ "boom" ])
+
+    assert_difference("ImportRule.count") do
+      ImportRule::RetroactiveApply.stub(:new, service_mock) do
+        post import_rules_url, params: {
+          apply_after_save: "1",
+          import_rule: { match_pattern: "ApplyErr", match_type: "contains", account_id: accounts(:expense_account).id }
+        }
+      end
+    end
+
+    assert ImportRule.exists?(user: @user, match_pattern: "ApplyErr")
+    assert_match(/couldn.t be applied: boom/, flash[:notice])
+    assert_mock service_mock
+  end
+
+  private
+
+    def current_user_top_priority
+      @user.import_rules.maximum(:priority) || -1
+    end
 end

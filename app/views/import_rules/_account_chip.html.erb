@@ -1,0 +1,11 @@
+<%# locals: account (Account or nil), exclude (boolean) %>
+<% if exclude %>
+  <span class="ir-action-chip ir-action-chip--exclude"><span class="ir-x" aria-hidden="true">⊘</span> Exclude</span>
+<% elsif account %>
+  <span class="ir-action-chip">
+    <span class="ir-action-chip__name"><%= account.name %></span>
+    <span class="ir-action-chip__kind"><%= account.kind.humanize %></span>
+  </span>
+<% else %>
+  <span class="ir-action-chip ir-action-chip--none">No account</span>
+<% end %>

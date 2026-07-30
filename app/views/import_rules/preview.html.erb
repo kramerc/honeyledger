@@ -1,13 +1,58 @@
 <% content_for :title, "Preview Rule: #{@import_rule.match_pattern}" %>
 
-<h1>Preview Rule: <%= @import_rule.match_pattern %></h1>
+<%= turbo_frame_tag "preview_modal_frame" do %>
+  <div class="ir-modal">
+    <div class="ir-modal__head">
+      <div>
+        <h2>Preview rule</h2>
+        <p>
+          <% if @changes.empty? %>
+            Re-running this rule over your history wouldn’t change anything.
+          <% else %>
+            <% exclude_count = @changes.count { |change| change.action == :exclude } %>
+            <% reassign_count = @changes.size - exclude_count %>
+            <% parts = [] %>
+            <% parts << "#{reassign_count} reassigned" if reassign_count.positive? %>
+            <% parts << "#{exclude_count} excluded" if exclude_count.positive? %>
+            Re-running this rule over your history would update <strong><%= @changes.size %></strong>
+            <%= "transaction".pluralize(@changes.size) %> (<%= parts.join(", ") %>).
+          <% end %>
+        </p>
+      </div>
+      <button type="button" class="ir-detail__close" data-action="import-rules--modal#close" aria-label="Close">✕</button>
+    </div>
 
-<% if @changes.any? %>
-  <p><%= @changes.size %> <%= "transaction".pluralize(@changes.size) %> would be <%= @import_rule.exclude? ? "excluded" : "reassigned" %> by this rule.</p>
+    <div class="ir-modal__body">
+      <% if @changes.empty? %>
+        <div class="ir-modal__empty">
+          <div class="ir-modal__empty-mark">✓</div>
+          <% if @dirty %>
+            No transactions need to move — but your rule edits aren’t saved yet.
+          <% else %>
+            No changes needed.
+          <% end %>
+        </div>
+      <% else %>
+        <%= render "preview_table", changes: @changes %>
+      <% end %>
+    </div>
 
-  <%= render "preview_table", changes: @changes %>
-<% else %>
-  <p>No existing transactions would be changed by this rule.</p>
+    <div class="ir-modal__foot">
+      <span class="ir-change-group__count">
+        <% if @dirty %>
+          Applying also saves your edits to this rule.
+        <% elsif @changes.any? %>
+          Review the changes above before applying.
+        <% end %>
+      </span>
+      <span class="ir-spacer"></span>
+      <button type="button" class="ir-btn ir-btn--secondary" data-action="import-rules--modal#close">Cancel</button>
+      <%# Each "apply" action saves the rule via the editor form (flagged to apply retroactively). %>
+      <% if @changes.empty? && @dirty %>
+        <button type="button" class="ir-btn" data-action="import-rules--modal#applyAndSave">Save rule</button>
+      <% elsif @changes.any? %>
+        <button type="button" class="ir-btn" data-action="import-rules--modal#applyAndSave"><%= @dirty ? "Save & apply" : "Apply" %> <%= pluralize(@changes.size, "change") %></button>
+      <% end %>
+    </div>
+  </div>
 <% end %>
-
-<p><%= link_to "Back to Import Rules", import_rules_path %></p>

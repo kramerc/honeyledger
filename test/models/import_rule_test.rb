@@ -176,4 +176,17 @@ class ImportRuleTest < ActiveSupport::TestCase
     assert_includes revenue_results, revenue_rule
     assert_not_includes revenue_results, expense_rule
   end
+
+  # matches? (in-memory, for previewing an unsaved draft)
+
+  test "matches? mirrors each match type, case-insensitively" do
+    assert ImportRule.new(match_pattern: "coffee", match_type: :contains).matches?("BLUE COFFEE BAR")
+    assert ImportRule.new(match_pattern: "BLUE COFFEE BAR", match_type: :exact).matches?("blue coffee bar")
+    assert ImportRule.new(match_pattern: "blue", match_type: :starts_with).matches?("BLUE COFFEE BAR")
+    assert ImportRule.new(match_pattern: "bar", match_type: :ends_with).matches?("BLUE COFFEE BAR")
+
+    assert_not ImportRule.new(match_pattern: "coffee", match_type: :exact).matches?("BLUE COFFEE BAR")
+    assert_not ImportRule.new(match_pattern: "", match_type: :contains).matches?("anything")
+    assert_not ImportRule.new(match_pattern: "x", match_type: nil).matches?("x")
+  end
 end

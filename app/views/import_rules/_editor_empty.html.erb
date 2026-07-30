@@ -1,0 +1,10 @@
+<div class="ir-detail ir-detail--empty">
+  <div class="ir-empty-detail">
+    <svg class="ir-empty-detail__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <path d="M3 6h18M7 12h10M10 18h4" stroke-linecap="round" />
+    </svg>
+    <h3>Select a rule to edit</h3>
+    <p>Pick a rule from the list to tune its pattern and see live matches — or create a new one.</p>
+    <%= link_to "+ New rule", new_import_rule_path, class: "ir-btn", data: { turbo_frame: "rule_editor" } %>
+  </div>
+</div>

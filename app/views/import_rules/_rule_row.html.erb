@@ -1,0 +1,29 @@
+<div id="<%= dom_id(rule) %>"
+     class="ir-rule<%= " ir-rule--selected" if rule.id == local_assigns[:selected_id] %>"
+     draggable="true"
+     data-rule-id="<%= rule.id %>"
+     data-ir-exclude="<%= rule.exclude? %>"
+     data-search="<%= [ rule.match_pattern, rule.account&.name ].compact.join(" ").downcase %>"
+     data-import-rules--list-filter-target="row"
+     data-import-rules--reorder-target="row"
+     data-action="dragstart->import-rules--reorder#dragStart dragover->import-rules--reorder#dragOver dragleave->import-rules--reorder#dragLeave drop->import-rules--reorder#drop dragend->import-rules--reorder#dragEnd">
+  <div class="ir-grip" title="Drag to reorder priority" aria-hidden="true">
+    <svg viewBox="0 0 12 18" fill="currentColor">
+      <circle cx="3" cy="3" r="1.4" /><circle cx="9" cy="3" r="1.4" />
+      <circle cx="3" cy="9" r="1.4" /><circle cx="9" cy="9" r="1.4" />
+      <circle cx="3" cy="15" r="1.4" /><circle cx="9" cy="15" r="1.4" />
+    </svg>
+  </div>
+
+  <%= link_to edit_import_rule_path(rule), class: "ir-rule__main",
+        data: { turbo_frame: "rule_editor", action: "click->import-rules--list-filter#select" } do %>
+    <div class="ir-rule__line1">
+      <span class="ir-rule__pattern"><%= rule.match_pattern %></span>
+      <span class="ir-mt-chip"><%= match_type_phrase(rule.match_type) %></span>
+    </div>
+    <div class="ir-rule__line2">
+      <span class="ir-rule__arrow" aria-hidden="true">→</span>
+      <%= render "account_chip", account: rule.account, exclude: rule.exclude? %>
+    </div>
+  <% end %>
+</div>
