@@ -67,11 +67,21 @@ and remote, the `honeyledger_development` database in the primary checkout, and
 any real aggregator API credentials.
 
 **Cleaning up.** `git worktree remove` does not drop the databases the worktree
-created. Run `bin/worktree-clean` from the primary checkout to list orphaned
-databases and `bin/worktree-clean --drop` to reclaim them. It only considers
-databases `bin/worktree-setup` recorded in `tmp/worktree_databases.json` when it
-created them, so a database made any other way — including by setting
-`HONEYLEDGER_DB_SUFFIX` by hand — is never dropped.
+created. Run `bin/worktree-clean` from the primary checkout to list what is
+orphaned, and `bin/worktree-clean --drop` to reclaim it.
+
+`--drop` only ever deletes **test** databases, which `db:test:prepare` rebuilds
+from `db/schema.rb`, so the worst it can cost is time. Orphaned **development**
+databases are reported with the `dropdb` command to run and are never deleted
+automatically — they hold work the script cannot know is finished. Only databases
+`bin/worktree-setup` recorded in `tmp/worktree_databases.json` are considered at
+all, so anything created another way — including by setting
+`HONEYLEDGER_DB_SUFFIX` by hand — is left alone entirely.
+
+**One caveat.** `DATABASE_URL` naming a database outranks `database.yml`, so it
+defeats the suffix and every worktree shares one database. `bin/worktree-setup`
+detects this and refuses to claim isolation rather than reporting a guarantee
+that is not in effect. A URL with no database path (what CI uses) is fine.
 
 Test parallelism within a single worktree stays disabled (see
 `test/test_helper.rb`) because it conflicts with SimpleCov; with several

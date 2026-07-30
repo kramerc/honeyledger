@@ -123,6 +123,32 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     end
   end
 
+  # Active Record gives a URL's database precedence over database.yml, so the
+  # suffix never reaches the connection and worktrees silently share a database.
+  # Claiming isolation there would be worse than not having the feature.
+  test "a DATABASE_URL naming a database defeats isolation" do
+    assert WorktreeDatabase.database_url_names_database?("postgres://localhost/honeyledger_development")
+    assert WorktreeDatabase.database_url_names_database?("postgres://user:pw@host:5432/somedb")
+  end
+
+  # CI supplies a URL with no path, to select host and credentials only.
+  test "a DATABASE_URL without a database name leaves the suffix in force" do
+    assert_not WorktreeDatabase.database_url_names_database?("postgres://postgres:postgres@localhost:5432")
+    assert_not WorktreeDatabase.database_url_names_database?("postgres://postgres:postgres@localhost:5432/")
+    assert_not WorktreeDatabase.database_url_names_database?(nil)
+    assert_not WorktreeDatabase.database_url_names_database?("")
+  end
+
+  test "a malformed DATABASE_URL is not treated as naming a database" do
+    assert_not WorktreeDatabase.database_url_names_database?("not a url at all")
+  end
+
+  test "a worktree is only isolated when nothing outranks its suffix" do
+    with_checkout(linked: true) do |root|
+      assert WorktreeDatabase.isolated?(root, override: nil)
+    end
+  end
+
   # override: nil throughout, so the port assertions describe the checkout
   # rather than whatever HONEYLEDGER_DB_SUFFIX happens to be set to.
   test "the primary checkout prefers port 3000" do

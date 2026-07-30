@@ -75,7 +75,15 @@ def register_databases(source_root, suffix)
 end
 
 exit 0 unless WorktreeDatabase.linked_worktree?(APP_ROOT)
-exit 0 if File.exist?(MARKER) && !ARGV.include?("--force")
+
+# The marker records which databases it vouches for, not merely that setup ran.
+# The identity derives from the checkout path and HONEYLEDGER_DB_SUFFIX, both of
+# which can change under a bootstrapped worktree -- `git worktree move`, or an
+# override added later -- and a bare "already done" marker would then skip
+# preparing the databases now in effect.
+IDENTITY = WorktreeDatabase.suffix(APP_ROOT)
+
+exit 0 if File.exist?(MARKER) && File.read(MARKER).strip == IDENTITY && !ARGV.include?("--force")
 
 source_root = primary_checkout
 exit 0 if source_root.nil? || source_root == APP_ROOT
@@ -92,15 +100,27 @@ unless prepare_databases
   exit 0
 end
 
+# DATABASE_URL naming a database outranks the suffix, so this worktree shares
+# databases with every other one. Report that plainly and leave no marker, so the
+# warning recurs until it is resolved rather than being silently accepted once.
+if WorktreeDatabase.database_url_names_database?
+  puts JSON.generate(
+    systemMessage: "Worktree databases are NOT isolated: DATABASE_URL names a database, which takes " \
+                   "precedence over config/database.yml, so every worktree shares it. Unset DATABASE_URL " \
+                   "(or drop its database path) to get per-worktree isolation."
+  )
+  exit 0
+end
+
 # Only databases this worktree exclusively owns are recorded. Under a manual
 # HONEYLEDGER_DB_SUFFIX the same databases may belong to the primary checkout or
 # another worktree, so they stay unregistered and bin/worktree-clean leaves them
 # alone -- reclaiming them is then the caller's business.
 exclusively_owned = WorktreeDatabase.path_derived?(APP_ROOT)
-register_databases(source_root, WorktreeDatabase.suffix(APP_ROOT)) if exclusively_owned
+register_databases(source_root, IDENTITY) if exclusively_owned
 
 FileUtils.mkdir_p(File.dirname(MARKER))
-FileUtils.touch(MARKER)
+File.write(MARKER, IDENTITY)
 
 summary = []
 summary << "linked #{linked.join(", ")} from the primary checkout" if linked.any?

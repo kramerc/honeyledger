@@ -3,6 +3,7 @@
 require "digest"
 require "fileutils"
 require "json"
+require "uri"
 
 # Identifies the checkout a process is running from, so parallel git worktrees
 # can be given their own databases and development server ports.
@@ -96,6 +97,27 @@ module WorktreeDatabase
     # under an override are therefore never recorded as reclaimable.
     def path_derived?(application_root, override: ENV["HONEYLEDGER_DB_SUFFIX"])
       override.nil? && linked_worktree?(application_root)
+    end
+
+    # True when DATABASE_URL names a database. Active Record gives the URL's
+    # database precedence over the `database:` key in database.yml, so the
+    # per-worktree suffix never reaches the connection and every worktree shares
+    # one database. Claiming isolation in that case would be worse than not
+    # having the feature, so callers must check this before promising anything.
+    #
+    # A URL with no path -- which is what CI supplies to select a host and
+    # credentials only -- leaves the YAML database name in force and is fine.
+    def database_url_names_database?(url = ENV["DATABASE_URL"])
+      return false if url.nil? || url.empty?
+
+      !URI.parse(url).path.to_s.delete_prefix("/").empty?
+    rescue URI::InvalidURIError
+      false
+    end
+
+    # Whether this checkout genuinely has databases of its own.
+    def isolated?(application_root, **options)
+      path_derived?(application_root, **options) && !database_url_names_database?
     end
   end
 

@@ -1,12 +1,4 @@
 {
-  "enabledPlugins": {
-    "github@claude-plugins-official": true,
-    "ruby-lsp@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
-  },
-  "worktree": {
-    "baseRef": "fresh"
-  },
   "hooks": {
     "SessionStart": [
       {
@@ -20,5 +12,14 @@
         ]
       }
     ]
+  },
+  "worktree": {
+    "baseRef": "fresh"
+  },
+  "enabledPlugins": {
+    "github@claude-plugins-official": true,
+    "ruby-lsp@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true
   }
 }
