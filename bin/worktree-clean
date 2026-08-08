@@ -1,0 +1,125 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Reclaims databases left behind by worktrees that no longer exist. Removing a
+# worktree does not remove the databases bin/worktree-setup created for it, so
+# run this occasionally.
+#
+#   bin/worktree-clean           # list what is orphaned
+#   bin/worktree-clean --drop    # drop the orphaned TEST databases
+#
+# --drop only ever deletes test databases, which db:test:prepare rebuilds from
+# db/schema.rb. Orphaned development databases are reported with the dropdb
+# command to run, never deleted, because they hold work this script has no way to
+# know is finished.
+#
+# Only databases recorded in tmp/worktree_databases.json when bin/worktree-setup
+# created them are eligible. Databases created any other way -- including by
+# setting HONEYLEDGER_DB_SUFFIX by hand -- are never touched, so an unrecognized
+# database is always left in place rather than guessed at.
+#
+# Every step fails closed: this script deletes data, so anything it cannot
+# establish for certain aborts rather than proceeding on a guess.
+
+require "shellwords"
+
+APP_ROOT = File.expand_path("..", __dir__)
+
+require File.join(APP_ROOT, "config", "worktree_database")
+
+abort "Run bin/worktree-clean from the primary checkout." if WorktreeDatabase.linked_worktree?(APP_ROOT)
+
+# A failed listing would look like "no worktrees are live", which would classify
+# every registered worktree as an orphan and drop databases still in use.
+def live_worktrees
+  listing = `git -C #{APP_ROOT.shellescape} worktree list --porcelain`
+  abort "Could not list git worktrees; refusing to guess which are live." unless $?.success?
+
+  paths = listing.lines.filter_map { |line| line[/\Aworktree (.+)/, 1]&.strip }
+  abort "git reported no worktrees at all; refusing to continue." if paths.empty?
+
+  paths
+end
+
+# config/database.yml honours DB_HOST (the devcontainer sets it), but psql and
+# dropdb would otherwise fall back to libpq's defaults and read or delete from a
+# different cluster than the one Rails uses.
+PSQL_ENVIRONMENT =
+  if ENV["DB_HOST"]
+    { "PGHOST" => ENV["DB_HOST"], "PGUSER" => "postgres", "PGPASSWORD" => "postgres" }
+  else
+    {}
+  end
+
+# Likewise, a failed enumeration would look like "none of these databases exist".
+def existing_databases
+  listing = IO.popen(PSQL_ENVIRONMENT, [ "psql", "-tAc", "SELECT datname FROM pg_database", "postgres" ], &:read)
+  abort "Could not query PostgreSQL for existing databases; is it running?" unless $?.success?
+
+  listing.split("\n").map(&:strip).reject(&:empty?)
+end
+
+# Test databases are disposable -- bin/rails db:test:prepare rebuilds one from
+# db/schema.rb -- so dropping one can only ever cost time. Development databases
+# hold work, so this script never deletes them: it names them and stops. That
+# asymmetry is deliberate, and it is why --drop cannot destroy anything valuable
+# even if the ownership bookkeeping above were wrong.
+def databases_for(reclaimable, existing, prefix)
+  reclaimable.flat_map do |worktree_path, suffix|
+    database = "#{prefix}#{suffix}"
+    existing.include?(database) ? [ [ worktree_path, database ] ] : []
+  end.uniq { |_worktree_path, database| database } # several dead worktrees can share a suffix
+end
+
+def report(droppable, keepable)
+  if droppable.empty? && keepable.empty?
+    puts "No orphaned worktree databases."
+    return
+  end
+
+  if droppable.any?
+    puts "Orphaned test databases (re-run with --drop to remove):"
+    droppable.each { |worktree_path, database| puts "  #{database}  (was #{worktree_path})" }
+  end
+
+  if keepable.any?
+    puts "Orphaned development databases -- never dropped automatically, remove by hand if you are sure:"
+    keepable.each { |worktree_path, database| puts "  dropdb #{database}  # was #{worktree_path}" }
+  end
+end
+
+# A dry run reports and changes nothing at all, including the registry.
+unless ARGV.include?("--drop")
+  reclaimable = WorktreeDatabase::Registry.reclaimable(WorktreeDatabase::Registry.read(APP_ROOT), live_worktrees)
+  existing = existing_databases
+  report(databases_for(reclaimable, existing, "honeyledger_test"),
+    databases_for(reclaimable, existing, "honeyledger_development"))
+  exit 0
+end
+
+# Decide and act holding the registry lock, and read the live worktrees inside
+# it. bin/worktree-setup registers under the same lock, so without this a
+# worktree created after the listing was taken -- but registered before the
+# registry was read -- would look like an orphan and have its databases dropped.
+WorktreeDatabase::Registry.with_lock(APP_ROOT) do
+  registry = WorktreeDatabase::Registry.read(APP_ROOT)
+  reclaimable = WorktreeDatabase::Registry.reclaimable(registry, live_worktrees)
+  existing = existing_databases
+
+  droppable = databases_for(reclaimable, existing, "honeyledger_test")
+  keepable = databases_for(reclaimable, existing, "honeyledger_development")
+
+  droppable.each do |_worktree_path, database|
+    system(PSQL_ENVIRONMENT, "dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
+    puts "Dropped #{database}"
+  end
+
+  # Keep the registry entry while a development database survives, so it stays
+  # reported until it is dealt with. Forget the rest.
+  surviving = keepable.map { |worktree_path, _database| worktree_path }
+  registry.reject! { |worktree_path, _suffix| reclaimable.key?(worktree_path) && !surviving.include?(worktree_path) }
+  WorktreeDatabase::Registry.write(APP_ROOT, registry)
+
+  puts "No orphaned test databases." if droppable.empty?
+  report([], keepable) if keepable.any?
+end

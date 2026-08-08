@@ -1,0 +1,130 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Prepares a git worktree for use as an isolated development checkout.
+#
+# Two things do not come along when git creates a worktree: files that are
+# gitignored (credentials, local Claude Code settings) and databases. This
+# script supplies both, so a session that starts in a fresh worktree can run
+# the suite immediately.
+#
+# It is idempotent and exits immediately in the primary checkout, which makes
+# it safe to wire up as a SessionStart hook. Pass --force to re-run the
+# database preparation in a worktree that has already been bootstrapped.
+
+require "fileutils"
+require "json"
+require "shellwords"
+
+APP_ROOT = File.expand_path("..", __dir__)
+MARKER = File.join(APP_ROOT, "tmp", "worktree_bootstrapped")
+
+require File.join(APP_ROOT, "config", "worktree_database")
+
+# Gitignored paths a worktree needs from the primary checkout. Each is
+# symlinked so that rotating a credential in the primary checkout, or adding a
+# permission to the allowlist, immediately applies everywhere.
+LINKED_PATHS = [
+  "config/master.key",
+  ".claude/settings.local.json"
+].freeze
+
+# `git worktree list --porcelain` always reports the primary checkout first.
+def primary_checkout
+  listing = `git -C #{APP_ROOT.shellescape} worktree list --porcelain 2>/dev/null`
+  return nil unless $?.success?
+
+  listing.lines.first.to_s[/\Aworktree (.+)/, 1]&.strip
+end
+
+def link_shared_paths(source_root)
+  linked = []
+
+  LINKED_PATHS.each do |relative_path|
+    source = File.join(source_root, relative_path)
+    destination = File.join(APP_ROOT, relative_path)
+
+    next unless File.exist?(source)
+    next if File.symlink?(destination) || File.exist?(destination)
+
+    FileUtils.mkdir_p(File.dirname(destination))
+    FileUtils.ln_s(source, destination)
+    linked << relative_path
+  end
+
+  linked
+end
+
+def prepare_databases
+  # db:prepare creates the database and loads the schema when it is missing,
+  # and is a cheap no-op once it exists.
+  # Quiet on failure too: the message points at the command to run by hand,
+  # which reports the underlying error properly.
+  system("bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL) &&
+    system("bin/rails", "db:test:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
+end
+
+# Record which databases this worktree owns, in the primary checkout, so that
+# bin/worktree-clean only ever drops databases it can prove were created here.
+# Anything created by other means is left alone. The update is locked because
+# several worktrees may be bootstrapping at once.
+def register_databases(source_root, suffix)
+  WorktreeDatabase::Registry.update(source_root) do |registry|
+    registry[APP_ROOT] = suffix
+  end
+end
+
+exit 0 unless WorktreeDatabase.linked_worktree?(APP_ROOT)
+
+# The marker records which databases it vouches for, not merely that setup ran.
+# The identity derives from the checkout path and HONEYLEDGER_DB_SUFFIX, both of
+# which can change under a bootstrapped worktree -- `git worktree move`, or an
+# override added later -- and a bare "already done" marker would then skip
+# preparing the databases now in effect.
+IDENTITY = WorktreeDatabase.suffix(APP_ROOT)
+
+exit 0 if File.exist?(MARKER) && File.read(MARKER).strip == IDENTITY && !ARGV.include?("--force")
+
+source_root = primary_checkout
+exit 0 if source_root.nil? || source_root == APP_ROOT
+
+linked = link_shared_paths(source_root)
+
+unless prepare_databases
+  # Leave the marker absent so a later session retries; PostgreSQL may simply
+  # not have been up yet.
+  puts JSON.generate(
+    systemMessage: "Could not prepare this worktree's databases — is PostgreSQL running? " \
+                   "Re-run bin/worktree-setup, or bin/rails db:prepare db:test:prepare."
+  )
+  exit 0
+end
+
+# DATABASE_URL naming a database outranks the suffix, so this worktree shares
+# databases with every other one. Report that plainly and leave no marker, so the
+# warning recurs until it is resolved rather than being silently accepted once.
+if WorktreeDatabase.database_url_names_database?
+  puts JSON.generate(
+    systemMessage: "Worktree databases are NOT isolated: DATABASE_URL names a database, which takes " \
+                   "precedence over config/database.yml, so every worktree shares it. Unset DATABASE_URL " \
+                   "(or drop its database path) to get per-worktree isolation."
+  )
+  exit 0
+end
+
+# Only databases this worktree exclusively owns are recorded. Under a manual
+# HONEYLEDGER_DB_SUFFIX the same databases may belong to the primary checkout or
+# another worktree, so they stay unregistered and bin/worktree-clean leaves them
+# alone -- reclaiming them is then the caller's business.
+exclusively_owned = WorktreeDatabase.path_derived?(APP_ROOT)
+register_databases(source_root, IDENTITY) if exclusively_owned
+
+FileUtils.mkdir_p(File.dirname(MARKER))
+File.write(MARKER, IDENTITY)
+
+summary = []
+summary << "linked #{linked.join(", ")} from the primary checkout" if linked.any?
+summary << "prepared this worktree's own development and test databases"
+summary << "left them unregistered because HONEYLEDGER_DB_SUFFIX is set, so bin/worktree-clean will not reclaim them" unless exclusively_owned
+
+puts JSON.generate(systemMessage: "Worktree ready: #{summary.join("; ")}.")

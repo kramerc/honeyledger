@@ -22,8 +22,71 @@ bin/bundler-audit                                # Security scan (gems)
 bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
 bin/rails db:create db:migrate                   # Set up database
+bin/worktree-clean --drop                        # Drop databases left by deleted worktrees
 kamal deploy                                     # Deploy to production
 ```
+
+## Parallel Development
+
+Several Claude Code sessions and agents work this repo at once. Each concurrent
+line of work gets its own git worktree, and each worktree is isolated so that
+sessions never share a database, a port, or a branch.
+
+**Start isolated work in a worktree**, not in the primary checkout — use the
+`EnterWorktree` tool, or `git worktree add .claude/worktrees/<name> -b <branch>`.
+Reserve the primary checkout at `/home/kramer/Dev/Honeyledger/honeyledger` for
+review, merging, and anything that must see `main`.
+
+**What is isolated automatically:**
+
+- **Databases.** `config/database.yml` appends a per-worktree suffix to the
+  development and test database names (`honeyledger_test_<worktree>_<digest>`).
+  The primary checkout keeps the plain, unsuffixed names. Two sessions can run
+  `bin/rails test` simultaneously without clobbering each other's fixtures, and
+  a migration on one branch cannot break another. Override with
+  `HONEYLEDGER_DB_SUFFIX`; production is never suffixed.
+
+  `config/worktree_database.rb` owns the derivation and is the single source of
+  truth — `database.yml`, `bin/dev`, `bin/worktree-setup` and
+  `bin/worktree-clean` all load it, because a cleanup script that derived
+  suffixes even slightly differently would mistake a live worktree's database
+  for an orphan. The trailing digest is what keeps names that normalize or
+  truncate alike (`feature-a` and `feature_a`) on separate databases.
+- **Secrets and local settings.** `bin/worktree-setup` runs as a `SessionStart`
+  hook. In a worktree it symlinks the gitignored `config/master.key` and
+  `.claude/settings.local.json` from the primary checkout and prepares that
+  worktree's databases. It is idempotent and a no-op in the primary checkout.
+- **Ports.** `bin/dev` starts on a port derived from the checkout, so each
+  worktree keeps a stable URL and servers coexist. The primary checkout prefers
+  3000. Two worktrees can still hash to the same port, in which case the second
+  falls forward to the next free one. Set `PORT` to pin one.
+- **Logs, tmp, and coverage** are per-worktree already.
+
+**What is still shared** — coordinate before touching these: the `main` branch
+and remote, the `honeyledger_development` database in the primary checkout, and
+any real aggregator API credentials.
+
+**Cleaning up.** `git worktree remove` does not drop the databases the worktree
+created. Run `bin/worktree-clean` from the primary checkout to list what is
+orphaned, and `bin/worktree-clean --drop` to reclaim it.
+
+`--drop` only ever deletes **test** databases, which `db:test:prepare` rebuilds
+from `db/schema.rb`, so the worst it can cost is time. Orphaned **development**
+databases are reported with the `dropdb` command to run and are never deleted
+automatically — they hold work the script cannot know is finished. Only databases
+`bin/worktree-setup` recorded in `tmp/worktree_databases.json` are considered at
+all, so anything created another way — including by setting
+`HONEYLEDGER_DB_SUFFIX` by hand — is left alone entirely.
+
+**One caveat.** `DATABASE_URL` naming a database outranks `database.yml`, so it
+defeats the suffix and every worktree shares one database. `bin/worktree-setup`
+detects this and refuses to claim isolation rather than reporting a guarantee
+that is not in effect. A URL with no database path (what CI uses) is fine.
+
+Test parallelism within a single worktree stays disabled (see
+`test/test_helper.rb`) because it conflicts with SimpleCov; with several
+sessions running suites concurrently the cores are better spent across
+worktrees anyway.
 
 ## Architecture
 
