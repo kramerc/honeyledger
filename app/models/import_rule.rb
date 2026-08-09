@@ -30,6 +30,22 @@ class ImportRule < ApplicationRecord
     joins(:account).where(accounts: { kind: kind })
   }
 
+  # In-memory equivalent of for_description, for testing a single (possibly unsaved) rule
+  # against a description without a query — used to preview a draft rule.
+  def matches?(description)
+    needle = match_pattern.to_s.strip.downcase
+    return false if needle.blank?
+
+    text = description.to_s.strip.downcase
+    case match_type
+    when "contains" then text.include?(needle)
+    when "exact" then text == needle
+    when "starts_with" then text.start_with?(needle)
+    when "ends_with" then text.end_with?(needle)
+    else false
+    end
+  end
+
   private
 
     def account_must_not_be_virtual

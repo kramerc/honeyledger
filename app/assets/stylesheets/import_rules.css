@@ -1,0 +1,238 @@
+/* ============================================================
+   Import Rules — workbench styles.
+   Namespaced under .ir-* because stylesheet_link_tag :app loads
+   every app stylesheet on every page. Builds on the design tokens
+   in application.css.
+   ============================================================ */
+
+.ir-wrap { max-width: 1180px; }
+
+/* ---------- Buttons (scoped so they win over `main a`) ---------- */
+.ir-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 14px; background: var(--honey-dark); color: #fff;
+  border: 1px solid transparent; border-radius: 7px;
+  font-size: 0.85rem; font-weight: 600; font-family: inherit; line-height: 1.2;
+  cursor: pointer; white-space: nowrap; text-decoration: none;
+}
+.ir-btn:hover { background: var(--honey); color: #fff; }
+.ir-btn--secondary { background: var(--surface-sheet); color: var(--bark-medium); border-color: var(--divider); }
+.ir-btn--secondary:hover { background: var(--honey-light); color: var(--accent-text); }
+.ir-btn--danger { color: var(--color-negative); }
+.ir-btn--secondary.ir-btn--danger:hover { background: var(--bg-error); color: var(--text-error); border-color: var(--border-error); }
+.ir-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.ir-btn-icon svg { width: 14px; height: 14px; }
+
+/* ---------- Page header ---------- */
+.ir-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.ir-page-head__titles h1 { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; color: var(--bark); }
+.ir-page-head__sub { margin: 4px 0 0; color: var(--bark-light); font-size: 0.875rem; max-width: 56ch; }
+.ir-page-head__actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* ---------- Summary strip ---------- */
+.ir-summary { display: flex; gap: 0; margin: 16px 0 18px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface-sheet); overflow: hidden; box-shadow: var(--shadow-card); }
+.ir-summary__cell { flex: 1; padding: 12px 16px; border-right: 1px solid var(--divider); min-width: 0; }
+.ir-summary__cell:last-child { border-right: none; }
+.ir-summary__label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--bark-light); }
+.ir-summary__value { margin-top: 4px; font-size: 1.45rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--bark); line-height: 1.1; }
+
+/* ---------- Split workbench layout ---------- */
+.ir-layout { display: grid; grid-template-columns: minmax(340px, 1fr) minmax(380px, 0.92fr); gap: 16px; align-items: start; }
+.ir-list-col { min-width: 0; }
+
+/* ---------- List toolbar ---------- */
+.ir-list-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ir-search { position: relative; flex: 1; min-width: 0; }
+.ir-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--bark-light); pointer-events: none; }
+.ir-search input { width: 100%; padding: 7px 9px 7px 28px; background: var(--surface-sheet); color: var(--bark); border: 1px solid var(--divider); border-radius: 7px; font-size: 0.85rem; font-family: inherit; }
+.ir-search input:focus { outline: none; border-color: var(--honey); box-shadow: 0 0 0 3px var(--honey-light); }
+.ir-seg { display: inline-flex; background: var(--surface-sunken); border: 1px solid var(--divider); border-radius: 7px; padding: 2px; gap: 2px; }
+.ir-seg button { border: none; background: none; padding: 5px 9px; font-size: 0.78rem; font-weight: 600; color: var(--bark-light); border-radius: 5px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.ir-seg button.active { background: var(--surface-sheet); color: var(--accent-text); box-shadow: 0 1px 2px rgba(146, 64, 14, 0.12); }
+.ir-seg button:hover:not(.active) { color: var(--bark-medium); }
+
+.ir-list-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding: 0 2px; }
+.ir-list-meta__count { font-size: 0.75rem; color: var(--bark-light); font-weight: 600; }
+.ir-list-meta__sort { font-size: 0.75rem; color: var(--bark-light); }
+
+/* ---------- Rule rows ---------- */
+.ir-list { display: flex; flex-direction: column; gap: 7px; }
+.ir-rule { display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 10px; padding: 10px 12px 10px 6px; background: var(--surface-sheet); border: 1px solid var(--divider); border-radius: 9px; transition: border-color 0.12s, box-shadow 0.12s, background 0.12s; position: relative; }
+/* The display:grid above would otherwise defeat the [hidden] attribute the list filter sets. */
+.ir-rule[hidden] { display: none; }
+.ir-rule:hover { border-color: var(--honey); box-shadow: var(--shadow-card); }
+.ir-rule--selected { border-color: var(--honey-dark); box-shadow: 0 0 0 1px var(--honey-dark), var(--shadow-card); background: var(--honey-pale); }
+.ir-rule--dragging { opacity: 0.4; }
+.ir-rule--dragover { border-color: var(--honey-dark); box-shadow: 0 -2px 0 var(--honey-dark); }
+
+.ir-grip { display: flex; align-items: center; justify-content: center; color: var(--bark-light); cursor: grab; height: 100%; opacity: 0.45; transition: opacity 0.1s; }
+.ir-rule:hover .ir-grip { opacity: 0.9; }
+.ir-grip:active { cursor: grabbing; }
+.ir-grip svg { width: 12px; height: 18px; }
+
+.ir-rule__main { min-width: 0; cursor: pointer; text-decoration: none; color: inherit; display: block; }
+.ir-rule__line1 { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.ir-rule__pattern { font-family: var(--font-mono); font-size: 0.86rem; font-weight: 500; color: var(--bark); background: var(--surface-sunken); border: 1px solid var(--divider); padding: 1px 7px; border-radius: 5px; max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-rule__line2 { display: flex; align-items: center; gap: 10px; margin-top: 7px; flex-wrap: wrap; }
+.ir-rule__arrow { color: var(--bark-light); font-size: 0.8rem; }
+
+.ir-list-empty { background: var(--surface-sunken); border: 1px solid var(--divider); border-radius: 9px; padding: 28px 20px; text-align: center; color: var(--bark-medium); }
+.ir-list-empty p { margin: 0; }
+.ir-list-empty__sub { margin-top: 4px !important; font-size: 0.82rem; color: var(--bark-light); }
+
+/* ---------- Match-type & account chips ---------- */
+.ir-mt-chip { font-size: 0.68rem; font-weight: 600; color: var(--accent-text); background: var(--honey-pale); border: 1px solid var(--divider); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.ir-action-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--bark-medium); white-space: nowrap; }
+.ir-action-chip__name { font-weight: 600; color: var(--bark); }
+.ir-action-chip__kind { font-size: 0.72rem; font-weight: 400; color: var(--bark-light); }
+.ir-action-chip__kind::before { content: '· '; }
+.ir-action-chip--exclude { color: var(--bark-light); font-weight: 600; }
+.ir-action-chip--none { color: var(--color-negative); font-style: italic; }
+
+/* ---------- Detail / editor ---------- */
+/* The column stretches to the (potentially long) list's height and the editor frame fills it,
+   so .ir-detail can stick within that tall box as you scroll a long rule list. */
+.ir-detail-col { align-self: stretch; min-width: 0; }
+.ir-detail-col > turbo-frame { display: block; height: 100%; }
+.ir-detail { position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; background: var(--surface-sheet); border: 1px solid var(--divider); border-radius: 12px; box-shadow: var(--shadow-card); }
+.ir-detail__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--divider); background: var(--honey-pale); }
+.ir-detail__title { font-size: 0.95rem; font-weight: 700; color: var(--bark); }
+.ir-detail__close { background: none; border: none; color: var(--bark-light); cursor: pointer; font-size: 1rem; line-height: 1; padding: 4px; border-radius: 5px; text-decoration: none; }
+.ir-detail__close:hover { background: rgba(0, 0, 0, 0.06); color: var(--bark); }
+.ir-detail__body { padding: 16px; }
+
+.ir-empty-detail { padding: 48px 24px; text-align: center; color: var(--bark-light); }
+.ir-empty-detail__icon { width: 40px; height: 40px; margin: 0 auto 12px; color: var(--honey); opacity: 0.6; }
+.ir-empty-detail h3 { margin: 0 0 6px; font-size: 1rem; color: var(--bark-medium); }
+.ir-empty-detail p { margin: 0 0 16px; font-size: 0.84rem; }
+
+.ir-form-errors { background: var(--bg-error); border: 1px solid var(--border-error); color: var(--text-error); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.82rem; }
+.ir-form-errors ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* ---------- Editor fields ---------- */
+.ir-field { margin-bottom: 14px; }
+.ir-field__label { display: flex; align-items: center; gap: 8px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--accent-text); margin-bottom: 6px; }
+.ir-field__hint { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bark-light); font-size: 0.72rem; }
+.ir-pattern-input { width: 100%; padding: 9px 11px; background: var(--cream); color: var(--bark); border: 1px solid var(--divider); border-radius: 7px; font-size: 0.95rem; font-family: var(--font-mono); font-weight: 500; }
+.ir-pattern-input:focus { outline: none; border-color: var(--honey); box-shadow: 0 0 0 3px var(--honey-light); }
+
+/* Segmented match-type control (radios visually hidden, labels are the buttons) */
+.ir-mtseg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.ir-mtseg__input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.ir-mtseg__label { display: block; text-align: center; border: 1px solid var(--divider); background: var(--cream); padding: 7px 4px; border-radius: 6px; cursor: pointer; font-size: 0.74rem; font-weight: 600; color: var(--bark-medium); transition: all 0.1s; }
+.ir-mtseg__label:hover { border-color: var(--honey); }
+.ir-mtseg__input:checked + .ir-mtseg__label { border-color: var(--honey-dark); background: var(--honey-pale); color: var(--accent-text); }
+.ir-mtseg__input:focus-visible + .ir-mtseg__label { box-shadow: 0 0 0 3px var(--honey-light); }
+
+/* Assign / Exclude two-button toggle (radios visually hidden, labels are the buttons) */
+.ir-action-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 10px; }
+.ir-action-toggle__input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.ir-action-toggle__btn { display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--divider); background: var(--cream); padding: 8px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--bark-medium); transition: all 0.1s; }
+.ir-action-toggle__btn:hover { border-color: var(--honey); }
+.ir-action-toggle__input:checked + .ir-action-toggle__btn { border-color: var(--honey-dark); background: var(--honey-pale); color: var(--accent-text); }
+.ir-action-toggle__input:focus-visible + .ir-action-toggle__btn { box-shadow: 0 0 0 3px var(--honey-light); }
+
+.ir-account-field .ir-field__label { margin-top: 2px; }
+.ir-select { width: 100%; padding: 9px 11px; background: var(--cream); color: var(--bark); border: 1px solid var(--divider); border-radius: 7px; font-size: 0.875rem; font-family: inherit; }
+.ir-select:focus { outline: none; border-color: var(--honey); box-shadow: 0 0 0 3px var(--honey-light); }
+.ir-exclude-note { background: var(--surface-sunken); border: 1px solid var(--divider); border-radius: 7px; padding: 10px 12px; font-size: 0.8rem; color: var(--bark-medium); line-height: 1.45; }
+
+.ir-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--bark-light); margin: 18px 0 8px; }
+
+.ir-editor-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--divider); }
+.ir-spacer { flex: 1; }
+.ir-editor-foot form { margin: 0; }
+
+/* ---------- Live test panel ---------- */
+.ir-test-frame { display: block; position: relative; }
+/* Loading state (added by JS only when a fetch is slow): keep the old results in place but
+   dim them and spin, so quick queries don't flicker and nothing jumps. */
+.ir-test-frame--loading .ir-test { opacity: 0.55; }
+.ir-test-frame--loading::after {
+  content: '';
+  position: absolute; top: 10px; right: 12px;
+  width: 13px; height: 13px;
+  border: 2px solid var(--divider);
+  border-top-color: var(--honey-dark);
+  border-radius: 50%;
+  animation: ir-spin 0.6s linear infinite;
+}
+@keyframes ir-spin { to { transform: rotate(360deg); } }
+.ir-test { border: 1px solid var(--divider); border-radius: 9px; overflow: hidden; background: var(--cream); transition: opacity 0.15s ease; }
+.ir-test__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; background: var(--surface-sunken); border-bottom: 1px solid var(--divider); }
+.ir-test__title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--bark-light); display: flex; align-items: center; gap: 7px; }
+.ir-test__count { font-size: 0.78rem; font-weight: 700; color: var(--accent-text); background: var(--honey-pale); border: 1px solid var(--divider); border-radius: 999px; padding: 1px 9px; font-variant-numeric: tabular-nums; }
+.ir-test__count--zero { color: var(--bark-light); background: var(--surface-sheet); }
+.ir-test__list { max-height: 240px; overflow-y: auto; }
+.ir-test__row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--divider); }
+.ir-test__row:last-child { border-bottom: none; }
+/* Already-excluded matches: a clear badge + lightly muted text (so it reads as "excluded",
+   not just generically faded — which is ambiguous when every match is excluded). */
+.ir-test__row--excluded .ir-test__desc { color: var(--bark-light); }
+.ir-test__excluded { display: inline-flex; align-items: center; gap: 3px; font-size: 0.66rem; font-weight: 600; color: var(--bark-light); background: var(--surface-sunken); border: 1px solid var(--divider); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.ir-test__excluded .ir-x { font-size: 0.9em; }
+.ir-test__desc { font-family: var(--font-mono); font-size: 0.78rem; color: var(--bark-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-test__steal { font-size: 0.7rem; color: var(--honey-dark); margin-left: 6px; font-family: var(--font-sans, sans-serif); }
+.ir-test__meta { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.ir-test__date { font-size: 0.72rem; color: var(--bark-light); }
+.ir-test__amt { font-size: 0.78rem; font-variant-numeric: tabular-nums; font-family: var(--font-mono); color: var(--bark-medium); }
+.ir-test__amt--neg { color: var(--color-negative); }
+.ir-test__amt--pos { color: var(--color-positive); }
+.ir-test__empty { padding: 22px 14px; text-align: center; color: var(--bark-light); font-size: 0.82rem; }
+.ir-test__foot { padding: 9px 12px; border-top: 1px solid var(--divider); background: var(--surface-sheet); font-size: 0.74rem; font-weight: 600; color: var(--honey-dark); }
+.ir-mark { background: var(--honey-light); color: var(--accent-text); border-radius: 2px; padding: 0 1px; font-weight: 700; }
+
+/* ---------- Modal (preview / preview & apply) ---------- */
+@keyframes ir-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ir-rise { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+/* Top-aligned 40px from the top (matches the prototype's flex-start backdrop), not centered. */
+/* overflow: visible overrides the dialog UA's overflow:auto, so the rise animation's
+   transient 12px translate doesn't flash a scrollbar (the modal body scrolls tall content). */
+.ir-modal-dialog { padding: 0; border: none; background: transparent; overflow: visible; max-width: 880px; width: calc(100% - 40px); margin: 40px auto auto; }
+.ir-modal-dialog::backdrop { background: rgba(28, 25, 23, 0.45); animation: ir-fade 0.15s ease; }
+.ir-modal-dialog turbo-frame { display: block; }
+.ir-modal { background: var(--surface-sheet); border: 1px solid var(--divider); border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); overflow: hidden; animation: ir-rise 0.18s ease; }
+.ir-modal__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--divider); }
+.ir-modal__head h2 { margin: 0; font-size: 1.2rem; font-weight: 700; color: var(--bark); }
+.ir-modal__head p { margin: 5px 0 0; font-size: 0.85rem; color: var(--bark-light); }
+.ir-modal__body { padding: 0; max-height: 56vh; overflow-y: auto; }
+.ir-modal__foot { display: flex; align-items: center; gap: 10px; padding: 16px 22px; border-top: 1px solid var(--divider); background: var(--honey-pale); }
+.ir-modal__empty { padding: 48px 24px; text-align: center; color: var(--bark-light); }
+.ir-modal__empty-mark { font-size: 1.6rem; margin-bottom: 8px; color: var(--color-positive); }
+
+.ir-change-group__head { display: flex; align-items: center; gap: 8px; padding: 11px 22px; background: var(--surface-sunken); border-bottom: 1px solid var(--divider); position: sticky; top: 0; z-index: 1; }
+.ir-change-group__title { font-size: 0.78rem; font-weight: 700; color: var(--bark); }
+.ir-change-group__count { font-size: 0.72rem; color: var(--bark-light); }
+.ir-change { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 11px 22px; border-bottom: 1px solid var(--divider); }
+.ir-change:last-child { border-bottom: none; }
+.ir-change__main { min-width: 0; }
+.ir-change__desc { font-family: var(--font-mono); font-size: 0.8rem; color: var(--bark-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-change__sub { font-size: 0.72rem; color: var(--bark-light); margin-top: 3px; display: flex; align-items: center; gap: 8px; }
+.ir-change__amt { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.ir-change__move { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.ir-change__arrow { color: var(--honey-dark); }
+.ir-change__from { color: var(--bark-light); font-size: 0.78rem; text-decoration: line-through; text-decoration-color: var(--bark-light); }
+.ir-merge-flag { font-size: 0.68rem; font-weight: 600; color: var(--honey-deeper); background: var(--honey-pale); border: 1px solid var(--honey-dark); border-radius: 3px; padding: 0 5px; cursor: help; }
+
+/* scrollbar polish (matches the prototype) */
+.ir-test__list::-webkit-scrollbar, .ir-modal__body::-webkit-scrollbar { width: 9px; }
+.ir-test__list::-webkit-scrollbar-thumb, .ir-modal__body::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 999px; border: 2px solid var(--surface-sheet); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ir-modal-dialog::backdrop, .ir-modal, .ir-test-frame--loading::after { animation: none; }
+}
+
+/* ---------- Responsive: collapse the split pane ---------- */
+@media (max-width: 1000px) {
+  .ir-layout { grid-template-columns: 1fr; }
+  .ir-detail-col { align-self: start; }
+  .ir-detail { position: relative; top: 0; max-height: none; overflow: visible; }
+}
+
+@media (max-width: 560px) {
+  .ir-summary { flex-wrap: wrap; }
+  .ir-summary__cell { flex-basis: 50%; }
+  .ir-list-toolbar { flex-wrap: wrap; }
+  .ir-change { grid-template-columns: 1fr; }
+  .ir-change__move { justify-content: flex-start; }
+}

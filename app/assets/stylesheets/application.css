@@ -41,6 +41,13 @@
   --bg-error:           light-dark(#fff5f5, rgba(153, 27, 27, 0.2));
   --text-error:         light-dark(#7f1d1d, #fca5a5);
   --border-error:       light-dark(#fca5a5, rgba(220, 38, 38, 0.5));
+
+  /* Surfaces, card shadow, and mono stack (used by the Import Rules workbench) */
+  --surface-sheet:      light-dark(#FFFFFF, #1B1308);
+  --surface-sunken:     var(--honey-pale);
+  --shadow-card:        0 1px 2px rgba(146, 64, 14, 0.06),
+                        0 4px 12px rgba(146, 64, 14, 0.08);
+  --font-mono:          ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 /* User toggle — override color-scheme to force a theme */

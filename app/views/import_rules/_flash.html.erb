@@ -1,0 +1,5 @@
+<%# locals: kind ("notice"/"alert"), message %>
+<div class="flash flash--<%= kind %>" data-controller="flash">
+  <span><%= message %></span>
+  <button class="flash__close" data-action="click->flash#dismiss" aria-label="Dismiss">✕</button>
+</div>

@@ -11,3 +11,10 @@ fixture_rule_two:
   match_pattern: FIXTURE_PATTERN_TWO
   match_type: exact
   priority: 5
+
+fixture_rule_exclude:
+  user: one
+  match_pattern: FIXTURE_EXCLUDE_PATTERN
+  match_type: contains
+  exclude: true
+  priority: 8
