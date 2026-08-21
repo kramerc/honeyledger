@@ -67,12 +67,15 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     assert_includes 3000...3200, port
   end
 
-  test "database_url_names_database? only when the URL has a database path" do
+  test "database_url_names_database? when the URL names a database by path or query" do
     assert_not WorktreeDatabase.database_url_names_database?(nil)
     assert_not WorktreeDatabase.database_url_names_database?("")
     assert_not WorktreeDatabase.database_url_names_database?("postgres://postgres:postgres@localhost")
     assert_not WorktreeDatabase.database_url_names_database?("postgres://localhost/")
     assert WorktreeDatabase.database_url_names_database?("postgres://localhost/honeyledger_test")
+    assert WorktreeDatabase.database_url_names_database?("postgres://localhost?database=shared")
+    assert WorktreeDatabase.database_url_names_database?("postgres://localhost?pool=5&database=shared")
+    assert_not WorktreeDatabase.database_url_names_database?("postgres://localhost?pool=5")
     assert_not WorktreeDatabase.database_url_names_database?("not a url")
   end
 end

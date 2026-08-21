@@ -57,15 +57,19 @@ module WorktreeDatabase
       File.file?(File.join(application_root, ".git"))
     end
 
-    # True when DATABASE_URL names a database. Active Record gives the URL's
-    # database precedence over database.yml, so the suffix would never reach
-    # the connection and every worktree would share one database. A URL with
-    # no path -- what CI supplies to pick a host and credentials -- is fine.
+    # True when DATABASE_URL names a database, either as its path or as a
+    # `database=` query option; Active Record accepts both and gives either
+    # precedence over database.yml, so the suffix would never reach the
+    # connection and every worktree would share one database. A URL with
+    # neither -- what CI supplies to pick a host and credentials -- is fine.
     def database_url_names_database?(url = ENV["DATABASE_URL"])
       return false if url.nil? || url.empty?
 
-      !URI.parse(url).path.to_s.delete_prefix("/").empty?
-    rescue URI::InvalidURIError
+      uri = URI.parse(url)
+      return true unless uri.path.to_s.delete_prefix("/").empty?
+
+      URI.decode_www_form(uri.query.to_s).any? { |key, value| key == "database" && !value.empty? }
+    rescue URI::InvalidURIError, ArgumentError
       false
     end
 
