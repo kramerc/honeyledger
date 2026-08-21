@@ -8,8 +8,12 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
   def primary_checkout = make_checkout("primary") { |root| Dir.mkdir(File.join(root, ".git")) }
   def linked_worktree(name = "feature") = make_checkout(name) { |root| File.write(File.join(root, ".git"), "gitdir: elsewhere") }
 
+  teardown { @tmpdirs&.each { |dir| FileUtils.rm_rf(dir) } }
+
+  def tmpdir = (@tmpdirs ||= []).push(Dir.mktmpdir).last
+
   def make_checkout(name)
-    root = File.join(Dir.mktmpdir, name)
+    root = File.join(tmpdir, name)
     Dir.mkdir(root)
     yield root
     root
@@ -42,7 +46,7 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
 
   test "a symlink to a worktree resolves to the same suffix as the worktree" do
     root = linked_worktree
-    link = File.join(Dir.mktmpdir, "alias")
+    link = File.join(tmpdir, "alias")
     File.symlink(root, link)
 
     assert_equal WorktreeDatabase.suffix(root), WorktreeDatabase.suffix(link)
