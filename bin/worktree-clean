@@ -14,6 +14,7 @@
 # development databases hold work and are only ever reported, with the dropdb
 # command to run by hand.
 
+require "json"
 require "shellwords"
 
 APP_ROOT = File.expand_path("..", __dir__)
@@ -21,9 +22,20 @@ require File.join(APP_ROOT, "config", "worktree_database")
 
 abort "Run bin/worktree-clean from the primary checkout." if WorktreeDatabase.linked_worktree?(APP_ROOT)
 
-# database.yml honours DB_HOST (the devcontainer sets it); psql and dropdb must
-# talk to the same cluster Rails does.
-PSQL_ENVIRONMENT = ENV["DB_HOST"] ? { "PGHOST" => ENV["DB_HOST"], "PGUSER" => "postgres", "PGPASSWORD" => "postgres" } : {}
+# psql and dropdb must talk to the cluster Rails does, whichever of database.yml,
+# DB_HOST or DATABASE_URL selected it, so ask Rails for the resolved settings
+# rather than re-deriving them here.
+connection = IO.popen(
+  [ "bin/rails", "runner", "puts ActiveRecord::Base.connection_db_config.configuration_hash" \
+                           ".slice(:host, :port, :username, :password).to_json" ],
+  chdir: APP_ROOT, err: File::NULL, &:read
+)
+abort "Could not read the database connection settings from Rails." unless $?.success?
+connection = JSON.parse(connection.lines.last.to_s)
+PSQL_ENVIRONMENT = {
+  "PGHOST" => connection["host"], "PGPORT" => connection["port"]&.to_s,
+  "PGUSER" => connection["username"], "PGPASSWORD" => connection["password"]
+}.compact
 PREFIXES = %w[honeyledger_test honeyledger_development].freeze
 
 # Enumerate databases BEFORE worktrees: a worktree created in between is then

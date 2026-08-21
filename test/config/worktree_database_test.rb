@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "fileutils"
+require "tmpdir"
 require Rails.root.join("config", "worktree_database").to_s
 
 class WorktreeDatabaseTest < ActiveSupport::TestCase
