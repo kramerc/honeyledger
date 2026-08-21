@@ -1,0 +1,65 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Drops the databases left behind by worktrees that no longer exist, since
+# `git worktree remove` does not know about them.
+#
+#   bin/worktree-clean          # list orphaned worktree databases
+#   bin/worktree-clean --drop   # drop the orphaned TEST databases
+#
+# Only databases carrying the worktree marker (honeyledger_*_wt_*) are ever
+# considered, and a database is an orphan only when no worktree git still lists
+# derives its name. --drop removes orphaned test databases, which db:prepare
+# rebuilds from db/schema.rb, so the worst it can cost is time. Orphaned
+# development databases hold work and are only ever reported, with the dropdb
+# command to run by hand.
+
+require "shellwords"
+
+APP_ROOT = File.expand_path("..", __dir__)
+require File.join(APP_ROOT, "config", "worktree_database")
+
+abort "Run bin/worktree-clean from the primary checkout." if WorktreeDatabase.linked_worktree?(APP_ROOT)
+
+# database.yml honours DB_HOST (the devcontainer sets it); psql and dropdb must
+# talk to the same cluster Rails does.
+PSQL_ENVIRONMENT = ENV["DB_HOST"] ? { "PGHOST" => ENV["DB_HOST"], "PGUSER" => "postgres", "PGPASSWORD" => "postgres" } : {}
+PREFIXES = %w[honeyledger_test honeyledger_development].freeze
+
+# Enumerate databases BEFORE worktrees: a worktree created in between is then
+# listed as live, and one created after cannot have a database in the listing.
+# Both commands abort on failure, since empty output from a failed command would
+# otherwise read as "nothing exists" or "nothing is live".
+databases = IO.popen(PSQL_ENVIRONMENT, [ "psql", "-tAc", "SELECT datname FROM pg_database", "postgres" ], &:read)
+abort "Could not list PostgreSQL databases; is it running?" unless $?.success?
+databases = databases.split("\n").map(&:strip).grep(/#{WorktreeDatabase::MARKER}/o)
+
+listing = `git -C #{APP_ROOT.shellescape} worktree list --porcelain`
+abort "Could not list git worktrees; refusing to guess which are live." unless $?.success?
+worktree_paths = listing.lines.filter_map { |line| line[/\Aworktree (.+)/, 1]&.strip }
+abort "git reported no worktrees at all; refusing to continue." if worktree_paths.empty?
+
+live_suffixes = worktree_paths.drop(1).map { |path| WorktreeDatabase.worktree_suffix(path) }
+orphaned = PREFIXES.to_h do |prefix|
+  [ prefix, databases.select { |name| name.start_with?("#{prefix}#{WorktreeDatabase::MARKER}") && live_suffixes.none? { |suffix| name == "#{prefix}#{suffix}" } } ]
+end
+
+if orphaned.values.all?(&:empty?)
+  puts "No orphaned worktree databases."
+  exit 0
+end
+
+if ARGV.include?("--drop")
+  orphaned["honeyledger_test"].each do |database|
+    system(PSQL_ENVIRONMENT, "dropdb", "--if-exists", database) or abort("Failed to drop #{database}")
+    puts "Dropped #{database}"
+  end
+elsif orphaned["honeyledger_test"].any?
+  puts "Orphaned test databases (re-run with --drop to remove):"
+  orphaned["honeyledger_test"].each { |database| puts "  #{database}" }
+end
+
+if orphaned["honeyledger_development"].any?
+  puts "Orphaned development databases -- never dropped automatically; remove by hand if you are sure:"
+  orphaned["honeyledger_development"].each { |database| puts "  dropdb #{database}" }
+end

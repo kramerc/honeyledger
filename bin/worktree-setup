@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Prepares a linked git worktree for use as an isolated checkout. Runs as a
+# SessionStart hook, so it must be quick, idempotent and quiet.
+#
+# Two things do not come along when git creates a worktree: gitignored files
+# (credentials, local Claude Code settings) and databases. This symlinks the
+# former from the primary checkout and creates the latter. It is a no-op in the
+# primary checkout.
+
+require "fileutils"
+require "json"
+require "shellwords"
+
+APP_ROOT = File.expand_path("..", __dir__)
+require File.join(APP_ROOT, "config", "worktree_database")
+
+# Symlinked rather than copied, so rotating a credential or adding a permission
+# in the primary checkout applies everywhere at once.
+LINKED_PATHS = [ "config/master.key", ".claude/settings.local.json" ].freeze
+
+def say(message)
+  puts JSON.generate(systemMessage: message)
+end
+
+exit 0 unless WorktreeDatabase.linked_worktree?(APP_ROOT)
+
+# `git worktree list --porcelain` always reports the primary checkout first.
+listing = `git -C #{APP_ROOT.shellescape} worktree list --porcelain 2>/dev/null`
+primary_checkout = listing.lines.first.to_s[/\Aworktree (.+)/, 1]&.strip
+exit 0 if !$?.success? || primary_checkout.nil? || File.realpath(primary_checkout) == File.realpath(APP_ROOT)
+
+if WorktreeDatabase.database_url_names_database?
+  say "Worktree databases are NOT isolated: DATABASE_URL names a database, which outranks " \
+      "config/database.yml, so every worktree shares it. Unset it or drop its database path."
+  exit 0
+end
+
+linked = LINKED_PATHS.select do |relative_path|
+  source = File.join(primary_checkout, relative_path)
+  destination = File.join(APP_ROOT, relative_path)
+  next false unless File.exist?(source)
+  next false if File.symlink?(destination) || File.exist?(destination)
+
+  FileUtils.mkdir_p(File.dirname(destination))
+  FileUtils.ln_s(source, destination)
+  true
+end
+
+# db:prepare creates both the development and test databases when they are
+# missing and loads the schema; once they exist it only runs pending
+# migrations, so repeating it every session is cheap.
+unless system("bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
+  say "Could not prepare this worktree's databases -- is PostgreSQL running? Run bin/rails db:prepare to see why."
+  exit 0
+end
+
+summary = [ "databases prepared (honeyledger_*#{WorktreeDatabase.suffix(APP_ROOT)})" ]
+summary.unshift("linked #{linked.join(", ")} from the primary checkout") if linked.any?
+say "Worktree ready: #{summary.join("; ")}."

@@ -12,6 +12,19 @@
 # Configure Using Gemfile
 # gem "pg"
 #
+<%
+  # Every linked git worktree gets its own development and test databases, so
+  # parallel sessions never share a schema or clobber each other's fixtures.
+  # The primary checkout keeps the plain names. Production has no worktrees and
+  # never loads this file; see config/worktree_database.rb.
+  worktree_suffix =
+    if Rails.env.local?
+      require Rails.root.join("config", "worktree_database").to_s
+      WorktreeDatabase.suffix(Rails.root.to_s)
+    else
+      ""
+    end
+%>
 default: &default
   adapter: postgresql
   encoding: unicode
@@ -27,7 +40,7 @@ default: &default
 
 development:
   <<: *default
-  database: honeyledger_development
+  database: honeyledger_development<%= worktree_suffix %>
 
   # The specified database role being used to connect to PostgreSQL.
   # To create additional roles in PostgreSQL see `$ createuser --help`.
@@ -61,7 +74,7 @@ development:
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: honeyledger_test
+  database: honeyledger_test<%= worktree_suffix %>
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
