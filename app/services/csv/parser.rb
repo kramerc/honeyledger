@@ -21,6 +21,22 @@ class Csv::Parser
     new(io: io, mappings: {}, currency: nil).headers
   end
 
+  # Whether +content+ looks like text a CSV parser can read: valid UTF-8 with
+  # no NUL bytes (spreadsheets, PDFs, and other binary formats contain them).
+  # A file that fails this check raises Error from the parser instead of
+  # leaking an encoding ArgumentError out of String#sub / CSV.parse.
+  def self.readable_text?(content)
+    utf8 = content.to_s
+    utf8 = utf8.dup.force_encoding("UTF-8") unless utf8.encoding == Encoding::UTF_8
+    utf8.valid_encoding? && !utf8.include?("\0")
+  end
+
+  UNREADABLE_MESSAGE = "is not readable as UTF-8 text; export the statement as a CSV file and try again".freeze
+
+  def self.unreadable_message
+    "file #{UNREADABLE_MESSAGE}"
+  end
+
   def self.raw_preview(io, limit: 10)
     parser = new(io: io, mappings: {}, currency: nil)
     headers = parser.headers
@@ -123,10 +139,9 @@ class Csv::Parser
     def read_string
       @read_string ||= begin
         @io.rewind if @io.respond_to?(:rewind)
-        content = @io.read
-        content = content.dup.force_encoding("UTF-8") if content.respond_to?(:force_encoding)
-        content = content.sub(/\A﻿/, "")
-        content
+        content = @io.read.to_s.dup.force_encoding("UTF-8")
+        raise Error, self.class.unreadable_message unless self.class.readable_text?(content)
+        content.delete_prefix("\uFEFF")
       end
     end
 
