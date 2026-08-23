@@ -90,7 +90,11 @@ class Csv::Import < ApplicationRecord
     # character boundary before the check.
     def file_is_readable_text
       sample = read_file_sample
-      return if sample.nil? || Csv::Parser.readable_text?(trim_to_character_boundary(sample))
+      return if sample.nil?
+
+      truncated = sample.bytesize > TEXT_SAMPLE_BYTES
+      sample = sample.byteslice(0, TEXT_SAMPLE_BYTES) if truncated
+      return if Csv::Parser.readable_text?(trim_to_character_boundary(sample, truncated: truncated))
 
       errors.add(:file, Csv::Parser::UNREADABLE_MESSAGE)
     end
@@ -107,22 +111,43 @@ class Csv::Import < ApplicationRecord
       io = pending.is_a?(Hash) ? pending[:io] : pending
       return nil unless io.respond_to?(:read)
 
+      # One byte past the sample size tells whether the file continues beyond
+      # the sample; a file that ends exactly at the boundary is checked whole.
       io.rewind if io.respond_to?(:rewind)
-      sample = io.read(TEXT_SAMPLE_BYTES)
+      sample = io.read(TEXT_SAMPLE_BYTES + 1)
       io.rewind if io.respond_to?(:rewind)
       sample
     end
 
-    def trim_to_character_boundary(sample)
+    # A multi-byte character cut by the sample boundary must not count as
+    # invalid, but only a genuinely incomplete trailing sequence is dropped:
+    # a lead byte followed by too few continuation bytes. Any other invalid
+    # byte stays in place and fails the readability check.
+    def trim_to_character_boundary(sample, truncated:)
       utf8 = sample.to_s.dup.force_encoding("UTF-8")
-      return utf8 if utf8.valid_encoding? || sample.bytesize < TEXT_SAMPLE_BYTES
+      return utf8 if utf8.valid_encoding? || !truncated
 
-      # Drop up to three trailing bytes (the longest partial UTF-8 sequence) so
-      # a character cut by the sample boundary is not reported as invalid.
-      3.times do
-        utf8 = utf8.byteslice(0, utf8.bytesize - 1)
-        break if utf8.valid_encoding?
+      partial_length = incomplete_trailing_sequence_length(utf8)
+      partial_length.zero? ? utf8 : utf8.byteslice(0, utf8.bytesize - partial_length)
+    end
+
+    # Length in bytes of an incomplete UTF-8 sequence at the end of +utf8+, or
+    # zero when the trailing bytes are not the start of a longer character.
+    def incomplete_trailing_sequence_length(utf8)
+      trailing = utf8.bytes.last(3)
+      (1..trailing.size).each do |length|
+        lead = trailing[-length]
+        next if (0x80..0xBF).cover?(lead) # continuation byte: keep walking back
+
+        expected_length =
+          case lead
+          when 0xC2..0xDF then 2
+          when 0xE0..0xEF then 3
+          when 0xF0..0xF4 then 4
+          else return 0 # ASCII or never-valid lead byte
+          end
+        return expected_length > length ? length : 0
       end
-      utf8
+      0
     end
 end

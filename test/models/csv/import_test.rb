@@ -66,6 +66,22 @@ class Csv::ImportTest < ActiveSupport::TestCase
     assert csv_import.valid?, csv_import.errors.full_messages.join(", ")
   end
 
+  test "rejects an invalid byte near the end of the sample even when the file continues" do
+    padding = "a" * (Csv::Import::TEXT_SAMPLE_BYTES - 2)
+    csv_import = build_import_with_file("#{padding}\xFFa,more\n".b, filename: "statement.csv")
+
+    assert_not csv_import.valid?
+    assert_includes csv_import.errors[:file], Csv::Parser::UNREADABLE_MESSAGE
+  end
+
+  test "rejects a file that ends exactly at the sample boundary with a truncated character" do
+    padding = "a" * (Csv::Import::TEXT_SAMPLE_BYTES - 1)
+    csv_import = build_import_with_file("#{padding}\xC3".b, filename: "statement.csv")
+
+    assert_not csv_import.valid?
+    assert_includes csv_import.errors[:file], Csv::Parser::UNREADABLE_MESSAGE
+  end
+
   test "does not re-sample the file when saving a persisted import without changing the attachment" do
     csv_import = build_import_with_file("Date,Description,Amount\n", filename: "statement.csv")
     csv_import.save!

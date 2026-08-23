@@ -26,7 +26,8 @@ class Csv::Parser
   # A file that fails this check raises Error from the parser instead of
   # leaking an encoding ArgumentError out of String#sub / CSV.parse.
   def self.readable_text?(content)
-    utf8 = content.to_s.dup.force_encoding("UTF-8")
+    utf8 = content.to_s
+    utf8 = utf8.dup.force_encoding("UTF-8") unless utf8.encoding == Encoding::UTF_8
     utf8.valid_encoding? && !utf8.include?("\0")
   end
 
@@ -140,7 +141,7 @@ class Csv::Parser
         @io.rewind if @io.respond_to?(:rewind)
         content = @io.read.to_s.dup.force_encoding("UTF-8")
         raise Error, self.class.unreadable_message unless self.class.readable_text?(content)
-        content.sub(/\A﻿/, "")
+        content.delete_prefix("\uFEFF")
       end
     end
 
