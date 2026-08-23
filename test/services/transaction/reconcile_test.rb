@@ -767,7 +767,7 @@ class Transaction::ReconcileTest < ActiveSupport::TestCase
   end
 
   test "skips transactions that have any live source" do
-    # Live source: matches via direct sft → ledger lookup, not Reconcile.
+    # Live source: matches via direct simplefin_transaction → ledger lookup, not Reconcile.
     live_simplefin_transaction = Simplefin::Transaction.create!(
       account: @live_simplefin_account,
       remote_id: "live_with_extra",

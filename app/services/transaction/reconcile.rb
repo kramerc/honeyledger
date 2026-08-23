@@ -178,8 +178,8 @@ class Transaction::Reconcile
     # case-insensitive prefix match — covers the cross-aggregator truncation case
     # (e.g. Lunch Flow's 32-char merchant truncation of a longer SimpleFIN
     # description). Candidates are excluded if they already have a *live* source of
-    # the same aggregator type as the incoming source, since the incoming sft would
-    # represent a separate real-world event.
+    # the same aggregator type as the incoming source, since the incoming aggregator
+    # transaction would represent a separate real-world event.
     def orphan_with_description_clause
       manual_entry_clause.or(sourced_clause)
     end

@@ -661,14 +661,14 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       name: "Secondary Sync Bank", currency: "USD", balance: "1000.00"
     )
     bank_account.account_sources.create!(sourceable: sf_account)
-    sft = Simplefin::Transaction.create!(
+    simplefin_transaction = Simplefin::Transaction.create!(
       account: sf_account, remote_id: "sf_seq", amount: "-30.00",
       description: "Coffee", posted: 2.days.ago, transacted_at: 2.days.ago, pending: false
     )
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
-    ledger = sft.ledger_transactions.first!
+    ledger = simplefin_transaction.ledger_transactions.first!
 
-    lft = Lunchflow::Transaction.create!(
+    lunchflow_transaction = Lunchflow::Transaction.create!(
       account: lf_account, remote_id: "lf_secondary_sync", amount: "-30.00",
       currency: "USD", description: "Coffee", pending: false, date: 2.days.ago.to_date
     )
@@ -677,7 +677,7 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     secondary_synced_at = ledger.synced_at
 
     travel 2.seconds
-    lft.update!(synced_at: Time.current)
+    lunchflow_transaction.update!(synced_at: Time.current)
 
     Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
 

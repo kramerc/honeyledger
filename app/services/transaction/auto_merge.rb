@@ -66,8 +66,8 @@ class Transaction::AutoMerge
           cleared_at: [ @transaction.cleared_at, transfer.cleared_at ].compact.min
         )
 
-        [ @transaction, transfer ].each do |t|
-          t.update!(amount_minor: 0, fx_amount_minor: nil, fx_currency_id: nil, merged_into: merged)
+        [ @transaction, transfer ].each do |transaction|
+          transaction.update!(amount_minor: 0, fx_amount_minor: nil, fx_currency_id: nil, merged_into: merged)
         end
       end
       true

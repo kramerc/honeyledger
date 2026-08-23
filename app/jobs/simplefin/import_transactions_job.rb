@@ -11,9 +11,9 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
       .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND simplefin_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
     Transaction.collecting_sidebar_broadcasts do
-      transactions.find_each do |sft|
-        user = sft.account.connection.user
-        ledger_account = sft.account.ledger_accounts.first
+      transactions.find_each do |simplefin_transaction|
+        user = simplefin_transaction.account.connection.user
+        ledger_account = simplefin_transaction.account.ledger_accounts.first
         next if ledger_account.nil?
 
         # Direction is decided once per row and drives reconciliation, kind, and
@@ -24,10 +24,10 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         # the direction is overridden, the amount is stored as .abs either way and
         # Simplefin::Transaction stays a verbatim mirror. The rule lives on the row
         # model so the opening-balance walk-back reads the same answer (#227).
-        direction = sft.ledger_direction
+        direction = simplefin_transaction.ledger_direction
         ledger_side = direction.ledger_side
 
-        existing_source = TransactionSource.find_by(sourceable: sft)
+        existing_source = TransactionSource.find_by(sourceable: simplefin_transaction)
 
         if existing_source
           ledger_transaction = existing_source.ledger_transaction
@@ -36,7 +36,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           # Re-sync only when this source is the first writer of the ledger transaction.
           # Secondary sources never overwrite canonical fields, but we still bump the
           # ledger transaction's synced_at so the outer query's
-          # `sft.synced_at > ledger.synced_at` filter stops re-matching this row
+          # `simplefin_transaction.synced_at > ledger.synced_at` filter stops re-matching this row
           # until the canonical source's data actually advances again.
           unless canonical_source.id == existing_source.id
             ledger_transaction.update!(synced_at: Time.current)
@@ -48,20 +48,20 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           # by AutoMerge or by the user) and must not be re-derived on every resync —
           # re-running counterpart creation here is what produced #137.
           ledger_transaction.update!(
-            amount_minor: sft.amount_minor.abs,
-            transacted_at: sft.transacted_at || sft.posted || Time.current,
-            cleared_at: sft.posted,
+            amount_minor: simplefin_transaction.amount_minor.abs,
+            transacted_at: simplefin_transaction.transacted_at || simplefin_transaction.posted || Time.current,
+            cleared_at: simplefin_transaction.posted,
             synced_at: Time.current
           )
           next
         elsif (match = Transaction::Reconcile.call(
           ledger_account: ledger_account,
-          amount_minor: sft.amount_minor.abs,
+          amount_minor: simplefin_transaction.amount_minor.abs,
           currency_id: ledger_account.currency_id,
-          transacted_at: sft.transacted_at || sft.posted || Time.current,
-          description: sft.description,
+          transacted_at: simplefin_transaction.transacted_at || simplefin_transaction.posted || Time.current,
+          description: simplefin_transaction.description,
           ledger_side: ledger_side,
-          incoming_source: sft
+          incoming_source: simplefin_transaction
         ))
           # Same concurrent-attach guard as the new-creation branch below — if a
           # parallel job attaches this source between Reconcile returning and our
@@ -69,7 +69,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           begin
             Transaction.transaction do
               TransactionSource::Attach.call(
-                transaction: match, sourceable: sft,
+                transaction: match, sourceable: simplefin_transaction,
                 direction_overridden: direction.direction_overridden?
               )
               match.update!(synced_at: Time.current)
@@ -82,7 +82,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           transaction = Transaction.new
         end
 
-        rule = user.import_rules.for_description(sft.description).first
+        rule = user.import_rules.for_description(simplefin_transaction.description).first
         rule_account = rule&.account
         bs_rule_account = rule_account if rule_account&.balance_sheet?
 
@@ -90,7 +90,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         counterpart = if rule_account && !bs_rule_account
           rule_account
         else
-          Account.find_or_create_for_import(user: user, description: sft.description, kind: kind, currency: ledger_account.currency, skip_rules: true)
+          Account.find_or_create_for_import(user: user, description: simplefin_transaction.description, kind: kind, currency: ledger_account.currency, skip_rules: true)
         end
 
         if ledger_side == :src
@@ -104,11 +104,11 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         transaction.user = user
         transaction.src_account = transaction_src
         transaction.dest_account = transaction_dest
-        transaction.description = sft.description
-        transaction.amount_minor = sft.amount_minor.abs
+        transaction.description = simplefin_transaction.description
+        transaction.amount_minor = simplefin_transaction.amount_minor.abs
         transaction.currency = ledger_account.currency
-        transaction.transacted_at = sft.transacted_at || sft.posted || Time.current
-        transaction.cleared_at = sft.posted
+        transaction.transacted_at = simplefin_transaction.transacted_at || simplefin_transaction.posted || Time.current
+        transaction.cleared_at = simplefin_transaction.posted
         transaction.synced_at = Time.current
         # Wrap save+attach so a concurrent import that creates the source row
         # first rolls back this iteration cleanly instead of leaving an
@@ -117,7 +117,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           Transaction.transaction do
             transaction.save!
             TransactionSource::Attach.call(
-              transaction: transaction, sourceable: sft,
+              transaction: transaction, sourceable: simplefin_transaction,
               direction_overridden: direction.direction_overridden?
             )
           end

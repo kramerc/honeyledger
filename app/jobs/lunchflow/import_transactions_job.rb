@@ -11,12 +11,12 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
       .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND lunchflow_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
 
     Transaction.collecting_sidebar_broadcasts do
-      transactions.find_each do |lft|
-        user = lft.account.connection.user
-        ledger_account = lft.account.ledger_accounts.first
+      transactions.find_each do |lunchflow_transaction|
+        user = lunchflow_transaction.account.connection.user
+        ledger_account = lunchflow_transaction.account.ledger_accounts.first
         next if ledger_account.nil?
 
-        description = lft.resolved_description
+        description = lunchflow_transaction.resolved_description
 
         # Direction is decided once per row and drives reconciliation, kind, and
         # src/dest assignment below. Normally the sign decides it: a negative amount
@@ -27,10 +27,10 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         # Lunchflow::Transaction stays a verbatim mirror. This feed signs those rows
         # correctly today, so the negative? gate leaves it inert. The rule lives on
         # the row model so the opening-balance walk-back reads the same answer (#227).
-        direction = lft.ledger_direction
+        direction = lunchflow_transaction.ledger_direction
         ledger_side = direction.ledger_side
 
-        existing_source = TransactionSource.find_by(sourceable: lft)
+        existing_source = TransactionSource.find_by(sourceable: lunchflow_transaction)
 
         if existing_source
           ledger_transaction = existing_source.ledger_transaction
@@ -39,7 +39,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           # Re-sync only when this source is the first writer of the ledger transaction.
           # Secondary sources never overwrite canonical fields, but we still bump the
           # ledger transaction's synced_at so the outer query's
-          # `lft.synced_at > ledger.synced_at` filter stops re-matching this row
+          # `lunchflow_transaction.synced_at > ledger.synced_at` filter stops re-matching this row
           # until the canonical source's data actually advances again.
           unless canonical_source.id == existing_source.id
             ledger_transaction.update!(synced_at: Time.current)
@@ -51,20 +51,20 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           # by AutoMerge or by the user) and must not be re-derived on every resync —
           # re-running counterpart creation here is what produced #137.
           ledger_transaction.update!(
-            amount_minor: lft.amount_minor.abs,
-            transacted_at: lft.date || Time.current,
-            cleared_at: lft.pending ? nil : lft.date,
+            amount_minor: lunchflow_transaction.amount_minor.abs,
+            transacted_at: lunchflow_transaction.date || Time.current,
+            cleared_at: lunchflow_transaction.pending ? nil : lunchflow_transaction.date,
             synced_at: Time.current
           )
           next
         elsif (match = Transaction::Reconcile.call(
           ledger_account: ledger_account,
-          amount_minor: lft.amount_minor.abs,
+          amount_minor: lunchflow_transaction.amount_minor.abs,
           currency_id: ledger_account.currency_id,
-          transacted_at: lft.date || Time.current,
+          transacted_at: lunchflow_transaction.date || Time.current,
           description: description,
           ledger_side: ledger_side,
-          incoming_source: lft
+          incoming_source: lunchflow_transaction
         ))
           # Same concurrent-attach guard as the new-creation branch below — if a
           # parallel job attaches this source between Reconcile returning and our
@@ -72,7 +72,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           begin
             Transaction.transaction do
               TransactionSource::Attach.call(
-                transaction: match, sourceable: lft,
+                transaction: match, sourceable: lunchflow_transaction,
                 direction_overridden: direction.direction_overridden?
               )
               match.update!(synced_at: Time.current)
@@ -108,10 +108,10 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
         transaction.src_account = transaction_src
         transaction.dest_account = transaction_dest
         transaction.description = description
-        transaction.amount_minor = lft.amount_minor.abs
+        transaction.amount_minor = lunchflow_transaction.amount_minor.abs
         transaction.currency = ledger_account.currency
-        transaction.transacted_at = lft.date || Time.current
-        transaction.cleared_at = lft.pending ? nil : lft.date
+        transaction.transacted_at = lunchflow_transaction.date || Time.current
+        transaction.cleared_at = lunchflow_transaction.pending ? nil : lunchflow_transaction.date
         transaction.synced_at = Time.current
         # Wrap save+attach so a concurrent import that creates the source row
         # first rolls back this iteration cleanly instead of leaving an
@@ -120,7 +120,7 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           Transaction.transaction do
             transaction.save!
             TransactionSource::Attach.call(
-              transaction: transaction, sourceable: lft,
+              transaction: transaction, sourceable: lunchflow_transaction,
               direction_overridden: direction.direction_overridden?
             )
           end

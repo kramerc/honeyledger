@@ -954,15 +954,15 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       currency: "USD", status: "ACTIVE", balance: "1000.00"
     )
     bank_account.account_sources.create!(sourceable: lunchflow_account)
-    lft = Lunchflow::Transaction.create!(
+    lunchflow_transaction = Lunchflow::Transaction.create!(
       account: lunchflow_account, remote_id: "lf_seq", amount: "-30.00",
       currency: "USD", description: "Coffee", pending: false, date: 2.days.ago.to_date
     )
     Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lunchflow_account.id)
-    ledger = lft.ledger_transactions.first!
+    ledger = lunchflow_transaction.ledger_transactions.first!
 
     # SimpleFIN imports the same real-world transaction; Reconcile attaches it as secondary.
-    sft = Simplefin::Transaction.create!(
+    simplefin_transaction = Simplefin::Transaction.create!(
       account: sf_account, remote_id: "sf_secondary_sync", amount: "-30.00",
       description: "Coffee", posted: 2.days.ago, transacted_at: 2.days.ago, pending: false
     )
@@ -970,10 +970,10 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     ledger.reload
     secondary_synced_at = ledger.synced_at
 
-    # Aggregator side gets a fresh refresh — sft.synced_at advances past the
+    # Aggregator side gets a fresh refresh — simplefin_transaction.synced_at advances past the
     # ledger.synced_at the secondary-source path just stamped.
     travel 2.seconds
-    sft.update!(synced_at: Time.current)
+    simplefin_transaction.update!(synced_at: Time.current)
 
     Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
 
@@ -1000,7 +1000,7 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_reconcile_race", name: "Reconcile Race Bank")
     expense = Account.create!(user: @user, name: "Coffee", kind: :expense, currency: @currency)
 
-    # Manual-entry ledger transaction that the incoming sft will match via Reconcile.
+    # Manual-entry ledger transaction that the incoming simplefin_transaction will match via Reconcile.
     Transaction.create!(
       user: @user, src_account: bank_account, dest_account: expense,
       amount_minor: 1000, currency: @currency, description: "Coffee",
