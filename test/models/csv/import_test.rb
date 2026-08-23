@@ -66,6 +66,23 @@ class Csv::ImportTest < ActiveSupport::TestCase
     assert csv_import.valid?, csv_import.errors.full_messages.join(", ")
   end
 
+  test "accepts a sample boundary that splits a three- or four-byte character" do
+    { "three-byte" => "\u20AC", "four-byte" => "\u{1F600}" }.each do |label, character|
+      padding = "a" * (Csv::Import::TEXT_SAMPLE_BYTES - 2)
+      csv_import = build_import_with_file("#{padding}#{character},more\n", filename: "statement.csv")
+
+      assert csv_import.valid?, "#{label}: #{csv_import.errors.full_messages.join(', ')}"
+    end
+  end
+
+  test "rejects stray continuation bytes at the end of the sample" do
+    padding = "a" * (Csv::Import::TEXT_SAMPLE_BYTES - 3)
+    csv_import = build_import_with_file("#{padding}\x80\x80\x80more\n".b, filename: "statement.csv")
+
+    assert_not csv_import.valid?
+    assert_includes csv_import.errors[:file], Csv::Parser::UNREADABLE_MESSAGE
+  end
+
   test "rejects an invalid byte near the end of the sample even when the file continues" do
     padding = "a" * (Csv::Import::TEXT_SAMPLE_BYTES - 2)
     csv_import = build_import_with_file("#{padding}\xFFa,more\n".b, filename: "statement.csv")
