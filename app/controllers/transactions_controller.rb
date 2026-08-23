@@ -72,11 +72,11 @@ class TransactionsController < ApplicationController
       if unmerger.call
         scope = visible_transactions(show_excluded: show_excluded?)
         restored = unmerger.restored_transactions
-          .sort_by { |t| [ t.transacted_at, t.created_at ] }.reverse
+          .sort_by { |transaction| [ transaction.transacted_at, transaction.created_at ] }.reverse
         # Only legs that belong in the list being rendered can be inserted; an
         # account-filtered index may exclude some or all of them.
         visible_ids = scope.where(id: restored.map(&:id)).pluck(:id)
-        @restored_transactions = restored.select { |t| visible_ids.include?(t.id) }
+        @restored_transactions = restored.select { |transaction| visible_ids.include?(transaction.id) }
 
         # Find the nearest transaction that's newer (appears above in the list) to insert after.
         # This element is already in the DOM, unlike older ones which may be off-screen or absent.
@@ -149,7 +149,7 @@ class TransactionsController < ApplicationController
 
     survivor = nil
     if params[:survivor_id].present?
-      survivor = transactions.find { |t| t.id.to_s == params[:survivor_id].to_s }
+      survivor = transactions.find { |transaction| transaction.id.to_s == params[:survivor_id].to_s }
       if survivor.nil?
         @dedupe_errors = [ "The transaction to keep must be one of the selected transactions." ]
         respond_to do |format|
@@ -169,7 +169,7 @@ class TransactionsController < ApplicationController
     respond_to do |format|
       if succeeded
         @survivor = deduplicator.survivor
-        @removed_ids = transactions.reject { |t| t.id == @survivor.id }.map(&:id)
+        @removed_ids = transactions.reject { |transaction| transaction.id == @survivor.id }.map(&:id)
         format.turbo_stream
       else
         @dedupe_errors = deduplicator.errors

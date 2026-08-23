@@ -91,7 +91,7 @@ class Transaction < ApplicationRecord
   # the one that required the opening balance to be set.
   def opening_balance_target_account
     return nil unless opening_balance?
-    [ src_account, dest_account ].find { |a| a&.real? }
+    [ src_account, dest_account ].find { |account| account&.real? }
   end
 
   # This transaction's own source rows with each sourceable preloaded. Reused for the
@@ -100,7 +100,7 @@ class Transaction < ApplicationRecord
   # sourceable are already loaded; otherwise materializes via `.includes(:sourceable)`
   # so neither the caller's `.any?` nor the badge helper triggers an N+1.
   def own_badge_sources
-    if transaction_sources.loaded? && transaction_sources.all? { |s| s.association(:sourceable).loaded? }
+    if transaction_sources.loaded? && transaction_sources.all? { |transaction_source| transaction_source.association(:sourceable).loaded? }
       transaction_sources.to_a
     else
       transaction_sources.includes(:sourceable).to_a

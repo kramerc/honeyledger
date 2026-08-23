@@ -266,7 +266,7 @@ class Csv::Parser
         # whose timezone cell is blank (try without trailing %Z), and a row
         # whose time and timezone cells are both blank (try date-only).
         segments = format.split(/\s+/).reject(&:empty?)
-        formats_to_try = segments.size.downto(1).map { |n| segments.first(n).join(" ") }
+        formats_to_try = segments.size.downto(1).map { |segment_count| segments.first(segment_count).join(" ") }
         formats_to_try.each do |candidate_format|
           begin
             return ::DateTime.strptime(cleaned, candidate_format).to_time
