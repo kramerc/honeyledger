@@ -10,3 +10,12 @@ updates:
   schedule:
     interval: weekly
   open-pull-requests-limit: 10
+  # Workflows reference floating major tags (e.g. actions/checkout@v7), which
+  # track patch releases on their own. Only propose major-version bumps so
+  # Dependabot does not rewrite a floating tag to an exact one whenever an
+  # upstream major tag briefly lags a new patch release.
+  ignore:
+  - dependency-name: "*"
+    update-types:
+    - version-update:semver-minor
+    - version-update:semver-patch
