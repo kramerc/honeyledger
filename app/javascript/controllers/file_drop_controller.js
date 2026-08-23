@@ -39,13 +39,13 @@ export default class extends Controller {
 
     const files = event.dataTransfer.files
     if (files.length !== 1) {
-      this.showMessage("Drop a single .csv file.")
+      this.reject("Drop a single .csv file.")
       return
     }
 
     const file = files[0]
     if (!this.acceptable(file)) {
-      this.showMessage(`${file.name} is not a .csv file.`)
+      this.reject(`${file.name} is not a .csv file.`)
       return
     }
 
@@ -66,6 +66,13 @@ export default class extends Controller {
   // .xls workbooks, so the type alone can't distinguish them.
   acceptable(file) {
     return /\.csv$/i.test(file.name)
+  }
+
+  // Clear any earlier selection so a rejected drop can't leave a stale file
+  // behind the rejection message and get uploaded by mistake.
+  reject(message) {
+    this.inputTarget.value = ""
+    this.showMessage(message)
   }
 
   showMessage(text) {

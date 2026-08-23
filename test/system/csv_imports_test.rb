@@ -62,12 +62,26 @@ class CsvImportsTest < ApplicationSystemTestCase
     assert_text "Map columns"
   end
 
-  test "dropping a non-CSV file onto the upload form is rejected" do
+  test "dropping a non-CSV file onto the upload form is rejected and clears an earlier selection" do
     visit new_account_csv_import_path(@account)
+    drop_file_on_zone(name: "statement.csv", type: "text/csv", content: "Date,Description,Amount\n")
+    assert_equal 1, page.evaluate_script("document.getElementById('csv_import_file').files.length")
 
     drop_file_on_zone(name: "notes.txt", type: "text/plain", content: "hello")
 
     assert_selector ".file-drop__status", text: "notes.txt is not a .csv file."
+    assert_equal 0, page.evaluate_script("document.getElementById('csv_import_file').files.length")
+  end
+
+  test "dropping several files onto the upload form is rejected" do
+    visit new_account_csv_import_path(@account)
+
+    drop_files_on_zone([
+      { name: "one.csv", type: "text/csv", content: "a" },
+      { name: "two.csv", type: "text/csv", content: "b" }
+    ])
+
+    assert_selector ".file-drop__status", text: "Drop a single .csv file."
     assert_equal 0, page.evaluate_script("document.getElementById('csv_import_file').files.length")
   end
 
@@ -85,10 +99,14 @@ class CsvImportsTest < ApplicationSystemTestCase
     # Capybara cannot drag a file in from the operating system, so synthesize the
     # drop event the browser would dispatch with the file already attached.
     def drop_file_on_zone(name:, type:, content:)
-      page.execute_script(<<~JS, name, type, content)
-        const [name, type, content] = arguments
+      drop_files_on_zone([ { name: name, type: type, content: content } ])
+    end
+
+    def drop_files_on_zone(files)
+      page.execute_script(<<~JS, files.map { |file| file.transform_keys(&:to_s) })
+        const [files] = arguments
         const transfer = new DataTransfer()
-        transfer.items.add(new File([content], name, { type }))
+        for (const { name, type, content } of files) transfer.items.add(new File([content], name, { type }))
         const event = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer })
         document.querySelector(".file-drop").dispatchEvent(event)
       JS
