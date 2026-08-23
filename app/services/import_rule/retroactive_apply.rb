@@ -157,7 +157,7 @@ class ImportRule::RetroactiveApply
         .where(transacted_at: (transaction.transacted_at - 7.days)..(transaction.transacted_at + 7.days))
         .where.missing(:merged_sources)
         .to_a
-        .select { |t| !t.src_account.balance_sheet? || !t.dest_account.balance_sheet? }
+        .select { |transaction| !transaction.src_account.balance_sheet? || !transaction.dest_account.balance_sheet? }
         .select { |candidate| mergeable?(transaction, candidate) }
     end
 

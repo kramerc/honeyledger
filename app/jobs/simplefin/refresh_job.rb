@@ -13,7 +13,7 @@ class Simplefin::RefreshJob < ApplicationJob
       simplefin_client = simplefin_connection.client
       simplefin_accounts = simplefin_client.accounts(start_date: 1.month.ago.to_i)
 
-      connections_by_id = (simplefin_accounts["connections"] || []).index_by { |c| c["conn_id"] }
+      connections_by_id = (simplefin_accounts["connections"] || []).index_by { |connection| connection["conn_id"] }
 
       simplefin_accounts["accounts"].each do |sf_account_data|
         refresh_account(simplefin_connection, connections_by_id, sf_account_data, refreshed_at)

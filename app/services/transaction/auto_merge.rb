@@ -87,7 +87,7 @@ class Transaction::AutoMerge
       base_candidates
         .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: @rule_account.id)
         .to_a
-        .reject { |t| transfer?(t) }
+        .reject { |transaction| transfer?(transaction) }
     end
 
     # Find BS-to-BS transfers involving the same ledger account
@@ -95,7 +95,7 @@ class Transaction::AutoMerge
       candidates = base_candidates
         .where("transactions.src_account_id = :id OR transactions.dest_account_id = :id", id: ledger_account_id)
         .to_a
-        .select { |t| transfer?(t) }
+        .select { |transaction| transfer?(transaction) }
 
       candidates.size == 1 ? candidates.first : nil
     end

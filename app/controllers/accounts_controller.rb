@@ -93,8 +93,8 @@ class AccountsController < ApplicationController
       else
         begin
           Account.transaction do
-            @account.save.tap do |ok|
-              AccountSource::Attach.call(account: @account, sourceable: sourceable) if ok && sourceable
+            @account.save.tap do |saved|
+              AccountSource::Attach.call(account: @account, sourceable: sourceable) if saved && sourceable
             end
           end
         rescue AccountSource::Attach::MismatchedAccount

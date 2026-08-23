@@ -58,7 +58,7 @@ class Transaction::Deduplicate
         return
       end
 
-      unless @transactions.all? { |t| t.user_id == @user.id }
+      unless @transactions.all? { |transaction| transaction.user_id == @user.id }
         @errors << "All transactions must belong to you"
       end
 
@@ -70,7 +70,7 @@ class Transaction::Deduplicate
         @errors << "Currencies must match"
       end
 
-      if @transactions.any? { |t| t.has_fx? }
+      if @transactions.any? { |transaction| transaction.has_fx? }
         @errors << "Foreign exchange transactions cannot be combined"
       end
 
@@ -78,7 +78,7 @@ class Transaction::Deduplicate
         @errors << "Opening balance transactions cannot be combined"
       end
 
-      if @transactions.any? { |t| t.split? || t.parent_transaction_id? }
+      if @transactions.any? { |transaction| transaction.split? || transaction.parent_transaction_id? }
         @errors << "Split transactions cannot be combined"
       end
 
@@ -86,11 +86,11 @@ class Transaction::Deduplicate
         @errors << "Excluded transactions cannot be combined"
       end
 
-      if @transactions.any? { |t| t.merged_into_id? || t.merged_sources.any? }
+      if @transactions.any? { |transaction| transaction.merged_into_id? || transaction.merged_sources.any? }
         @errors << "Merged transactions cannot be combined"
       end
 
-      if @transactions.any? { |t| transfer?(t) }
+      if @transactions.any? { |transaction| transfer?(transaction) }
         @errors << "Transfers cannot be combined as duplicates"
       end
 
@@ -112,10 +112,10 @@ class Transaction::Deduplicate
     # balance-sheet account on the same side (all src == BankX, or all dest ==
     # BankX) — the shape of duplicate recordings of one event.
     def same_bank_side?
-      return false if @transactions.any? { |t| transfer?(t) }
+      return false if @transactions.any? { |transaction| transfer?(transaction) }
 
-      all_src = @transactions.all? { |t| t.src_account.balance_sheet? }
-      all_dest = @transactions.all? { |t| t.dest_account.balance_sheet? }
+      all_src = @transactions.all? { |transaction| transaction.src_account.balance_sheet? }
+      all_dest = @transactions.all? { |transaction| transaction.dest_account.balance_sheet? }
 
       if all_src
         @transactions.map(&:src_account_id).uniq.size == 1
@@ -128,6 +128,6 @@ class Transaction::Deduplicate
 
     # Prefer a user-curated (categorized) row; tie-break by oldest.
     def heuristic_survivor
-      @transactions.min_by { |t| [ t.category_id ? 0 : 1, t.transacted_at, t.created_at, t.id ] }
+      @transactions.min_by { |transaction| [ transaction.category_id ? 0 : 1, transaction.transacted_at, transaction.created_at, transaction.id ] }
     end
 end
