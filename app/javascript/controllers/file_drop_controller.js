@@ -8,8 +8,11 @@ export default class extends Controller {
   static classes = ["active"]
 
   connect() {
+    // Stop a file missed outside the zone from navigating the browser to it,
+    // while leaving non-file drags (selected text, links) alone.
     this.preventWindowDrop = (event) => {
-      if (!this.zoneTarget.contains(event.target)) event.preventDefault()
+      if (this.zoneTarget.contains(event.target)) return
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault()
     }
     window.addEventListener("dragover", this.preventWindowDrop)
     window.addEventListener("drop", this.preventWindowDrop)
@@ -58,9 +61,11 @@ export default class extends Controller {
     this.showMessage("")
   }
 
+  // Match on extension only: browsers report .csv with a variety of MIME
+  // types (often application/vnd.ms-excel), and that type is also used for
+  // .xls workbooks, so the type alone can't distinguish them.
   acceptable(file) {
-    const csvTypes = ["text/csv", "application/vnd.ms-excel"]
-    return /\.csv$/i.test(file.name) || csvTypes.includes(file.type)
+    return /\.csv$/i.test(file.name)
   }
 
   showMessage(text) {

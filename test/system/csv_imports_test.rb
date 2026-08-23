@@ -71,6 +71,15 @@ class CsvImportsTest < ApplicationSystemTestCase
     assert_equal 0, page.evaluate_script("document.getElementById('csv_import_file').files.length")
   end
 
+  test "dropping an Excel workbook onto the upload form is rejected" do
+    visit new_account_csv_import_path(@account)
+
+    drop_file_on_zone(name: "workbook.xls", type: "application/vnd.ms-excel", content: "binary")
+
+    assert_selector ".file-drop__status", text: "workbook.xls is not a .csv file."
+    assert_equal 0, page.evaluate_script("document.getElementById('csv_import_file').files.length")
+  end
+
   private
 
     # Capybara cannot drag a file in from the operating system, so synthesize the
@@ -84,7 +93,6 @@ class CsvImportsTest < ApplicationSystemTestCase
         document.querySelector(".file-drop").dispatchEvent(event)
       JS
     end
-
 
     def sign_in_as(user)
       visit new_user_session_path
