@@ -20,7 +20,7 @@ Honeyledger is a personal finance management application built with Ruby on Rail
 - Use RuboCop for linting: `bin/rubocop`
 - Auto-fix style issues when possible: `bin/rubocop -a`
 - All code must pass RuboCop checks before committing
-- Spell out variable names (`simplefin_transaction`, not `sft`; `ledger_account`, not `la`). Abbreviations already in older code are grandfathered, but don't add new ones
+- Spell out variable names (`simplefin_transaction`, not `sft`; `ledger_account`, not `la`), including block parameters
 
 ### Rails Conventions
 - Use Rails conventions for file structure and naming
