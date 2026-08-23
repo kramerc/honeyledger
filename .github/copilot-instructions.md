@@ -207,7 +207,7 @@ Every `Transaction` has `src_account` and `dest_account` (both FK to `accounts`)
 
 ### PR Requirements
 - Clear description of changes
-- Reference related issues with `Closes #NN` once in the PR body
+- Reference related issues with a closing keyword once in the PR body (`Closes`, `Fixes`, or `Resolves` and their other forms; one keyword per issue, e.g. `Closes #10, fixes #12`). Keywords only link when the PR targets `main`
 - Include screenshots for UI changes
 - Update documentation if needed
 
