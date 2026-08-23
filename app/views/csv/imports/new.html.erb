@@ -11,10 +11,15 @@
     </ul>
   <% end %>
 
-  <p>
-    <%= form.label :file, "CSV file" %><br>
-    <%= form.file_field :file, accept: ".csv,text/csv" %>
-  </p>
+  <div data-controller="file-drop" data-file-drop-active-class="file-drop--active">
+    <div class="file-drop" data-file-drop-target="zone"
+         data-action="dragover->file-drop#dragover dragenter->file-drop#dragover dragleave->file-drop#dragleave drop->file-drop#drop">
+      <%= form.label :file, "CSV file" %><br>
+      <%= form.file_field :file, accept: ".csv,text/csv", data: { file_drop_target: "input", action: "change->file-drop#changed" } %>
+      <p class="file-drop__hint">or drag and drop a .csv file here</p>
+      <p class="file-drop__status" data-file-drop-target="status" aria-live="polite"></p>
+    </div>
+  </div>
 
   <p><%= form.submit "Upload" %></p>
 <% end %>

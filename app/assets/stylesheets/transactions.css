@@ -788,3 +788,33 @@
   cursor: pointer;
   font-size: 0.8rem;
 }
+
+/* CSV upload drop zone */
+.file-drop {
+  border: 2px dashed var(--divider);
+  border-radius: 8px;
+  background-color: var(--honey-pale);
+  padding: 1.25rem;
+  margin: 1rem 0;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.file-drop--active {
+  border-color: var(--honey);
+  background-color: var(--honey-light);
+}
+
+.file-drop__hint {
+  color: var(--bark-light);
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0;
+}
+
+.file-drop__status {
+  color: var(--text-error);
+  margin: 0.5rem 0 0;
+}
+
+.file-drop__status:empty {
+  display: none;
+}
