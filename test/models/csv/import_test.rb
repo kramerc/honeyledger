@@ -25,6 +25,56 @@ class Csv::ImportTest < ActiveSupport::TestCase
     assert_match(/must be smaller than/, csv_import.errors[:file].first)
   end
 
+  test "is invalid when the attached file does not have a .csv extension" do
+    csv_import = build_import_with_file("Date,Description,Amount\n", filename: "statement.xls", content_type: "application/vnd.ms-excel")
+
+    assert_not csv_import.valid?
+    assert_includes csv_import.errors[:file], "must be a CSV file (.csv)"
+  end
+
+  test "accepts a .CSV extension regardless of case and browser content type" do
+    csv_import = build_import_with_file("Date,Description,Amount\n", filename: "STATEMENT.CSV", content_type: "application/vnd.ms-excel")
+
+    assert csv_import.valid?, csv_import.errors.full_messages.join(", ")
+  end
+
+  test "is invalid when the attached file is not valid UTF-8 text" do
+    csv_import = build_import_with_file("\xFF\xFE\x00binary\x80".b, filename: "renamed.csv")
+
+    assert_not csv_import.valid?
+    assert_includes csv_import.errors[:file], Csv::Parser::UNREADABLE_MESSAGE
+  end
+
+  test "is invalid when the attached file contains NUL bytes" do
+    csv_import = build_import_with_file("Date,Description\0,Amount\n", filename: "renamed.csv")
+
+    assert_not csv_import.valid?
+    assert_includes csv_import.errors[:file], Csv::Parser::UNREADABLE_MESSAGE
+  end
+
+  test "accepts a UTF-8 file with a BOM and multi-byte characters" do
+    csv_import = build_import_with_file("\uFEFFDate,Description,Amount\n2026-01-15,Café,-4.75\n", filename: "statement.csv")
+
+    assert csv_import.valid?, csv_import.errors.full_messages.join(", ")
+  end
+
+  test "accepts a file whose text sample boundary splits a multi-byte character" do
+    # Fill the sample window so its final byte lands in the middle of "é".
+    padding = "a" * (Csv::Import::TEXT_SAMPLE_BYTES - 1)
+    csv_import = build_import_with_file("#{padding}é,more\n", filename: "statement.csv")
+
+    assert csv_import.valid?, csv_import.errors.full_messages.join(", ")
+  end
+
+  test "does not re-sample the file when saving a persisted import without changing the attachment" do
+    csv_import = build_import_with_file("Date,Description,Amount\n", filename: "statement.csv")
+    csv_import.save!
+
+    Csv::Parser.stub(:readable_text?, ->(*) { raise "sampled the file again" }) do
+      assert csv_import.update(state: "mapped")
+    end
+  end
+
   test "rejects an account belonging to another user" do
     other_account = accounts(:two)
     csv_import = Csv::Import.new(user: @user, account: other_account, state: "pending")
@@ -40,4 +90,12 @@ class Csv::ImportTest < ActiveSupport::TestCase
     assert_not csv_import.valid?
     assert_includes csv_import.errors[:account], "must be a real (non-virtual) account"
   end
+
+  private
+
+    def build_import_with_file(content, filename:, content_type: "text/csv")
+      csv_import = Csv::Import.new(user: @user, account: @account, state: "pending")
+      csv_import.file.attach(io: StringIO.new(content), filename: filename, content_type: content_type)
+      csv_import
+    end
 end

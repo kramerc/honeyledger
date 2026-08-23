@@ -52,6 +52,44 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
   end
 
+  test "POST create rejects a non-CSV upload without creating an import" do
+    file = Rack::Test::UploadedFile.new(StringIO.new("\xFF\xFE\x00binary\x80".b), "application/vnd.ms-excel", original_filename: "statement.xls")
+
+    assert_no_difference "Csv::Import.count" do
+      post account_csv_imports_url(@account), params: { csv_import: { file: file } }
+    end
+    assert_response :unprocessable_entity
+  end
+
+  test "POST create rejects a binary file renamed to .csv without creating an import" do
+    file = Rack::Test::UploadedFile.new(StringIO.new("\xFF\xFE\x00binary\x80".b), "text/csv", original_filename: "renamed.csv")
+
+    assert_no_difference "Csv::Import.count" do
+      post account_csv_imports_url(@account), params: { csv_import: { file: file } }
+    end
+    assert_response :unprocessable_entity
+  end
+
+  test "GET show renders an empty raw preview for an existing import whose file is not readable text" do
+    csv_import = build_csv_import(state: "pending", content: "\xFF\xFE\x00binary\x80".b)
+    csv_import.save!(validate: false)
+
+    get account_csv_import_url(@account, csv_import)
+    assert_response :success
+  end
+
+  test "GET confirm surfaces a preview error for a mapped import whose file is not readable text" do
+    csv_import = build_csv_import(
+      state: "mapped",
+      column_mappings: { "date_column" => "Date", "amount_mode" => "signed", "amount_column" => "Amount" },
+      content: "\xFF\xFE\x00binary\x80".b
+    )
+    csv_import.save!(validate: false)
+
+    get confirm_account_csv_import_url(@account, csv_import)
+    assert_response :success
+  end
+
   test "POST create defaults column_mappings to the most recent prior import for the account" do
     prior_mappings = {
       "date_column" => "Date",

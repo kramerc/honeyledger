@@ -14,6 +14,33 @@ class CsvImportsTest < ApplicationSystemTestCase
     ActiveJob::Base.queue_adapter = @previous_adapter
   end
 
+  test "uploading a non-CSV file shows a validation error on the upload form" do
+    fixture_path = Rails.root.join("tmp/test_import_not_csv.xls")
+    File.binwrite(fixture_path, "\xFF\xFE\x00binary\x80".b)
+
+    visit new_account_csv_import_path(@account)
+    attach_file "csv_import_file", fixture_path.to_s
+    click_button "Upload"
+
+    assert_text "File must be a CSV file (.csv)"
+    assert_equal 0, Csv::Import.where(account: @account).count
+  ensure
+    File.delete(fixture_path) if fixture_path && File.exist?(fixture_path)
+  end
+
+  test "uploading a binary file renamed to .csv shows an unreadable-text error on the upload form" do
+    fixture_path = Rails.root.join("tmp/test_import_renamed.csv")
+    File.binwrite(fixture_path, "\xFF\xFE\x00binary\x80".b)
+
+    visit new_account_csv_import_path(@account)
+    attach_file "csv_import_file", fixture_path.to_s
+    click_button "Upload"
+
+    assert_text "File is not readable as UTF-8 text"
+  ensure
+    File.delete(fixture_path) if fixture_path && File.exist?(fixture_path)
+  end
+
   test "upload, map columns, parse and import a CSV end-to-end" do
     fixture_path = Rails.root.join("tmp/test_import.csv")
     File.write(fixture_path, <<~CSV)

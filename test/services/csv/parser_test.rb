@@ -21,6 +21,25 @@ class Csv::ParserTest < ActiveSupport::TestCase
     assert_equal 1200, rows[1].amount_minor
   end
 
+  test "raw_preview raises Error instead of ArgumentError for a file that is not valid UTF-8" do
+    io = StringIO.new("\xFF\xFE\x00binary\x80".b)
+
+    error = assert_raises(Csv::Parser::Error) { Csv::Parser.raw_preview(io) }
+    assert_equal Csv::Parser.unreadable_message, error.message
+  end
+
+  test "headers raises Error for a file containing NUL bytes" do
+    io = StringIO.new("Date,Desc\0ription,Amount\n")
+
+    assert_raises(Csv::Parser::Error) { Csv::Parser.headers(io) }
+  end
+
+  test "readable_text? accepts UTF-8 with a BOM and rejects invalid bytes or NULs" do
+    assert Csv::Parser.readable_text?("\uFEFFDate,Café\n")
+    assert_not Csv::Parser.readable_text?("\xFF\x80".b)
+    assert_not Csv::Parser.readable_text?("a\0b")
+  end
+
   test "signed mode strips dollar sign and commas" do
     content = "Date,Description,Amount\n2026-01-15,Big buy,\"$1,234.56\"\n"
     rows = parse(content, mappings: signed_mappings, currency: @usd)
