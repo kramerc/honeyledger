@@ -1,2 +1,26 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Start on a port derived from this checkout, so servers from parallel worktrees
+# coexist and each keeps a stable URL. The primary checkout prefers 3000; set
+# PORT to pin one. Two worktrees can still hash to the same port, in which case
+# the second falls forward to the next free one.
+unless ENV["PORT"] || ARGV.any? { |argument| argument.start_with?("-p", "--port") }
+  require "socket"
+  require File.expand_path("../config/worktree_database", __dir__)
+
+  preferred = WorktreeDatabase.preferred_port(File.expand_path("..", __dir__))
+  port = (preferred..preferred + 50).find do |candidate|
+    TCPServer.new("127.0.0.1", candidate).close
+    true
+  rescue Errno::EADDRINUSE, Errno::EACCES
+    false
+  end
+
+  if port
+    ENV["PORT"] = port.to_s
+    warn "=> Port #{preferred} is taken; starting on #{port}" unless port == preferred
+  end
+end
+
 exec "./bin/rails", "server", *ARGV

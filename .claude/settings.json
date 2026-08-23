@@ -1,4 +1,18 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "setup=\"${CLAUDE_PROJECT_DIR:-.}/bin/worktree-setup\"; [ -x \"$setup\" ] && \"$setup\" || true",
+            "timeout": 300,
+            "statusMessage": "Preparing worktree databases"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "github@claude-plugins-official": true,
     "ruby-lsp@claude-plugins-official": true,

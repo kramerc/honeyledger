@@ -22,8 +22,42 @@ bin/bundler-audit                                # Security scan (gems)
 bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
 bin/rails db:create db:migrate                   # Set up database
+bin/worktree-clean --drop                        # Drop test databases left by deleted worktrees
 kamal deploy                                     # Deploy to production
 ```
+
+## Parallel Development
+
+The repo supports several Claude Code sessions and agents working at once, each
+in its own git worktree. **Start isolated work in a worktree** (`EnterWorktree`, or
+`git worktree add .claude/worktrees/<name> -b <branch>`) and reserve the primary
+checkout at `/home/kramer/Dev/Honeyledger/honeyledger` for review, merging, and
+anything that must see `main`.
+
+Everything derives from the worktree's path, via `config/worktree_database.rb`:
+
+- **Databases.** A linked worktree's development and test databases are named
+  `honeyledger_<env>_wt_<label>_<digest>`; the primary checkout keeps the plain
+  names and production is untouched. Two sessions can run `bin/rails test` at
+  once, and a migration on one branch cannot break another.
+- **Secrets and local settings.** `bin/worktree-setup` runs as a `SessionStart`
+  hook: in a worktree it symlinks the gitignored `config/master.key` and
+  `.claude/settings.local.json` from the primary checkout and runs
+  `db:prepare`. It is idempotent and a no-op in the primary checkout.
+- **Ports.** `bin/dev` picks a stable port per worktree (the primary checkout
+  prefers 3000) and falls forward if it is taken. Set `PORT` to pin one.
+
+**Still shared** — coordinate before touching: the `main` branch and remote, the
+primary checkout's `honeyledger_development`, and real aggregator credentials.
+
+**Cleanup.** `git worktree remove` leaves databases behind. From the primary
+checkout, `bin/worktree-clean` lists them and `--drop` removes the orphaned
+**test** databases (rebuilt from `db/schema.rb` on demand). Orphaned development
+databases are only ever reported with the `dropdb` command to run by hand.
+
+**Caveat.** `DATABASE_URL` naming a database outranks `database.yml` and defeats
+the isolation; `bin/worktree-setup` warns instead of claiming it. A URL with no
+database path (what CI uses) is fine.
 
 ## Architecture
 
