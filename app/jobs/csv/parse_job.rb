@@ -22,6 +22,7 @@ class Csv::ParseJob < ApplicationJob
           posted_at: parsed.posted_at,
           description: parsed.description,
           amount_minor: parsed.amount_minor,
+          remote_id: parsed.remote_id,
           raw: parsed.raw,
           synced_at: parse_started_at
         )
