@@ -114,6 +114,12 @@
       <%= mapping_form.select :posted_at_column, header_options, { include_blank: "—" }, selected: mappings[:posted_at_column] %>
     </p>
 
+    <p>
+      <%= mapping_form.label :id_column, "Transaction id column (optional)" %><br>
+      <%= mapping_form.select :id_column, header_options, { include_blank: "—" }, selected: mappings[:id_column] %>
+      <small>A stable per-transaction id from the export. Re-imported rows with the same id attach to the transaction they created before, even if the description changed.</small>
+    </p>
+
     <fieldset data-controller="csv-mapping" data-csv-mapping-mode-value="<%= mappings[:amount_mode] || "signed" %>">
       <legend>Amount</legend>
       <% Csv::Parser::AMOUNT_MODES.each do |mode| %>

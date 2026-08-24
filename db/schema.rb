@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_24_171322) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -99,10 +99,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
     t.bigint "import_id", null: false
     t.datetime "posted_at"
     t.jsonb "raw", default: {}, null: false
+    t.string "remote_id"
     t.integer "row_index", null: false
     t.datetime "synced_at"
     t.datetime "transacted_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["import_id", "remote_id"], name: "index_csv_transactions_on_import_id_and_remote_id", where: "(remote_id IS NOT NULL)"
     t.index ["import_id", "row_index"], name: "index_csv_transactions_on_import_id_and_row_index", unique: true
     t.index ["import_id"], name: "index_csv_transactions_on_import_id"
     t.index ["synced_at"], name: "index_csv_transactions_on_synced_at"

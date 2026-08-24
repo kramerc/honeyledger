@@ -44,9 +44,9 @@ class CsvImportsTest < ApplicationSystemTestCase
   test "upload, map columns, parse and import a CSV end-to-end" do
     fixture_path = Rails.root.join("tmp/test_import.csv")
     File.write(fixture_path, <<~CSV)
-      Date,Description,Amount
-      2026-01-15,Coffee Shop,-4.75
-      2026-01-16,Refund Issued,12.00
+      Date,Description,Amount,Id
+      2026-01-15,Coffee Shop,-4.75,1001
+      2026-01-16,Refund Issued,12.00,1002
     CSV
 
     visit account_transactions_path(@account)
@@ -63,6 +63,7 @@ class CsvImportsTest < ApplicationSystemTestCase
     select "Date", from: "csv_import_column_mappings_date_column"
     check "Description"
     select "Amount", from: "csv_import_column_mappings_amount_column"
+    select "Id", from: "csv_import_column_mappings_id_column"
     click_button "Save mapping"
 
     assert_text "Step 3: Confirm and import"
@@ -73,6 +74,7 @@ class CsvImportsTest < ApplicationSystemTestCase
     visit account_transactions_path(@account)
     assert_text "Coffee Shop"
     assert_text "Refund Issued"
+    assert_equal %w[ 1001 1002 ], @account.csv_imports.sole.transactions.order(:row_index).pluck(:remote_id)
   ensure
     File.delete(fixture_path) if defined?(fixture_path) && File.exist?(fixture_path)
   end

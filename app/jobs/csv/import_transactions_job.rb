@@ -54,6 +54,14 @@ class Csv::ImportTransactionsJob < ApplicationJob
             synced_at: Time.current
           )
           next
+        elsif (identity_target = find_identity_target(csv_transaction, ledger_account))
+          # The export's stable id says this is a row a prior import already
+          # turned into a ledger transaction. Attach by identity before any
+          # heuristic runs, so a description that changed between exports (a
+          # pending placeholder vs. the posted merchant descriptor) can't
+          # produce a duplicate charge (#253).
+          attach_to_existing(identity_target, csv_transaction)
+          next
         elsif (match = Transaction::Reconcile.call(
           ledger_account: ledger_account,
           amount_minor: csv_transaction.amount_minor.abs,
@@ -63,28 +71,14 @@ class Csv::ImportTransactionsJob < ApplicationJob
           ledger_side: ledger_side,
           incoming_source: csv_transaction
         ))
-          begin
-            Transaction.transaction do
-              TransactionSource::Attach.call(transaction: match, sourceable: csv_transaction)
-              match.update!(synced_at: Time.current)
-            end
-          rescue TransactionSource::Attach::MismatchedTransaction
-            # Another import handled this source; skip this iteration.
-          end
+          attach_to_existing(match, csv_transaction)
           next
         elsif (target = find_merged_duplicate_target(csv_transaction, ledger_account))
           # The row was already imported and then consolidated into a transfer,
           # so Transaction::Reconcile excludes its (now zeroed, merged) ledger
           # transaction from the candidate set. Attach this re-imported row to
           # the same merged original instead of creating a duplicate (#184).
-          begin
-            Transaction.transaction do
-              TransactionSource::Attach.call(transaction: target, sourceable: csv_transaction)
-              target.update!(synced_at: Time.current)
-            end
-          rescue TransactionSource::Attach::MismatchedTransaction
-            # Another import handled this source; skip this iteration.
-          end
+          attach_to_existing(target, csv_transaction)
           next
         else
           transaction = Transaction.new
@@ -147,7 +141,53 @@ class Csv::ImportTransactionsJob < ApplicationJob
 
   private
 
-    # Recognize a re-imported statement line whose prior CSV row was already
+    # Attach a re-imported row to the ledger transaction that already
+    # represents it and bump that transaction's synced_at.
+    def attach_to_existing(target, csv_transaction)
+      Transaction.transaction do
+        TransactionSource::Attach.call(transaction: target, sourceable: csv_transaction)
+        target.update!(synced_at: Time.current)
+      end
+    rescue TransactionSource::Attach::MismatchedTransaction
+      # Another import handled this source; skip this row.
+    end
+
+    # Recognize a re-imported row by the export's stable per-transaction id.
+    # Find prior Csv::Transaction rows from *other* imports into the *same*
+    # ledger account with the same remote_id and return the single ledger
+    # transaction they belong to. Identity is exact, so unlike
+    # find_merged_duplicate_target this ignores description, sign, and merge
+    # state: a live, merged (zeroed), or excluded original all qualify. Rows in
+    # the current import are excluded so an export that repeats an id (a pending
+    # row and its posted replacement) still imports both rows as before.
+    def find_identity_target(csv_transaction, ledger_account)
+      return nil if csv_transaction.remote_id.blank?
+
+      prior_csv_ids = Csv::Transaction
+        .joins(:import)
+        .where(csv_imports: { account_id: ledger_account.id })
+        .where.not(import_id: csv_transaction.import_id)
+        .where(remote_id: csv_transaction.remote_id)
+        .select(:id)
+
+      # Only the 0 / 1 / 2+ distinction matters, so cap the scan at two rows.
+      ledger_transaction_ids = TransactionSource
+        .where(sourceable_type: "Csv::Transaction", sourceable_id: prior_csv_ids)
+        .distinct
+        .limit(2)
+        .pluck(:transaction_id)
+
+      # 0 or 2+ distinct matches: nothing to adopt, or the id column is not
+      # actually unique; fall through to the heuristics rather than guess.
+      return nil unless ledger_transaction_ids.size == 1
+
+      Transaction.find(ledger_transaction_ids.first)
+    end
+
+    # Description-based fallback for imports that mapped no id column (or whose
+    # id found nothing) when Transaction::Reconcile abstained — for example a
+    # live sourceless charge and a merged original both matching (#158):
+    # recognize a re-imported statement line whose prior CSV row was already
     # consolidated (merged) into a transfer. Transaction::Reconcile excludes
     # merged transactions and merge results from its candidate set, so an
     # overlapping re-import of an already-merged row would otherwise create a
