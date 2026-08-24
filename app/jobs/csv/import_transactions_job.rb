@@ -185,8 +185,10 @@ class Csv::ImportTransactionsJob < ApplicationJob
     end
 
     # Description-based fallback for imports that mapped no id column (or whose
-    # id found nothing): recognize a re-imported statement line whose prior CSV
-    # row was already consolidated (merged) into a transfer. Transaction::Reconcile excludes
+    # id found nothing) when Transaction::Reconcile abstained — for example a
+    # live sourceless charge and a merged original both matching (#158):
+    # recognize a re-imported statement line whose prior CSV row was already
+    # consolidated (merged) into a transfer. Transaction::Reconcile excludes
     # merged transactions and merge results from its candidate set, so an
     # overlapping re-import of an already-merged row would otherwise create a
     # duplicate ledger transaction and double-count the balance (#184). Find a

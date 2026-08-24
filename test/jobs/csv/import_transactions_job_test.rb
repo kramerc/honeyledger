@@ -452,6 +452,29 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "the merge fallback still attaches when Reconcile abstains on a live + merged collision (#184)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    charge = import_then_merge_charge(description: "Coffee Shop", amount_minor: -5000, transacted_at: same_at)
+
+    # A sourceless manual charge with the same amount and day makes Reconcile see
+    # both a live and a merged candidate, so it abstains rather than guess.
+    expense = Account.create!(user: @user, currency: @currency, name: "Manual Expense", kind: :expense)
+    Transaction.create!(
+      user: @user, currency: @currency, src_account: @bank_account, dest_account: expense,
+      amount_minor: 5000, description: "Coffee Shop", transacted_at: same_at
+    )
+
+    import_b = create_csv_import
+    csv_b = import_b.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "Coffee Shop", amount_minor: -5000, synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+    assert_equal charge, csv_b.reload.ledger_transactions.sole
+  end
+
   # --- #253: re-importing a row by the export's stable id ---
 
   test "a re-imported row with the same remote_id but a different description attaches instead of duplicating (#253)" do
