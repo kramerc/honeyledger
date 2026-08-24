@@ -452,15 +452,141 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  # --- #253: re-importing a row by the export's stable id ---
+
+  test "a re-imported row with the same remote_id but a different description attaches instead of duplicating (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    import_a = create_csv_import
+    csv_a = import_a.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "PENDING PURCHASE", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+    Csv::ImportTransactionsJob.perform_now(import_a.id)
+    original = csv_a.reload.ledger_transactions.sole
+
+    import_b = create_csv_import
+    csv_b = import_b.transactions.create!(
+      row_index: 0, transacted_at: same_at + 1.day, description: "SAMPLE VENDOR -PURCHASE CITY ST", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+
+    assert_equal original, csv_b.reload.ledger_transactions.sole
+    assert_equal "PENDING PURCHASE", original.reload.description, "canonical fields are first-writer-wins"
+  end
+
+  test "a re-imported row with the same remote_id attaches to a merged original without double-counting (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    charge = import_then_merge_charge(
+      description: "PENDING PURCHASE", amount_minor: -5000, transacted_at: same_at, remote_id: "8521853000000001"
+    )
+    assert charge.merged_into_id.present?
+    balance_before = @bank_account.reload.balance_minor
+
+    import_b = create_csv_import
+    csv_b = import_b.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "SAMPLE VENDOR -PURCHASE CITY ST", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+
+    assert_equal charge, csv_b.reload.ledger_transactions.sole
+    assert_equal balance_before, @bank_account.reload.balance_minor
+  end
+
+  test "the same remote_id in a different ledger account does not collide (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    import_a = create_csv_import
+    import_a.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "Coffee Shop", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+    Csv::ImportTransactionsJob.perform_now(import_a.id)
+
+    import_b = create_csv_import(account: @bank_b)
+    import_b.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "Coffee Shop", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+
+    assert_difference "Transaction.count", 1 do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+  end
+
+  test "an ambiguous remote_id across prior imports falls through to the heuristics (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    [ "First Vendor", "Second Vendor" ].each_with_index do |description, index|
+      import = create_csv_import
+      csv_row = import.transactions.create!(
+        row_index: 0, transacted_at: same_at, description: description, amount_minor: -1000 * (index + 1),
+        remote_id: "not-unique", synced_at: Time.current
+      )
+      expense = Account.create!(user: @user, currency: @currency, name: "Expense #{index}", kind: :expense)
+      ledger_transaction = Transaction.create!(
+        user: @user, currency: @currency, src_account: @bank_account, dest_account: expense,
+        amount_minor: 1000 * (index + 1), description: description, transacted_at: same_at
+      )
+      TransactionSource.create!(ledger_transaction: ledger_transaction, sourceable: csv_row)
+    end
+
+    import_c = create_csv_import
+    import_c.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "Third Vendor", amount_minor: -7000,
+      remote_id: "not-unique", synced_at: Time.current
+    )
+
+    assert_difference "Transaction.count", 1 do
+      Csv::ImportTransactionsJob.perform_now(import_c.id)
+    end
+  end
+
+  test "two rows sharing a remote_id inside one import are both imported (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    import = create_csv_import
+    import.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "PENDING PURCHASE", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+    import.transactions.create!(
+      row_index: 1, transacted_at: same_at, description: "SAMPLE VENDOR -PURCHASE CITY ST", amount_minor: -5200,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+
+    assert_difference "Transaction.count", 2 do
+      Csv::ImportTransactionsJob.perform_now(import.id)
+    end
+  end
+
+  test "a row without remote_id whose description changed is not adopted by identity (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    import_a = create_csv_import
+    import_a.transactions.create!(row_index: 0, transacted_at: same_at, description: "PENDING PURCHASE", amount_minor: -5000, synced_at: Time.current)
+    Csv::ImportTransactionsJob.perform_now(import_a.id)
+
+    import_b = create_csv_import
+    import_b.transactions.create!(row_index: 0, transacted_at: same_at, description: "SAMPLE VENDOR -PURCHASE CITY ST", amount_minor: -5000, synced_at: Time.current)
+
+    assert_difference "Transaction.count", 1 do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+  end
+
   private
 
     # Import a charge through the job, then consolidate it into a BS->BS transfer
     # via Transaction::Merge. Returns the now-zeroed, merged original.
-    def import_then_merge_charge(description:, amount_minor:, transacted_at:)
+    def import_then_merge_charge(description:, amount_minor:, transacted_at:, remote_id: nil)
       import = create_csv_import
       csv_row = import.transactions.create!(
         row_index: 0, transacted_at: transacted_at, description: description,
-        amount_minor: amount_minor, synced_at: Time.current
+        amount_minor: amount_minor, remote_id: remote_id, synced_at: Time.current
       )
       Csv::ImportTransactionsJob.perform_now(import.id)
       charge = csv_row.reload.ledger_transactions.first
@@ -499,8 +625,8 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
       charge.reload
     end
 
-    def create_csv_import
-      csv_import = Csv::Import.new(user: @user, account: @bank_account, state: "parsed")
+    def create_csv_import(account: @bank_account)
+      csv_import = Csv::Import.new(user: @user, account: account, state: "parsed")
       csv_import.file.attach(
         io: StringIO.new("Date,Description,Amount\n"),
         filename: "stub.csv",

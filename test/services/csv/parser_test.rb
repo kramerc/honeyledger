@@ -281,6 +281,33 @@ class Csv::ParserTest < ActiveSupport::TestCase
     assert_equal 475, rows.first.amount_minor
   end
 
+  test "maps the id column into remote_id, stripped" do
+    content = "Date,Description,Amount,Id\n2026-01-15,Coffee,-4.75, 8521853000000001 \n"
+
+    rows = parse(content, mappings: signed_mappings.merge(id_column: "Id"), currency: @usd)
+    assert_equal "8521853000000001", rows[0].remote_id
+  end
+
+  test "remote_id is nil when no id column is mapped" do
+    content = <<~CSV
+      Date,Description,Amount,Id
+      2026-01-15,Coffee,-4.75,8521853000000001
+    CSV
+
+    rows = parse(content, mappings: signed_mappings, currency: @usd)
+    assert_nil rows[0].remote_id
+  end
+
+  test "remote_id is nil when the mapped id cell is blank" do
+    content = <<~CSV
+      Date,Description,Amount,Id
+      2026-01-15,Coffee,-4.75,
+    CSV
+
+    rows = parse(content, mappings: signed_mappings.merge(id_column: "Id"), currency: @usd)
+    assert_nil rows[0].remote_id
+  end
+
   private
 
     def parse(content, mappings:, currency:)

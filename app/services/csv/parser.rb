@@ -15,7 +15,7 @@ class Csv::Parser
 
   AMOUNT_MODES = %w[ signed debit_credit sign_indicator ].freeze
 
-  Row = Struct.new(:row_index, :transacted_at, :posted_at, :description, :amount_minor, :raw, keyword_init: true)
+  Row = Struct.new(:row_index, :transacted_at, :posted_at, :description, :amount_minor, :remote_id, :raw, keyword_init: true)
 
   def self.headers(io)
     new(io: io, mappings: {}, currency: nil).headers
@@ -106,6 +106,7 @@ class Csv::Parser
         posted_at: posted_at,
         description: description,
         amount_minor: minor_from(amount_decimal),
+        remote_id: build_remote_id(csv_row),
         raw: raw_hash
       )
     end
@@ -195,6 +196,15 @@ class Csv::Parser
       columns = [ @mappings[:description_column] ] if columns.empty? && @mappings[:description_column].present?
       values = columns.map { |column| csv_row[column].to_s.strip }.reject(&:empty?)
       values.join(" ").squeeze(" ").strip
+    end
+
+    # The export's stable per-transaction id, when the user mapped one. It is
+    # what lets a re-import recognize a row whose description changed between
+    # exports (a pending placeholder vs. the posted merchant descriptor).
+    def build_remote_id(csv_row)
+      id_column = @mappings[:id_column]
+      return nil if id_column.blank?
+      csv_row[id_column].to_s.strip.presence
     end
 
     def parse_amount(csv_row, row_index)
