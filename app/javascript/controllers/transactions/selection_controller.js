@@ -124,35 +124,35 @@ export default class extends Controller {
   // with a valid transfer pair, which needs two one-sided rows on different
   // bank accounts.
   validateDuplicates(rows) {
-    if (new Set(rows.map(r => r.amountMinor)).size !== 1) return false
-    if (new Set(rows.map(r => r.currencyCode)).size !== 1) return false
+    if (new Set(rows.map(row => row.amountMinor)).size !== 1) return false
+    if (new Set(rows.map(row => row.currencyCode)).size !== 1) return false
 
     // FX and split rows are rejected by Transaction::Deduplicate, so don't offer
     // the action for them — mirror those server guards here.
-    if (rows.some(r => r.hasFx || r.isSplit)) return false
+    if (rows.some(row => row.hasFx || row.isSplit)) return false
 
-    const transfers = rows.filter(r => this.isTransfer(r))
-    const oneSided = rows.filter(r => !this.isTransfer(r))
+    const transfers = rows.filter(row => this.isTransfer(row))
+    const oneSided = rows.filter(row => !this.isTransfer(row))
     if (transfers.length > 1 || oneSided.length === 0) return false
 
     // Only the surviving transfer may be a merge result; a merge result whose
     // accounts were edited into a one-sided shape is still rejected server-side.
-    if (oneSided.some(r => r.isMergeResult)) return false
+    if (oneSided.some(row => row.isMergeResult)) return false
 
     const isBs = kind => this.constructor.BALANCE_SHEET_KINDS.includes(kind)
-    const allSrc = oneSided.every(r => isBs(r.srcKind))
-    const allDest = oneSided.every(r => isBs(r.destKind))
+    const allSrc = oneSided.every(row => isBs(row.srcKind))
+    const allDest = oneSided.every(row => isBs(row.destKind))
     const side = allSrc ? "src" : (allDest ? "dest" : null)
     if (!side) return false
 
-    const bankIds = new Set(oneSided.map(r => r[`${side}AccountId`]))
+    const bankIds = new Set(oneSided.map(row => row[`${side}AccountId`]))
     if (bankIds.size !== 1) return false
 
-    return transfers.every(r => {
-      if (!bankIds.has(r[`${side}AccountId`])) return false
+    return transfers.every(row => {
+      if (!bankIds.has(row[`${side}AccountId`])) return false
       // A merged transfer parks absorbed sources on the origin that keeps the
       // bank side, so one of its origins must still touch that account.
-      if (r.isMergeResult && !r[`origin${side === "src" ? "Src" : "Dest"}AccountIds`].some(id => bankIds.has(id))) return false
+      if (row.isMergeResult && !row[`origin${side === "src" ? "Src" : "Dest"}AccountIds`].some(id => bankIds.has(id))) return false
       return true
     })
   }
