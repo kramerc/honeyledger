@@ -364,6 +364,46 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "combining a one-sided duplicate into a merged transfer keeps the transfer" do
+    duplicate = sourced_transaction("Pending charge", 900, :transaction_two)
+    transfer = merged_transfer(900)
+
+    visit transactions_path
+    toggle_select(duplicate)
+    toggle_select(transfer)
+
+    assert_button "Combine Duplicates", disabled: false
+    assert_button "Merge into Transfer", disabled: true
+
+    click_button "Combine Duplicates"
+
+    within ".selection-confirmation:not([hidden])" do
+      assert_checked_field "combine_survivor", with: transfer.id.to_s, visible: :all
+      assert_field "combine_survivor", with: duplicate.id.to_s, disabled: true, visible: :all
+      click_button "Combine"
+    end
+
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(duplicate)}"
+    within "##{ActionView::RecordIdentifier.dom_id(transfer)}" do
+      assert_selector ".source-badge", text: "SimpleFIN"
+    end
+  end
+
+  test "combine stays disabled when the transfer is on a different bank account" do
+    duplicate = manual_transaction("Elsewhere charge", 900)
+    transfer = Transaction.create!(
+      user: @user, src_account: accounts(:lunchflow_linked_asset), dest_account: accounts(:linked_asset),
+      amount_minor: 900, currency: currencies(:usd), description: "Other transfer",
+      transacted_at: 1.day.ago
+    )
+
+    visit transactions_path
+    toggle_select(duplicate)
+    toggle_select(transfer)
+
+    assert_button "Combine Duplicates", disabled: true
+  end
+
   test "combine stays disabled when a selected row is a foreign-exchange transaction" do
     normal = manual_transaction("FX gate normal", 500)
     fx = Transaction.create!(
@@ -423,6 +463,20 @@ class TransactionsTest < ApplicationSystemTestCase
     transaction = manual_transaction(description, amount_minor)
     TransactionSource.create!(ledger_transaction: transaction, sourceable: simplefin_transactions(source_key))
     transaction
+  end
+
+  # A merge result on the same bank as manual_transaction: a sourced
+  # asset_account → expense withdrawal merged with a revenue → linked_asset deposit.
+  def merged_transfer(amount_minor)
+    withdrawal = sourced_transaction("Posted charge", amount_minor, :transaction_one)
+    deposit = Transaction.create!(
+      user: @user, src_account: accounts(:revenue_account), dest_account: accounts(:linked_asset),
+      amount_minor: amount_minor, currency: currencies(:usd), description: "Posted deposit",
+      transacted_at: 1.day.ago
+    )
+    merge = Transaction::Merge.new(withdrawal, deposit, user: @user)
+    assert merge.call, merge.errors.inspect
+    merge.merged_transaction
   end
 
   def toggle_select(transaction)
