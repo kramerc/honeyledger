@@ -18,6 +18,9 @@
        data-merge-category="<%= transaction.category&.name %>"
        data-merge-has-fx="<%= transaction.has_fx? %>"
        data-merge-split="<%= transaction.split? || transaction.parent_transaction_id? %>"
+       data-merge-merge-result="<%= transaction.merged_sources.any? %>"
+       data-merge-origin-src-account-ids="<%= transaction.merged_sources.map(&:src_account_id).join(",") %>"
+       data-merge-origin-dest-account-ids="<%= transaction.merged_sources.map(&:dest_account_id).join(",") %>"
        data-merge-transacted-at="<%= transaction.transacted_at&.strftime("%Y-%m-%dT%H:%M") %>"
        data-merge-currency-code="<%= transaction.currency.code %>"
        data-merge-currency-decimal-places="<%= transaction.currency.decimal_places %>">

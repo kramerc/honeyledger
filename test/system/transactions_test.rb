@@ -407,6 +407,34 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_button "Combine Duplicates", disabled: true
   end
 
+  test "combine stays disabled when a one-sided row is an edited merge result" do
+    duplicate = manual_transaction("Plain charge", 900)
+    edited = merged_transfer(900)
+    edited.update!(dest_account: accounts(:expense_account))
+
+    visit transactions_path
+    toggle_select(duplicate)
+    toggle_select(edited)
+
+    assert_button "Combine Duplicates", disabled: true
+  end
+
+  test "combine stays disabled when a merged transfer's origins no longer touch the shared bank" do
+    duplicate = Transaction.create!(
+      user: @user, src_account: accounts(:lunchflow_linked_asset), dest_account: accounts(:expense_account),
+      amount_minor: 900, currency: currencies(:usd), description: "Moved charge",
+      transacted_at: 1.day.ago
+    )
+    edited = merged_transfer(900)
+    edited.update!(src_account: accounts(:lunchflow_linked_asset))
+
+    visit transactions_path
+    toggle_select(duplicate)
+    toggle_select(edited)
+
+    assert_button "Combine Duplicates", disabled: true
+  end
+
   test "combine stays disabled when a selected row is a foreign-exchange transaction" do
     normal = manual_transaction("FX gate normal", 500)
     fx = Transaction.create!(

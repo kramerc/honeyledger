@@ -135,16 +135,26 @@ export default class extends Controller {
     const oneSided = rows.filter(r => !this.isTransfer(r))
     if (transfers.length > 1 || oneSided.length === 0) return false
 
+    // Only the surviving transfer may be a merge result; a merge result whose
+    // accounts were edited into a one-sided shape is still rejected server-side.
+    if (oneSided.some(r => r.isMergeResult)) return false
+
     const isBs = kind => this.constructor.BALANCE_SHEET_KINDS.includes(kind)
     const allSrc = oneSided.every(r => isBs(r.srcKind))
     const allDest = oneSided.every(r => isBs(r.destKind))
-    const side = allSrc ? "srcAccountId" : (allDest ? "destAccountId" : null)
+    const side = allSrc ? "src" : (allDest ? "dest" : null)
     if (!side) return false
 
-    const bankIds = new Set(oneSided.map(r => r[side]))
+    const bankIds = new Set(oneSided.map(r => r[`${side}AccountId`]))
     if (bankIds.size !== 1) return false
 
-    return transfers.every(r => bankIds.has(r[side]))
+    return transfers.every(r => {
+      if (!bankIds.has(r[`${side}AccountId`])) return false
+      // A merged transfer parks absorbed sources on the origin that keeps the
+      // bank side, so one of its origins must still touch that account.
+      if (r.isMergeResult && !r[`origin${side === "src" ? "Src" : "Dest"}AccountIds`].some(id => bankIds.has(id))) return false
+      return true
+    })
   }
 
   // Both sides balance-sheet.
@@ -182,6 +192,9 @@ export default class extends Controller {
       category: row.dataset.mergeCategory,
       hasFx: row.dataset.mergeHasFx === "true",
       isSplit: row.dataset.mergeSplit === "true",
+      isMergeResult: row.dataset.mergeMergeResult === "true",
+      originSrcAccountIds: (row.dataset.mergeOriginSrcAccountIds || "").split(",").filter(Boolean),
+      originDestAccountIds: (row.dataset.mergeOriginDestAccountIds || "").split(",").filter(Boolean),
       transactedAt: row.dataset.mergeTransactedAt,
       currencyCode: row.dataset.mergeCurrencyCode,
       currencyDecimalPlaces: parseInt(row.dataset.mergeCurrencyDecimalPlaces, 10) || 2
