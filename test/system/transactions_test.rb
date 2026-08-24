@@ -380,6 +380,9 @@ class TransactionsTest < ApplicationSystemTestCase
     within ".selection-confirmation:not([hidden])" do
       assert_checked_field "combine_survivor", with: transfer.id.to_s, visible: :all
       assert_field "combine_survivor", with: duplicate.id.to_s, disabled: true, visible: :all
+      within ".selection-confirmation__option--disabled" do
+        assert_text "Will be removed"
+      end
       click_button "Combine"
     end
 

@@ -334,7 +334,9 @@ export default class extends Controller {
       input.checked = row.id === defaultId
       // A transfer always survives (Transaction::Deduplicate rejects any other
       // survivor), so the one-sided rows aren't offered.
-      input.disabled = hasTransfer && !this.isTransfer(row)
+      const removed = hasTransfer && !this.isTransfer(row)
+      input.disabled = removed
+      if (removed) label.classList.add("selection-confirmation__option--disabled")
 
       const body = document.createElement("span")
       body.className = "selection-confirmation__option-body"
@@ -349,6 +351,7 @@ export default class extends Controller {
       if (row.transactedAt) details.push(row.transactedAt.replace("T", " "))
       details.push(`${row.srcAccountName} → ${row.destAccountName}`)
       if (row.category) details.push(row.category)
+      if (removed) details.push("Will be removed — a transfer is always kept")
 
       const detail = document.createElement("span")
       detail.className = "selection-confirmation__option-detail"
