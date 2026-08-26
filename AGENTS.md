@@ -31,8 +31,8 @@ kamal deploy                                     # Deploy to production
 The repo supports several agent sessions working at once, each in its own git
 worktree. **Start isolated work in a worktree**
 (`git worktree add .claude/worktrees/<name> -b <branch>`) and reserve the primary
-checkout at `/home/kramer/Dev/Honeyledger/honeyledger` for review, merging, and
-anything that must see `main`.
+checkout — the main clone that the worktrees are linked from — for review,
+merging, and anything that must see `main`.
 
 Everything derives from the worktree's path, via `config/worktree_database.rb`:
 
