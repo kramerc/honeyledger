@@ -4,9 +4,9 @@ Guidance for any coding agent working in this repository. Codex, Copilot (coding
 
 ## Overview
 
-Honeyledger is a personal finance management Rails 8.1.2 app that syncs financial transactions from banks via aggregator APIs (SimpleFIN and Lunch Flow) and supports double-entry bookkeeping.
+Honeyledger is a personal finance management Rails 8.1 app that syncs financial transactions from banks via aggregator APIs (SimpleFIN and Lunch Flow) and supports double-entry bookkeeping.
 
-**Stack:** Ruby on Rails 8.1.2, PostgreSQL, Devise, Hotwire (Turbo + Stimulus), Propshaft + importmap, Minitest, Kamal deployment.
+**Stack:** Ruby on Rails 8.1, PostgreSQL, Devise, Hotwire (Turbo + Stimulus), Propshaft + importmap, Minitest, Kamal deployment.
 
 ## Commands
 
