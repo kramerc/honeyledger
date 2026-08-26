@@ -168,7 +168,7 @@ Naming a vendor as the *subject of an integration* — "support a provider's acc
 - **Commit SHAs** go bare in comments (`Fixed in bdcffff`) so GitHub auto-links them; backticks suppress the link. Keep backticks for code identifiers.
 - **Bare `#N`** anywhere in issue/PR text creates a permanent backlink on item N. Only write it for an intentional reference — never as a list label (`(first)`, not `(#1)`).
 - **`gh api --paginate`** on every list endpoint (`pulls/N/comments`, `pulls/N/reviews`, `issues/N/comments`). The default 30-item page silently truncates, and a truncated list looks complete.
-- **Re-request bot reviews** after pushing fixes for their findings: Copilot re-reviews each push automatically when enabled (otherwise re-request it through the PR's reviewers list); Codex re-reviews only when asked, by commenting `@codex review` on the PR.
+- **Re-request bot reviews** after pushing fixes for their findings; neither bot re-reviews on push. Copilot: `gh api -X POST repos/{owner}/{repo}/pulls/N/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'` (the requested-reviewers list empties as soon as Copilot accepts, so an empty list is not a failed request). Codex: comment `@codex review` on the PR.
 - **Copilot's login** differs by endpoint: `Copilot` on `pulls/N/comments`, `copilot-pull-request-reviewer[bot]` on `pulls/N/reviews`. Filter on both or match case-insensitively on `copilot`.
 
 ## Known Design Decisions
