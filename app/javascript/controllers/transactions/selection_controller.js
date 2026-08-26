@@ -117,29 +117,50 @@ export default class extends Controller {
     this.combineButtonTarget.disabled = !rows.every(Boolean) || !this.validateDuplicates(rows)
   }
 
-  // Duplicates of one event: equal amount + currency, each a non-transfer, all
-  // sharing the same bank account on the same side (all src == BankX, or all
-  // dest == BankX). Mutually exclusive with a valid transfer pair.
+  // Duplicates of one event: equal amount + currency, one or more one-sided
+  // rows sharing the same bank account on the same side (all src == BankX, or
+  // all dest == BankX), plus at most one transfer touching that same account
+  // on that same side (mirrors Transaction::Deduplicate). Mutually exclusive
+  // with a valid transfer pair, which needs two one-sided rows on different
+  // bank accounts.
   validateDuplicates(rows) {
-    const balanceSheetKinds = this.constructor.BALANCE_SHEET_KINDS
-    const isBs = kind => balanceSheetKinds.includes(kind)
-
-    if (new Set(rows.map(r => r.amountMinor)).size !== 1) return false
-    if (new Set(rows.map(r => r.currencyCode)).size !== 1) return false
+    if (new Set(rows.map(row => row.amountMinor)).size !== 1) return false
+    if (new Set(rows.map(row => row.currencyCode)).size !== 1) return false
 
     // FX and split rows are rejected by Transaction::Deduplicate, so don't offer
     // the action for them — mirror those server guards here.
-    if (rows.some(r => r.hasFx || r.isSplit)) return false
+    if (rows.some(row => row.hasFx || row.isSplit)) return false
 
-    // Each must be a non-transfer: exactly one balance-sheet side.
-    if (!rows.every(r => isBs(r.srcKind) !== isBs(r.destKind))) return false
+    const transfers = rows.filter(row => this.isTransfer(row))
+    const oneSided = rows.filter(row => !this.isTransfer(row))
+    if (transfers.length > 1 || oneSided.length === 0) return false
 
-    const allSrc = rows.every(r => isBs(r.srcKind))
-    const allDest = rows.every(r => isBs(r.destKind))
+    // Only the surviving transfer may be a merge result; a merge result whose
+    // accounts were edited into a one-sided shape is still rejected server-side.
+    if (oneSided.some(row => row.isMergeResult)) return false
 
-    if (allSrc) return new Set(rows.map(r => r.srcAccountId)).size === 1
-    if (allDest) return new Set(rows.map(r => r.destAccountId)).size === 1
-    return false
+    const isBs = kind => this.constructor.BALANCE_SHEET_KINDS.includes(kind)
+    const allSrc = oneSided.every(row => isBs(row.srcKind))
+    const allDest = oneSided.every(row => isBs(row.destKind))
+    const side = allSrc ? "src" : (allDest ? "dest" : null)
+    if (!side) return false
+
+    const bankIds = new Set(oneSided.map(row => row[`${side}AccountId`]))
+    if (bankIds.size !== 1) return false
+
+    return transfers.every(row => {
+      if (!bankIds.has(row[`${side}AccountId`])) return false
+      // A merged transfer parks absorbed sources on the origin that keeps the
+      // bank side, so one of its origins must still touch that account.
+      if (row.isMergeResult && !row[`origin${side === "src" ? "Src" : "Dest"}AccountIds`].some(id => bankIds.has(id))) return false
+      return true
+    })
+  }
+
+  // Both sides balance-sheet.
+  isTransfer(row) {
+    const isBs = kind => this.constructor.BALANCE_SHEET_KINDS.includes(kind)
+    return isBs(row.srcKind) && isBs(row.destKind)
   }
 
   // --- Row data helpers -----------------------------------------------------
@@ -171,6 +192,9 @@ export default class extends Controller {
       category: row.dataset.mergeCategory,
       hasFx: row.dataset.mergeHasFx === "true",
       isSplit: row.dataset.mergeSplit === "true",
+      isMergeResult: row.dataset.mergeMergeResult === "true",
+      originSrcAccountIds: (row.dataset.mergeOriginSrcAccountIds || "").split(",").filter(Boolean),
+      originDestAccountIds: (row.dataset.mergeOriginDestAccountIds || "").split(",").filter(Boolean),
       transactedAt: row.dataset.mergeTransactedAt,
       currencyCode: row.dataset.mergeCurrencyCode,
       currencyDecimalPlaces: parseInt(row.dataset.mergeCurrencyDecimalPlaces, 10) || 2
@@ -309,6 +333,7 @@ export default class extends Controller {
     if (rows.length < 2 || !this.validateDuplicates(rows)) return
 
     const defaultId = this.defaultSurvivorId(rows)
+    const hasTransfer = rows.some(row => this.isTransfer(row))
 
     this.combineOptionsTarget.innerHTML = ""
     rows.forEach(row => {
@@ -320,6 +345,11 @@ export default class extends Controller {
       input.name = "combine_survivor"
       input.value = row.id
       input.checked = row.id === defaultId
+      // A transfer always survives (Transaction::Deduplicate rejects any other
+      // survivor), so the one-sided rows aren't offered.
+      const removed = hasTransfer && !this.isTransfer(row)
+      input.disabled = removed
+      if (removed) label.classList.add("selection-confirmation__option--disabled")
 
       const body = document.createElement("span")
       body.className = "selection-confirmation__option-body"
@@ -334,6 +364,7 @@ export default class extends Controller {
       if (row.transactedAt) details.push(row.transactedAt.replace("T", " "))
       details.push(`${row.srcAccountName} → ${row.destAccountName}`)
       if (row.category) details.push(row.category)
+      if (removed) details.push("Will be removed — a transfer is always kept")
 
       const detail = document.createElement("span")
       detail.className = "selection-confirmation__option-detail"
@@ -350,11 +381,15 @@ export default class extends Controller {
     this.barTarget.hidden = true
   }
 
-  // Heuristic default (mirrors Transaction::Deduplicate): a categorized row,
-  // else the oldest by transacted_at. When transacted_at ties — common for
-  // duplicates — break by smallest id (the older record) so the default is
-  // stable rather than dependent on selection order.
+  // Heuristic default (mirrors Transaction::Deduplicate): the transfer if one
+  // is selected; else a categorized row, else the oldest by transacted_at.
+  // When transacted_at ties — common for duplicates — break by smallest id
+  // (the older record) so the default is stable rather than dependent on
+  // selection order.
   defaultSurvivorId(rows) {
+    const transfer = rows.find(row => this.isTransfer(row))
+    if (transfer) return transfer.id
+
     const categorized = rows.filter(row => row.category && row.category.length > 0)
     const pool = categorized.length > 0 ? categorized : rows
     return pool.reduce((best, row) => {

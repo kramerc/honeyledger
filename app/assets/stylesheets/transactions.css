@@ -740,6 +740,17 @@
   flex-shrink: 0;
 }
 
+/* A row that cannot be kept (a transfer always survives): muted, non-interactive. */
+.selection-confirmation__option--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.selection-confirmation__option--disabled .selection-confirmation__option-title {
+  color: var(--bark-medium);
+  text-decoration: line-through;
+}
+
 .selection-confirmation__option-body {
   display: flex;
   flex-direction: column;

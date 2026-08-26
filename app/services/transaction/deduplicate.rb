@@ -4,6 +4,14 @@
 # loser is destroyed — producing the exact one-row-owns-all-sources shape that
 # Transaction::Reconcile produces automatically at import time.
 #
+# The selection may include at most one transfer (both sides balance-sheet),
+# which is then always the survivor: it carries the richer state — the
+# counterpart account and, for a merge result, the merged_sources chain. A
+# merge result is created sourceless (its provenance lives on the zeroed
+# originals) and Transaction::Unmerge destroys it, so absorbed sources are
+# parked on the merged origin that shares the bank side rather than on the
+# transfer itself; a plain transfer takes them directly.
+#
 # This is the manual counterpart to import-time reconciliation, and is the
 # opposite shape from Transaction::Merge (which combines a withdrawal + deposit
 # on two different accounts into one transfer). It is intentionally irreversible
@@ -23,17 +31,23 @@ class Transaction::Deduplicate
     return false if @errors.any?
 
     @survivor ||= heuristic_survivor
+    target = source_target
+    if target.nil?
+      @errors << "The transfer has no original on the shared bank account to keep the sources"
+      return false
+    end
+
     losers = @transactions - [ @survivor ]
 
     ActiveRecord::Base.transaction do
       losers.each do |loser|
-        # Move each source onto the survivor by reassigning the join row. We
-        # can't use TransactionSource::Attach here — it refuses to move a row
-        # that already points at another transaction. The unique index on
-        # (sourceable_type, sourceable_id) guarantees the survivor can't already
+        # Move each source by reassigning the join row. We can't use
+        # TransactionSource::Attach here — it refuses to move a row that
+        # already points at another transaction. The unique index on
+        # (sourceable_type, sourceable_id) guarantees the target can't already
         # own the same sourceable, so the reassignment never collides.
         loser.transaction_sources.to_a.each do |source|
-          source.update!(ledger_transaction: @survivor)
+          source.update!(ledger_transaction: target)
         end
 
         # Reload so the now-stale cached transaction_sources association doesn't
@@ -86,12 +100,16 @@ class Transaction::Deduplicate
         @errors << "Excluded transactions cannot be combined"
       end
 
-      if @transactions.any? { |transaction| transaction.merged_into_id? || transaction.merged_sources.any? }
+      # Any row already folded into a merge, or a one-sided row that is itself
+      # a merge result, is off limits; only the surviving transfer may be a
+      # merge result.
+      if @transactions.any? { |transaction| transaction.merged_into_id? } ||
+         one_sided.any? { |transaction| transaction.merged_sources.any? }
         @errors << "Merged transactions cannot be combined"
       end
 
-      if @transactions.any? { |transaction| transfer?(transaction) }
-        @errors << "Transfers cannot be combined as duplicates"
+      if transfers.size > 1
+        @errors << "Select at most one transfer to combine into"
       end
 
       unless same_bank_side?
@@ -100,6 +118,8 @@ class Transaction::Deduplicate
 
       if @survivor && @transactions.exclude?(@survivor)
         @errors << "The transaction to keep must be one of the selected transactions"
+      elsif @survivor && transfer && @survivor != transfer
+        @errors << "The transfer must be the transaction to keep"
       end
     end
 
@@ -108,26 +128,59 @@ class Transaction::Deduplicate
       transaction.src_account.balance_sheet? && transaction.dest_account.balance_sheet?
     end
 
-    # True when every transaction is a non-transfer sharing the same
-    # balance-sheet account on the same side (all src == BankX, or all dest ==
-    # BankX) — the shape of duplicate recordings of one event.
-    def same_bank_side?
-      return false if @transactions.any? { |transaction| transfer?(transaction) }
-
-      all_src = @transactions.all? { |transaction| transaction.src_account.balance_sheet? }
-      all_dest = @transactions.all? { |transaction| transaction.dest_account.balance_sheet? }
-
-      if all_src
-        @transactions.map(&:src_account_id).uniq.size == 1
-      elsif all_dest
-        @transactions.map(&:dest_account_id).uniq.size == 1
-      else
-        false
-      end
+    def transfers
+      @transfers ||= @transactions.select { |transaction| transfer?(transaction) }
     end
 
-    # Prefer a user-curated (categorized) row; tie-break by oldest.
+    def transfer
+      transfers.first if transfers.size == 1
+    end
+
+    def one_sided
+      @one_sided ||= @transactions - transfers
+    end
+
+    # The side (:src or :dest) on which every one-sided row touches the bank,
+    # or nil when they disagree or there are none.
+    def bank_side
+      return @bank_side if defined?(@bank_side)
+
+      @bank_side =
+        if one_sided.any? && one_sided.all? { |transaction| transaction.src_account.balance_sheet? }
+          :src
+        elsif one_sided.any? && one_sided.all? { |transaction| transaction.dest_account.balance_sheet? }
+          :dest
+        end
+    end
+
+    def bank_account_id
+      return nil unless bank_side
+
+      ids = one_sided.map { |transaction| transaction.public_send("#{bank_side}_account_id") }.uniq
+      ids.first if ids.size == 1
+    end
+
+    # True when the one-sided rows share the same balance-sheet account on the
+    # same side (all src == BankX, or all dest == BankX) — the shape of
+    # duplicate recordings of one event — and any transfer touches that same
+    # account on that same side.
+    def same_bank_side?
+      return false if bank_account_id.nil?
+
+      transfers.all? { |transaction| transaction.public_send("#{bank_side}_account_id") == bank_account_id }
+    end
+
+    # Where the losers' sources land: a merge result hands them to the origin
+    # that keeps the bank side, so Transaction::Unmerge restores them intact.
+    def source_target
+      return @survivor unless transfer?(@survivor) && @survivor.merged_sources.any?
+
+      @survivor.merged_sources.find { |origin| origin.public_send("#{bank_side}_account_id") == bank_account_id }
+    end
+
+    # A transfer always survives. Otherwise prefer a user-curated (categorized)
+    # row; tie-break by oldest.
     def heuristic_survivor
-      @transactions.min_by { |transaction| [ transaction.category_id ? 0 : 1, transaction.transacted_at, transaction.created_at, transaction.id ] }
+      transfer || @transactions.min_by { |transaction| [ transaction.category_id ? 0 : 1, transaction.transacted_at, transaction.created_at, transaction.id ] }
     end
 end
