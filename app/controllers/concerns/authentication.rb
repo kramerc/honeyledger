@@ -46,6 +46,13 @@ module Authentication
       session.delete(:return_to_after_authenticating) || root_path
     end
 
+    # For the login and sign-up entry points: someone who already has a
+    # session is sent home rather than allowed to open a second one, which
+    # would silently swap accounts and strand the old session server-side.
+    def redirect_signed_in_users
+      redirect_to root_path if authenticated?
+    end
+
     def start_new_session_for(user)
       user.sessions.create!(user_agent: request.user_agent.to_s, ip_address: request.remote_ip.to_s).tap do |session|
         Current.session = session

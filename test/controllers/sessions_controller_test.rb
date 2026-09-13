@@ -57,6 +57,26 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_path
   end
 
+  test "a signed-in user is sent home instead of the login form" do
+    sign_in_as(@user)
+
+    get new_session_path
+
+    assert_redirected_to root_path
+  end
+
+  test "a signed-in user cannot open a second session or switch accounts by logging in again" do
+    sign_in_as(@user)
+    original_cookie = cookies[:session_id]
+
+    post session_path, params: { email: users(:two).email, password: "password123" }
+
+    assert_redirected_to root_path
+    assert_equal original_cookie, cookies[:session_id]
+    assert_equal 1, @user.sessions.count
+    assert_equal 0, users(:two).sessions.count
+  end
+
   test "destroy" do
     sign_in_as(@user)
 

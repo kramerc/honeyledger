@@ -88,6 +88,18 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Password can't be blank", flash[:alert]
   end
 
+  test "update with a nested password parameter is treated as blank" do
+    sign_in_as(@user)
+    token = @user.password_reset_token
+
+    assert_no_changes -> { @user.reload.password_digest } do
+      put password_path(token), params: { password: { ignored: "newpassword1" }, password_confirmation: "newpassword1" }
+      assert_redirected_to edit_password_path(token)
+    end
+
+    assert_equal 1, @user.sessions.count
+  end
+
   test "update with a too-short password" do
     token = @user.password_reset_token
     assert_no_changes -> { @user.reload.password_digest } do

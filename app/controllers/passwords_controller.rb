@@ -19,8 +19,11 @@ class PasswordsController < ApplicationController
 
   def update
     # A blank password would leave the digest untouched yet still sign the
-    # user out everywhere, so refuse it before touching any session.
-    if params[:password].present? && @user.update(params.permit(:password, :password_confirmation))
+    # user out everywhere, so refuse it before touching any session. Check
+    # the permitted value: a nested `password[x]` is present but dropped.
+    password_params = params.permit(:password, :password_confirmation)
+
+    if password_params[:password].present? && @user.update(password_params)
       @user.sessions.destroy_all
       redirect_to new_session_path, notice: "Password has been reset."
     else
