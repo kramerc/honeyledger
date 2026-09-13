@@ -1,13 +1,12 @@
 require "test_helper"
 
 class Lunchflow::ConnectionsControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
   include ActiveJob::TestHelper
 
   setup do
     @lunchflow_connection = lunchflow_connections(:one)
     @user = users(:one)
-    sign_in @user
+    sign_in_as(@user)
   end
 
   test "should get new" do

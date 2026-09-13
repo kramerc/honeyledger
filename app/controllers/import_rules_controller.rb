@@ -1,5 +1,4 @@
 class ImportRulesController < ApplicationController
-  before_action :authenticate_user!
   before_action :set_import_rule, only: %i[ edit update destroy preview ]
 
   def index

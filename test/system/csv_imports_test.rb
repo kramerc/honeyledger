@@ -3,7 +3,6 @@ require "application_system_test_case"
 class CsvImportsTest < ApplicationSystemTestCase
   setup do
     @user = users(:one)
-    @user.update!(password: "password123")
     @account = accounts(:asset_account)
     @previous_adapter = ActiveJob::Base.queue_adapter
     ActiveJob::Base.queue_adapter = :inline
@@ -137,13 +136,5 @@ class CsvImportsTest < ApplicationSystemTestCase
         const event = new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer })
         document.querySelector(".file-drop").dispatchEvent(event)
       JS
-    end
-
-    def sign_in_as(user)
-      visit new_user_session_path
-      fill_in "Email", with: user.email
-      fill_in "Password", with: "password123"
-      click_button "Log in"
-      assert_link "Logout"
     end
 end

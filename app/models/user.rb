@@ -1,9 +1,16 @@
 class User < ApplicationRecord
-  # Include default devise modules. Others available are:
-  # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
-  devise :database_authenticatable, :registerable,
-         :recoverable, :rememberable, :validatable,
-         :trackable
+  has_secure_password
+  has_many :sessions, dependent: :destroy
+
+  normalizes :email, with: ->(email) { email.strip.downcase }
+
+  validates :email, presence: true,
+                    uniqueness: { case_sensitive: false },
+                    format: { with: /\A[^@\s]+@[^@\s]+\z/ }
+  # Six characters matches the Devise minimum this app started with, so no
+  # existing user is invalidated. has_secure_password enforces the 72-byte
+  # bcrypt ceiling and presence on create.
+  validates :password, length: { minimum: 6 }, allow_nil: true
 
   has_many :accounts, dependent: :destroy
   has_many :import_rules, dependent: :destroy

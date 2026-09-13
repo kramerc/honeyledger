@@ -1,0 +1,21 @@
+<h1>Log in</h1>
+
+<%= form_with url: session_path do |form| %>
+  <div>
+    <%= form.label :email, style: "display: block" %>
+    <%= form.email_field :email, required: true, autofocus: true, autocomplete: "username", value: params[:email] %>
+  </div>
+
+  <div>
+    <%= form.label :password, style: "display: block" %>
+    <%= form.password_field :password, required: true, autocomplete: "current-password", maxlength: 72 %>
+  </div>
+
+  <div>
+    <%= form.submit "Log in" %>
+  </div>
+<% end %>
+
+<p>
+  <%= link_to "Forgot password?", new_password_path %> | <%= link_to "Sign up", new_registration_path %>
+</p>

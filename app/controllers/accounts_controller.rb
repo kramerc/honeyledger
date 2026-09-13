@@ -1,5 +1,4 @@
 class AccountsController < ApplicationController
-  before_action :authenticate_user!
   before_action :set_account, only: %i[ show edit update destroy ]
   before_action :set_simplefin_account, only: %i[ new create ], if: -> { simplefin_account_id.present? }
   before_action :set_lunchflow_account, only: %i[ new create ], if: -> { lunchflow_account_id.present? }

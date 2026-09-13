@@ -3,6 +3,14 @@ require "test_helper"
 class CurrenciesControllerTest < ActionDispatch::IntegrationTest
   setup do
     @currency = currencies(:usd)
+    sign_in_as(users(:one))
+  end
+
+  test "requires authentication" do
+    sign_out
+
+    get currencies_url
+    assert_redirected_to new_session_url
   end
 
   test "should get index" do

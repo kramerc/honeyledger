@@ -1,5 +1,4 @@
 class Simplefin::ConnectionsController < ApplicationController
-  before_action :authenticate_user!
   before_action :fail_if_connected, only: %i[new create]
   before_action :set_simplefin_connection, only: %i[refresh destroy]
 

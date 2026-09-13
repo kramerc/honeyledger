@@ -1,5 +1,4 @@
 class Lunchflow::AccountsController < ApplicationController
-  before_action :authenticate_user!
   before_action :set_lunchflow_account, only: [ :link, :unlink ]
 
   def link

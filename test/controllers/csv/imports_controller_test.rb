@@ -1,19 +1,17 @@
 require "test_helper"
 
 class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @user = users(:one)
     @other_user = users(:two)
     @account = accounts(:asset_account)
-    sign_in @user
+    sign_in_as(@user)
   end
 
   test "redirects unauthenticated requests" do
-    sign_out @user
+    sign_out
     get account_csv_imports_url(@account)
-    assert_redirected_to new_user_session_url
+    assert_redirected_to new_session_url
   end
 
   test "GET account index shows the account's imports" do

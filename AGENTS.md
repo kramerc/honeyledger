@@ -6,7 +6,7 @@ Guidance for any coding agent working in this repository. Codex, Copilot (coding
 
 Honeyledger is a personal finance management Rails 8.1 app that syncs financial transactions from banks via aggregator APIs (SimpleFIN and Lunch Flow) and supports double-entry bookkeeping.
 
-**Stack:** Ruby on Rails 8.1, PostgreSQL, Devise, Hotwire (Turbo + Stimulus), Propshaft + importmap, Minitest, Kamal deployment.
+**Stack:** Ruby on Rails 8.1, PostgreSQL, Rails built-in authentication (`has_secure_password` + `sessions` table), Hotwire (Turbo + Stimulus), Propshaft + importmap, Minitest, Kamal deployment.
 
 ## Commands
 
@@ -125,9 +125,13 @@ Development uses a single database.
 
 Turbo Frames for partial page updates, Turbo Streams for inline updates (e.g., `TransactionsController` index). Stimulus controllers in `app/javascript/controllers/`. Minimal custom JavaScript.
 
-### Authorization Pattern
+### Authentication and Authorization
 
-Controllers that expose user-owned financial data use `before_action :authenticate_user!`, and their queries are scoped to `current_user` to prevent cross-user data access. Some controllers are intentionally public (for example, `HomeController` and `CurrenciesController`) and do not require authentication because they only serve non-user-specific or informational data.
+Authentication is the Rails 8 generator pattern, not Devise: `app/controllers/concerns/authentication.rb` is included in `ApplicationController` and runs `require_authentication` on every action by default, resuming a `Session` row from the signed `session_id` cookie into `Current.session` / `Current.user`. `User` uses `has_secure_password` (bcrypt digests in `password_digest`), `normalizes :email`, and a six-character minimum password. `SessionsController`, `RegistrationsController` (public sign-up), and `PasswordsController` (reset by email, which production has no mailer configured to deliver) are the authentication workflow itself and therefore skip the session requirement.
+
+The only other public controller is `HomeController`, which opts out with `allow_unauthenticated_access` because the landing page carries no user data. Everything else, including `CurrenciesController`, is authenticated implicitly, and user-owned queries are scoped to `current_user` to prevent cross-user data access. In views and controllers use `authenticated?` and `current_user`.
+
+Tests: integration tests call `sign_in_as(user)` / `sign_out` from `test/test_helpers/session_test_helper.rb` (sets the cookie directly); system tests call the `sign_in_as(user)` defined in `ApplicationSystemTestCase`, which logs in through the form. Every user fixture carries the `"password123"` digest.
 
 ## Testing
 
