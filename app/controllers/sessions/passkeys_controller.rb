@@ -5,6 +5,7 @@ module Sessions
   class PasskeysController < ApplicationController
     allow_unauthenticated_access
     before_action :require_passkeys
+    before_action :reject_signed_in_users
     rate_limit to: 10, within: 3.minutes, with: -> { head :too_many_requests }
 
     def options
@@ -30,6 +31,12 @@ module Sessions
     end
 
     private
+      # The JSON counterpart of Authentication#redirect_signed_in_users: a
+      # browser that already holds a session must not open a second one.
+      def reject_signed_in_users
+        head :forbidden if authenticated?
+      end
+
       def credential_params
         params.require(:credential).permit(
           :id, :rawId, :type, :authenticatorAttachment,

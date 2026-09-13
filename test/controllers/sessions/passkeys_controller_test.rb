@@ -20,6 +20,18 @@ module Sessions
       assert_equal "www.example.com", body["rpId"]
     end
 
+    test "a signed-in browser cannot start a passkey login for another account" do
+      sign_in_as(users(:two))
+
+      post passkey_session_options_path, as: :json
+      assert_response :forbidden
+
+      assertion = fake_webauthn_client.get(challenge: stray_webauthn_challenge, user_verified: true)
+      post passkey_session_path, params: { credential: assertion }, as: :json
+      assert_response :forbidden
+      assert_equal 0, @user.sessions.count
+    end
+
     test "options is not found when passkeys are not configured" do
       configuration = Rails.application.config.x.webauthn
       configuration.derive_origin_from_request = false
@@ -114,6 +126,9 @@ module Sessions
       post passkey_session_path, params: { credential: assertion }, as: :json
       assert_response :success
 
+      # Sign out so the replay is judged on the consumed challenge alone,
+      # not refused for already holding a session.
+      sign_out
       post passkey_session_path, params: { credential: assertion }, as: :json
 
       assert_response :unprocessable_content
