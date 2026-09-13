@@ -54,6 +54,21 @@ class UserTest < ActiveSupport::TestCase
     assert_nil User.authenticate_by(email: "one@example.com", password: "wrong")
   end
 
+  test "assigns a unique webauthn id on create" do
+    first = User.create!(email: "first@example.com", password: "password123")
+    second = User.create!(email: "second@example.com", password: "password123")
+
+    assert first.webauthn_id.present?
+    assert_not_equal first.webauthn_id, second.webauthn_id
+  end
+
+  test "destroying a user removes its pending passkey registration challenges" do
+    user = User.create!(email: "leaving@example.com", password: "password123")
+    WebauthnChallenge.issue(purpose: "registration", challenge: "pending", user: user)
+
+    assert_difference("WebauthnChallenge.count", -1) { user.destroy! }
+  end
+
   test "destroying a user removes its sessions" do
     user = User.create!(email: "temporary@example.com", password: "password123")
     user.sessions.create!
