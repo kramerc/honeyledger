@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ruby \"$(git rev-parse --show-toplevel)/bin/codex-session-start\"",
+            "timeout": 300,
+            "statusMessage": "Preparing worktree databases"
+          }
+        ]
+      }
+    ]
+  }
+}

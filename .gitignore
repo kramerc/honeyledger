@@ -45,3 +45,4 @@
 
 # Ignore worktrees created for parallel sessions.
 /.claude/worktrees/
+/.codex/worktrees/
