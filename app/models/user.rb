@@ -2,6 +2,8 @@ class User < ApplicationRecord
   has_secure_password
   has_many :sessions, dependent: :destroy
   has_many :passkeys, dependent: :destroy
+  # Pending registration challenges; nothing to clean up per row, so a bulk delete is enough.
+  has_many :webauthn_challenges, dependent: :delete_all
 
   normalizes :email, with: ->(email) { email.strip.downcase }
 

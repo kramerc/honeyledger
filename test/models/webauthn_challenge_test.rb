@@ -34,11 +34,12 @@ class WebauthnChallengeTest < ActiveSupport::TestCase
     assert_equal "reg", WebauthnChallenge.consume(issued.id, purpose: "registration", user: users(:one))
   end
 
-  test "consume refuses an expired challenge" do
+  test "consume refuses an expired challenge and leaves it for the next purge" do
     issued = WebauthnChallenge.issue(purpose: "authentication", challenge: "old")
     issued.update!(expires_at: 1.second.ago)
 
     assert_nil WebauthnChallenge.consume(issued.id, purpose: "authentication")
+    assert WebauthnChallenge.exists?(issued.id)
   end
 
   test "consume tolerates a missing id" do

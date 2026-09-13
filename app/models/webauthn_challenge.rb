@@ -22,15 +22,13 @@ class WebauthnChallenge < ApplicationRecord
 
   # Returns the challenge string only if this call is the one that deleted
   # the row, so concurrent requests cannot both succeed. Also refuses a row
-  # issued for another purpose or another user, or one that has expired.
+  # issued for another purpose or another user, or one that has expired: the
+  # expiry is part of the delete itself, so a request paused between the read
+  # and the delete cannot consume a challenge that expired meanwhile.
   def self.consume(id, purpose:, user: nil)
     row = find_by(id: id, purpose: purpose, user_id: user&.id)
-    return nil if row.nil? || row.expired?
+    return nil if row.nil?
 
-    row.challenge if where(id: row.id).delete_all == 1
-  end
-
-  def expired?
-    expires_at <= Time.current
+    row.challenge if where(id: row.id, expires_at: Time.current..).delete_all == 1
   end
 end
