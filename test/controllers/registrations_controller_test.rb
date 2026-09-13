@@ -16,6 +16,24 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "new@example.com", User.last.email
   end
 
+  test "a signed-in user is sent home instead of the sign-up form" do
+    sign_in_as(users(:one))
+
+    get new_registration_path
+
+    assert_redirected_to root_path
+  end
+
+  test "a signed-in user cannot create another account" do
+    sign_in_as(users(:one))
+
+    assert_no_difference("User.count") do
+      post registration_path, params: { user: { email: "another@example.com", password: "password123", password_confirmation: "password123" } }
+    end
+
+    assert_redirected_to root_path
+  end
+
   test "create rejects a duplicate email" do
     assert_no_difference("User.count") do
       post registration_path, params: { user: { email: "ONE@example.com", password: "password123", password_confirmation: "password123" } }

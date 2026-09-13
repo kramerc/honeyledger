@@ -34,7 +34,9 @@ module Authentication
     end
 
     def request_authentication
-      session[:return_to_after_authenticating] = request.url
+      # Only a GET can be replayed by the post-login redirect; a stale POST or
+      # DELETE would send the user to a route that does not answer GET.
+      session[:return_to_after_authenticating] = request.url if request.get? || request.head?
       redirect_to new_session_path
     end
 

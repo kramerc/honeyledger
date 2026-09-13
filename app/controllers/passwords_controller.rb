@@ -18,11 +18,13 @@ class PasswordsController < ApplicationController
   end
 
   def update
-    if @user.update(params.permit(:password, :password_confirmation))
+    # A blank password would leave the digest untouched yet still sign the
+    # user out everywhere, so refuse it before touching any session.
+    if params[:password].present? && @user.update(params.permit(:password, :password_confirmation))
       @user.sessions.destroy_all
       redirect_to new_session_path, notice: "Password has been reset."
     else
-      redirect_to edit_password_path(params[:token]), alert: @user.errors.full_messages.to_sentence
+      redirect_to edit_password_path(params[:token]), alert: @user.errors.full_messages.to_sentence.presence || "Password can't be blank"
     end
   end
 

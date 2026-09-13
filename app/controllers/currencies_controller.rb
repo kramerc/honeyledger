@@ -1,6 +1,4 @@
 class CurrenciesController < ApplicationController
-  allow_unauthenticated_access
-
   before_action :set_currency, only: %i[ show edit update destroy ]
 
   # GET /currencies or /currencies.json
