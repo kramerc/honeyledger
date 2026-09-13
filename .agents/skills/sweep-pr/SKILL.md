@@ -9,7 +9,7 @@ allowed-tools: Bash(bin/sweep-pr:*) Bash(gh pr:*) Bash(gh api:*) Bash(git:*) Bas
 
 # Review sweep for one pull request
 
-This skill takes one argument, the pull request number, written as `N` below. It is the same procedure for every agent (Claude Code, Codex, Copilot): the canonical copy lives at `.agents/skills/sweep-pr/SKILL.md` and the copies under `.claude/skills/` and `.github/skills/` are links to it.
+This skill takes one optional argument, the pull request number, written as `N` below. Without it, `bin/sweep-pr` uses the pull request for the branch checked out where the script lives, so drop `N` from every command below and sweep that PR. It is the same procedure for every agent (Claude Code, Codex, Copilot): the canonical copy lives at `.agents/skills/sweep-pr/SKILL.md` and the copies under `.claude/skills/` and `.github/skills/` are links to it.
 
 Bot reviews are nondeterministic: Copilot keeps finding new things and Codex may say "clean" on the same commit. This procedure bounds the loop. The rules live in `AGENTS.md` under "Review sweep"; `bin/sweep-pr` does the GitHub side deterministically. The only state is the PR's single ledger comment (starts with `<!-- sweep-ledger -->`), so rerunning this procedure after a partial sweep resumes where it stopped.
 

@@ -5,11 +5,14 @@
 # AGENTS.md ("Review sweep"). Every read is pure; only `request` and
 # `ledger --write` post anything, and both are safe to rerun.
 #
-#   bin/sweep-pr status N                 # head, CI, per-bot state, rounds, stop conditions
-#   bin/sweep-pr findings N [--sha SHA]   # every bot finding as JSON (all heads; --sha filters)
-#   bin/sweep-pr request N [--force]      # ask Copilot and Codex to review the head, once
-#   bin/sweep-pr ledger N                 # print the ledger comment's JSON ({} if none)
-#   bin/sweep-pr ledger N --write FILE    # upsert the single ledger comment from FILE
+#   bin/sweep-pr status [N]                 # head, CI, per-bot state, rounds, stop conditions
+#   bin/sweep-pr findings [N] [--sha SHA]   # every bot finding as JSON (all heads; --sha filters)
+#   bin/sweep-pr request [N] [--force]      # ask Copilot and Codex to review the head, once
+#   bin/sweep-pr ledger [N]                 # print the ledger comment's JSON ({} if none)
+#   bin/sweep-pr ledger [N] --write FILE    # upsert the single ledger comment from FILE
+#
+# N is the pull request number; leave it out to use the pull request for the
+# branch checked out here.
 #
 # Findings come from Copilot (inline comments plus the suppressed comments in
 # its review bodies, which appear nowhere else), Codex, and CodeQL, keyed by
@@ -51,10 +54,18 @@ def option_value(options, flag)
   options[index + 1] or abort("#{flag} needs a value\n#{USAGE}")
 end
 
-command, number, *options = ARGV
-abort USAGE unless %w[status findings request ledger].include?(command) && number.to_s.match?(/\A\d+\z/)
+command, *options = ARGV
+abort USAGE unless %w[status findings request ledger].include?(command)
+number = options.shift if options.first.to_s.match?(/\A\d+\z/)
 
 repo = gh_json("repo", "view", "--json", "nameWithOwner")["nameWithOwner"]
+if number.nil?
+  # No number given: the PR for the branch checked out where this script lives.
+  current = IO.popen([ "gh", "pr", "view", "--json", "number" ], chdir: APP_ROOT, err: File::NULL, &:read)
+  abort "No pull request for the current branch; pass a PR number.\n#{USAGE}" unless $?.success?
+  number = JSON.parse(current)["number"].to_s
+  warn "Sweeping PR #{number}, the pull request for the current branch."
+end
 pr = gh_json("pr", "view", number, "--json",
              "number,url,isDraft,headRefOid,headRefName,baseRefName,reviewRequests,mergeStateStatus,statusCheckRollup")
 reviews = paginate("repos/#{repo}/pulls/#{number}/reviews")

@@ -23,7 +23,7 @@ bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
 bin/rails db:create db:migrate                   # Set up database
 bin/worktree-clean --drop                        # Drop test databases left by deleted worktrees
-bin/sweep-pr status 123                          # Review-sweep state of a PR (see "Review sweep")
+bin/sweep-pr status [123]                        # Review-sweep state of a PR, the current branch's by default
 kamal deploy                                     # Deploy to production
 ```
 
