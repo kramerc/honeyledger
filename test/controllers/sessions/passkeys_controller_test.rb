@@ -36,7 +36,7 @@ module Sessions
       post passkey_session_path, params: { credential: assertion }, as: :json
 
       assert_response :success
-      assert_equal root_url, response.parsed_body["redirect_url"]
+      assert_equal root_path, response.parsed_body["redirect_url"]
       assert cookies[:session_id]
       assert_equal 1, @user.sessions.count
       @passkey.reload
@@ -52,7 +52,7 @@ module Sessions
       assertion = fake_webauthn_client.get(challenge: response.parsed_body["challenge"], user_verified: true)
       post passkey_session_path, params: { credential: assertion }, as: :json
 
-      assert_equal accounts_url, response.parsed_body["redirect_url"]
+      assert_equal accounts_path, response.parsed_body["redirect_url"]
     end
 
     test "create rejects an assertion for a different challenge" do
