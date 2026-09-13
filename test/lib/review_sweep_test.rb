@@ -118,7 +118,7 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_empty state["warnings"]
   end
 
-  test "a Codex request is pending while young or acknowledged and dropped once stale" do
+  test "a Codex request is pending while young and dropped once stale, whether or not it was acknowledged" do
     young = issue_comment(id: 900, login: "kramerc", body: "@codex review", at: NOW - 5 * 60)
     stale = issue_comment(id: 901, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
     acknowledged = stale.merge("reactions" => { "eyes" => 1 })
@@ -131,9 +131,97 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_not dropped["pending"]
     assert dropped.dig("outstanding_request", "dropped")
 
-    assert ReviewSweep.assemble(pr, [], [], [ acknowledged ], now: NOW).dig("reviews", "codex", "pending")
+    stale_but_acknowledged = ReviewSweep.assemble(pr, [], [], [ acknowledged ], now: NOW).dig("reviews", "codex")
+    assert_not stale_but_acknowledged["pending"]
+    assert stale_but_acknowledged.dig("outstanding_request", "eyes")
+    assert stale_but_acknowledged.dig("outstanding_request", "dropped")
+
     assert_equal [ "no Copilot review on this PR yet", "1 finding(s) not in a terminal state", "fix delta not verified at head #{HEAD[0, 7]}" ],
                  ReviewSweep.assemble(pr, [], [ review_comments.last ], [], now: NOW).dig("stop", "reasons").tap { |reasons| reasons.delete_if { |reason| reason.start_with?("CI") } }
+  end
+
+  test "the stop conditions require a clean verification and count open ledger entries whose comment vanished" do
+    terminal = { "findings" => [], "verification" => { "base" => OLD_HEAD[0, 7], "head" => HEAD[0, 7], "result" => "clean" } }
+    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, now: NOW)
+    terminal["findings"] = state["findings"].map { |finding| { "id" => finding["id"], "status" => "fixed", "fixed_in" => "c" * 7 } }
+    assert ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: terminal, now: NOW).dig("stop", "met")
+
+    not_clean = terminal.merge("verification" => terminal["verification"].merge("result" => "issues found"))
+    reasons = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: not_clean, now: NOW).dig("stop", "reasons")
+    assert_equal [ "fix delta verification at head #{HEAD[0, 7]} is \"issues found\", not clean" ], reasons
+
+    stale_entry = terminal.merge("findings" => terminal["findings"] + [ { "id" => "copilot:999", "status" => "accepted" } ])
+    reasons = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: stale_entry, now: NOW).dig("stop", "reasons")
+    assert_equal [ "1 finding(s) not in a terminal state (1 no longer on the PR but still open in the ledger)" ], reasons
+  end
+
+  test "a suppressed-comments heading without a count and a marked ledger without JSON are format errors" do
+    assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_copilot_review("### Suppressed comments (many)\n\n**a.rb:1**\n* text") }
+    assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\n## Review sweep\n\nno data") }
+    assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\n```json\n{ not json\n```") }
+    assert_equal({}, ReviewSweep.parse_ledger("An unrelated comment"))
+  end
+
+  test "table cells escape backslashes and pipes and never carry a bare issue reference" do
+    assert_equal "a\\\\b\\|c issue 12", ReviewSweep.cell("a\\b|c #12")
+    long = "x" * 200
+    assert_not_equal ReviewSweep.suppressed_id("a.rb", "#{long} first"), ReviewSweep.suppressed_id("a.rb", "#{long} second")
+  end
+
+  test "the ledger table shows the fixing commit, the duplicate target, and the verification line" do
+    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, now: NOW)
+    input = {
+      "verification" => { "base" => OLD_HEAD[0, 7], "head" => HEAD[0, 7], "result" => "clean", "note" => "fresh subagent" },
+      "findings" => [
+        { "id" => "copilot:100", "status" => "fixed", "fixed_in" => "c" * 7 },
+        { "id" => "copilot:200", "status" => "duplicate", "duplicate_of" => "copilot:100" }
+      ]
+    }
+    rendered = ReviewSweep.render_ledger(ReviewSweep.upsert_ledger(input, state, now: NOW), state)
+
+    assert_includes rendered, "Fix delta #{OLD_HEAD[0, 7]}..#{HEAD[0, 7]} reviewed locally: clean — fresh subagent"
+    assert_includes rendered, "| fixed | #{"c" * 7} |"
+    assert_includes rendered, "| duplicate | copilot:100 |"
+
+    older_only = ReviewSweep.assemble(pr, [ reviews[2] ], [], [], now: NOW)
+    assert_includes ReviewSweep.format_status(older_only, {}), "Codex: no review for #{HEAD[0, 7]} (last reviewed #{OLD_HEAD[0, 7]})"
+  end
+
+  test "status and ledger text describe pending, dropped, failing, and unreviewed states" do
+    stalled = pr.merge(
+      "reviewRequests" => [ { "__typename" => "Bot", "login" => "copilot-pull-request-reviewer" } ],
+      "statusCheckRollup" => [
+        { "__typename" => "CheckRun", "name" => "test", "status" => "COMPLETED", "conclusion" => "FAILURE" },
+        { "__typename" => "StatusContext", "context" => "codecov/patch", "state" => "PENDING" }
+      ]
+    )
+    dropped = issue_comment(id: 901, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
+    state = ReviewSweep.assemble(stalled, [], [], [ dropped ], now: NOW)
+    ledger = ReviewSweep.upsert_ledger({}, state, now: NOW)
+
+    status = ReviewSweep.format_status(state, ledger)
+    assert_includes status, "CI: failing (test)"
+    assert_includes status, "Copilot: review pending for #{HEAD[0, 7]}"
+    assert_includes status, "Codex: request 901 looks dropped (20 min, no output)"
+    assert_includes status, "Stop conditions: not met — no Copilot review on this PR yet; CI failing: test; fix delta not verified"
+    rendered = ReviewSweep.render_ledger(ledger, state)
+    assert_includes rendered, "round 0 of 2 · Copilot review pending · Codex has not reviewed #{HEAD[0, 7]} · CI failing: test"
+    assert_includes rendered, "0 findings: "
+    assert_includes rendered, "Fix delta not yet verified"
+
+    young = issue_comment(id: 902, login: "kramerc", body: "@codex review", at: NOW - 60).merge("reactions" => { "eyes" => 1 })
+    codex_findings_review = review(id: 31, login: ReviewSweep::CODEX, sha: HEAD, at: NOW - 30, body: "### 💡 Codex Review\n\n**Reviewed commit:** `#{HEAD[0, 10]}`")
+    quiet = pr.merge("statusCheckRollup" => [])
+    state = ReviewSweep.assemble(quiet, [], [], [ young ], now: NOW)
+    assert_includes ReviewSweep.format_status(state, {}), "Codex: review pending for #{HEAD[0, 7]} (request 902, 1 min old, eyes: yes)"
+    assert_includes ReviewSweep.format_status(state, {}), "CI: no checks reported"
+    assert_includes ReviewSweep.render_ledger(ReviewSweep.upsert_ledger({}, state, now: NOW), state), "Copilot has not reviewed #{HEAD[0, 7]} · Codex review pending · CI pending"
+
+    state = ReviewSweep.assemble(pr.merge("statusCheckRollup" => [ { "__typename" => "CheckRun", "name" => "test", "status" => "IN_PROGRESS", "conclusion" => nil } ]),
+                                 [ codex_findings_review ], [], [], now: NOW)
+    assert_includes ReviewSweep.format_status(state, {}), "Codex: reviewed #{HEAD[0, 7]}: findings"
+    assert_includes ReviewSweep.format_status(state, {}), "CI: pending (test)"
+    assert_includes ReviewSweep.format_status(state, {}), "Copilot: no review for #{HEAD[0, 7]}"
   end
 
   test "Copilot is pending when requested or when its check run has not completed" do

@@ -39,8 +39,11 @@ def gh_json(*args, input: nil)
   JSON.parse(gh(*args, input: input))
 end
 
-def paginate(path)
-  gh_json("api", "--paginate", "--slurp", path).flatten(1)
+# `--slurp` returns one element per page: an array for list endpoints, an
+# object (with the list under a key) for endpoints such as check-runs.
+def paginate(path, key: nil)
+  pages = gh_json("api", "--paginate", "--slurp", path)
+  key ? pages.flat_map { |page| page.fetch(key) } : pages.flatten(1)
 end
 
 def option_value(options, flag)
@@ -57,26 +60,30 @@ pr = gh_json("pr", "view", number, "--json",
 reviews = paginate("repos/#{repo}/pulls/#{number}/reviews")
 review_comments = paginate("repos/#{repo}/pulls/#{number}/comments")
 issue_comments = paginate("repos/#{repo}/issues/#{number}/comments")
-check_runs = gh_json("api", "repos/#{repo}/commits/#{pr["headRefOid"]}/check-runs?check_name=#{ReviewSweep::COPILOT_CHECK_RUN}")["check_runs"]
+check_runs = paginate("repos/#{repo}/commits/#{pr["headRefOid"]}/check-runs?check_name=#{ReviewSweep::COPILOT_CHECK_RUN}", key: "check_runs")
 ledger_comment = issue_comments.find { |comment| comment["body"].to_s.start_with?(ReviewSweep::LEDGER_MARKER) }
-ledger = ledger_comment ? ReviewSweep.parse_ledger(ledger_comment["body"]) : {}
 
 begin
+  ledger = ledger_comment ? ReviewSweep.parse_ledger(ledger_comment["body"]) : {}
   state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, check_runs: check_runs, ledger: ledger)
 rescue ReviewSweep::FormatError => error
   abort error.message
 end
 
 # A worktree that has the PR branch checked out but sits on a different commit
-# means unpushed work (or a stale checkout); either way the bots would review
-# something other than what is on disk.
+# or carries uncommitted changes means the bots would review something other
+# than what is on disk.
 listing = IO.popen([ "git", "-C", APP_ROOT, "worktree", "list", "--porcelain" ], &:read)
 if $?.success?
   listing.split("\n\n").each do |block|
     next unless block[/^branch refs\/heads\/(.+)$/, 1] == state["branch"]
+    path = block[/^worktree (.+)$/, 1]
     local_head = block[/^HEAD (\h+)$/, 1]
-    next if local_head.nil? || local_head == state["head"]
-    state["warnings"] << "worktree #{block[/^worktree (.+)$/, 1]} has #{state["branch"]} at #{local_head[0, 7]} but the PR head is #{state["head7"]} (unpushed or behind)"
+    if local_head && local_head != state["head"]
+      state["warnings"] << "worktree #{path} has #{state["branch"]} at #{local_head[0, 7]} but the PR head is #{state["head7"]} (unpushed or behind)"
+    end
+    changes = IO.popen([ "git", "-C", path, "status", "--porcelain" ], &:read)
+    state["warnings"] << "worktree #{path} has uncommitted changes" if $?.success? && !changes.strip.empty?
   end
 end
 

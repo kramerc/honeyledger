@@ -37,6 +37,10 @@ module ReviewSweep
   def parse_copilot_review(body)
     headline = body[/^### (.+)$/, 1].to_s.strip
     declared = body[/^### Suppressed comments \((\d+)\)/, 1]
+    if declared.nil? && body.match?(/^### Suppressed comments/)
+      raise FormatError, "Copilot review has a suppressed-comments heading without a count that parses; " \
+                         "the review format may have changed (see lib/review_sweep.rb)"
+    end
     generated = body[/^- \*\*Comments generated:\*\* (\d+)/, 1]
     suppressed = declared ? parse_suppressed(body) : []
     if declared && suppressed.size != declared.to_i
@@ -172,9 +176,11 @@ module ReviewSweep
     request = issue_comments.select { |comment| codex_request?(comment["body"]) }.max_by { |comment| comment["created_at"].to_s }
     outstanding = nil
     if request && (latest_output_at.nil? || Time.iso8601(request["created_at"]) > latest_output_at)
+      # The 👀 reaction only says Codex started; a request with no durable output
+      # after the timeout is dropped whether or not the reaction is still there.
       age = (now - Time.iso8601(request["created_at"])).to_i
       eyes = request.dig("reactions", "eyes").to_i.positive?
-      outstanding = { "id" => request["id"], "created_at" => request["created_at"], "age_seconds" => age, "eyes" => eyes, "dropped" => !eyes && age > REQUEST_TIMEOUT }
+      outstanding = { "id" => request["id"], "created_at" => request["created_at"], "age_seconds" => age, "eyes" => eyes, "dropped" => age > REQUEST_TIMEOUT }
     end
     codex = {
       "sha" => codex_outputs.last&.dig("sha")&.slice(0, 7),
@@ -189,14 +195,23 @@ module ReviewSweep
     pending_checks = checks.select { |check| check_pending?(check) }.map { |check| check_name(check) }
     ci = { "green" => checks.any? && failing.empty? && pending_checks.empty?, "failing" => failing, "pending" => pending_checks }
 
-    open_findings = findings.reject { |finding| TERMINAL_STATUSES.include?(finding["ledger_status"]) }
+    # A ledger entry whose bot comment has since been deleted is no longer a
+    # live finding, but until it reaches a terminal state it still blocks.
+    live_ids = findings.map { |finding| finding["id"] }
+    open_count = findings.count { |finding| !TERMINAL_STATUSES.include?(finding["ledger_status"]) }
+    stale_open = Array(ledger["findings"]).count { |entry| !TERMINAL_STATUSES.include?(entry["status"]) && !live_ids.include?(entry["id"]) }
     reasons = []
     reasons << "no Copilot review on this PR yet" if rounds.empty?
-    reasons << "#{open_findings.size} finding(s) not in a terminal state" if open_findings.any?
+    if open_count + stale_open > 0
+      reasons << "#{open_count + stale_open} finding(s) not in a terminal state" \
+                 "#{" (#{stale_open} no longer on the PR but still open in the ledger)" if stale_open > 0}"
+    end
     reasons << (ci["failing"].any? ? "CI failing: #{ci["failing"].join(", ")}" : "CI not green yet") unless ci["green"]
     verification = ledger["verification"]
-    unless verification && sha_match?(verification["head"], head)
+    if verification.nil? || !sha_match?(verification["head"], head)
       reasons << "fix delta not verified at head #{head7}"
+    elsif verification["result"] != "clean"
+      reasons << "fix delta verification at head #{head7} is #{verification["result"].inspect}, not clean"
     end
     warnings << "base branch is #{pr["baseRefName"]}, not main: stacked PR, stabilize and merge the parent first" if pr["baseRefName"] != "main"
 
@@ -211,9 +226,18 @@ module ReviewSweep
 
   # ---- Ledger --------------------------------------------------------------
 
+  # A comment that carries the marker but no readable JSON is a broken ledger,
+  # not an empty one: treating it as empty would let the next write discard
+  # every adjudication it held.
   def parse_ledger(body)
     json = body.to_s[/```json\n(.*?)\n```/m, 1]
-    json ? JSON.parse(json) : {}
+    if json.nil?
+      raise FormatError, "the ledger comment carries the marker but no JSON block; refusing to treat it as empty" if body.to_s.start_with?(LEDGER_MARKER)
+      return {}
+    end
+    JSON.parse(json)
+  rescue JSON::ParserError => error
+    raise FormatError, "the ledger comment's JSON does not parse: #{error.message}"
   end
 
   # Merges the adjudications in `input` (the JSON a person or agent wrote) with
@@ -230,7 +254,7 @@ module ReviewSweep
       status = entry.fetch("status", "open")
       raise ArgumentError, "#{id}: unknown status #{status.inspect}" unless STATUSES.include?(status)
       raise ArgumentError, "#{id}: #{status} needs a note" if %w[rejected deferred].include?(status) && entry["note"].to_s.strip.empty?
-      raise ArgumentError, "#{id}: fixed needs fixed_in" if status == "fixed" && entry["fixed_in"].to_s.strip.empty?
+      raise ArgumentError, "#{id}: fixed needs fixed_in set to a commit SHA" if status == "fixed" && !entry["fixed_in"].to_s.match?(/\A\h{7,40}\z/)
       if status == "duplicate" && (entry["duplicate_of"] == id || !ids.include?(entry["duplicate_of"]))
         raise ArgumentError, "#{id}: duplicate needs duplicate_of naming another ledger id"
       end
@@ -334,7 +358,7 @@ module ReviewSweep
   # ---- Helpers -------------------------------------------------------------
 
   def suppressed_id(path, body)
-    "copilot-suppressed:#{path}:#{Digest::SHA1.hexdigest(body.to_s.downcase.gsub(/\s+/, " ").strip[0, 200])[0, 10]}"
+    "copilot-suppressed:#{path}:#{Digest::SHA1.hexdigest(body.to_s.downcase.gsub(/\s+/, " ").strip)[0, 10]}"
   end
 
   def first_sentence(text)
@@ -375,6 +399,6 @@ module ReviewSweep
   end
 
   def cell(text)
-    text.to_s.gsub(/\r?\n/, " ").gsub("|", "\\|").gsub(/#(\d+)/, 'issue \1')
+    text.to_s.gsub(/\r?\n/, " ").gsub("\\") { "\\\\" }.gsub("|") { "\\|" }.gsub(/#(\d+)/, 'issue \1')
   end
 end
