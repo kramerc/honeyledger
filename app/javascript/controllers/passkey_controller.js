@@ -6,7 +6,7 @@ import { Turbo } from "@hotwired/turbo-rails"
 // with one (login page). Relies on the browser's own JSON helpers, so there is
 // no client-side base64 handling; browsers without them see nothing.
 export default class extends Controller {
-  static targets = ["form", "nickname", "error", "unsupported"]
+  static targets = ["form", "nickname", "error", "unsupported", "button"]
   static values = { optionsUrl: String, submitUrl: String }
 
   connect() {
@@ -16,7 +16,10 @@ export default class extends Controller {
     if (this.hasUnsupportedTarget) this.unsupportedTarget.hidden = false
   }
 
-  async register() {
+  // Bound to the enrolment form's submit, so Enter in the name field works.
+  async register(event) {
+    event?.preventDefault()
+
     await this.run(async () => {
       const options = await this.post(this.optionsUrlValue)
       const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(options)
@@ -27,7 +30,9 @@ export default class extends Controller {
     }, "Could not add the passkey.")
   }
 
-  async authenticate() {
+  async authenticate(event) {
+    event?.preventDefault()
+
     await this.run(async () => {
       const options = await this.post(this.optionsUrlValue)
       const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(options)
@@ -44,16 +49,40 @@ export default class extends Controller {
   }
 
   async run(ceremony, failureMessage) {
+    if (this.busy) return
+
     this.hideError()
+    this.setBusy(true)
 
     try {
       const result = await ceremony()
       Turbo.visit(result.redirect_url)
     } catch (error) {
       // NotAllowedError is the browser reporting that the person dismissed the prompt.
-      if (error.name === "NotAllowedError") return
+      if (error.name !== "NotAllowedError") {
+        this.showError(error instanceof RequestError ? error.message : failureMessage)
+      }
+    } finally {
+      this.setBusy(false)
+    }
+  }
 
-      this.showError(error instanceof RequestError ? error.message : failureMessage)
+  // The browser's passkey prompt can take a moment to appear, so the button
+  // shows that something is happening and refuses a second click meanwhile.
+  setBusy(busy) {
+    this.busy = busy
+    if (!this.hasButtonTarget) return
+
+    const button = this.buttonTarget
+    if (busy) {
+      button.dataset.idleLabel = button.textContent
+      button.textContent = button.dataset.busyLabel || "Waiting for your device…"
+      button.disabled = true
+      button.setAttribute("aria-busy", "true")
+    } else {
+      button.textContent = button.dataset.idleLabel || button.textContent
+      button.disabled = false
+      button.removeAttribute("aria-busy")
     }
   }
 

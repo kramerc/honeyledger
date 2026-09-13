@@ -33,7 +33,7 @@
   <p>Passkeys are not configured for this deployment.</p>
 <% elsif recently_authenticated? %>
   <div data-controller="passkey" data-passkey-options-url-value="<%= options_passkeys_path %>" data-passkey-submit-url-value="<%= passkeys_path %>">
-    <div data-passkey-target="form">
+    <form data-passkey-target="form" data-action="submit->passkey#register">
       <div>
         <label for="passkey_nickname" style="display: block">Name</label>
         <input type="text" id="passkey_nickname" maxlength="64" data-passkey-target="nickname">
@@ -41,9 +41,9 @@
       </div>
 
       <div>
-        <button type="button" data-action="passkey#register">Add passkey</button>
+        <button type="submit" data-passkey-target="button">Add passkey</button>
       </div>
-    </div>
+    </form>
 
     <p data-passkey-target="error" style="color: var(--color-negative)" hidden></p>
     <p data-passkey-target="unsupported" hidden>This browser does not support passkeys.</p>

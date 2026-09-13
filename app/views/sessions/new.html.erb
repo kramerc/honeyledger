@@ -19,7 +19,7 @@
 <% if passkeys_available? %>
   <div data-controller="passkey" data-passkey-options-url-value="<%= passkey_session_options_path %>" data-passkey-submit-url-value="<%= passkey_session_path %>">
     <p data-passkey-target="form">
-      <button type="button" data-action="passkey#authenticate">Sign in with a passkey</button>
+      <button type="button" data-action="passkey#authenticate" data-passkey-target="button">Sign in with a passkey</button>
     </p>
     <p data-passkey-target="error" style="color: var(--color-negative)" hidden></p>
   </div>
