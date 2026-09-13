@@ -130,7 +130,8 @@ when "request"
   if codex["done_for_head"]
     puts "Codex: skipped, already reviewed #{state["head7"]}"
   elsif codex["pending"]
-    puts "Codex: skipped, request #{codex.dig("outstanding_request", "id")} still pending"
+    request = codex["outstanding_request"]
+    puts request ? "Codex: skipped, request #{request["id"]} still pending" : "Codex: skipped, a review is running"
   else
     if (dropped = codex["outstanding_request"])
       puts "Codex: request #{dropped["id"]} produced nothing in #{dropped["age_seconds"] / 60} minutes, treating it as dropped"
