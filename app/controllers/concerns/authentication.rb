@@ -1,0 +1,67 @@
+module Authentication
+  extend ActiveSupport::Concern
+
+  included do
+    before_action :require_authentication
+    helper_method :authenticated?, :current_user
+  end
+
+  class_methods do
+    def allow_unauthenticated_access(**options)
+      skip_before_action :require_authentication, **options
+    end
+  end
+
+  private
+    def authenticated?
+      resume_session
+    end
+
+    def current_user
+      Current.user
+    end
+
+    def require_authentication
+      resume_session || request_authentication
+    end
+
+    def resume_session
+      Current.session ||= find_session_by_cookie
+    end
+
+    def find_session_by_cookie
+      Session.find_by(id: cookies.signed[:session_id]) if cookies.signed[:session_id]
+    end
+
+    def request_authentication
+      # Only a GET can be replayed by the post-login redirect; a stale POST or
+      # DELETE would send the user to a route that does not answer GET. Store
+      # the path rather than the full URL so a forged Host header can never
+      # turn the redirect into one that leaves this site.
+      session[:return_to_after_authenticating] = request.fullpath if request.get? || request.head?
+      redirect_to new_session_path
+    end
+
+    def after_authentication_url
+      session.delete(:return_to_after_authenticating) || root_path
+    end
+
+    # For the login and sign-up entry points: someone who already has a
+    # session is sent home rather than allowed to open a second one, which
+    # would silently swap accounts and strand the old session server-side.
+    def redirect_signed_in_users
+      redirect_to root_path if authenticated?
+    end
+
+    def start_new_session_for(user)
+      user.sessions.create!(user_agent: request.user_agent.to_s, ip_address: request.remote_ip.to_s).tap do |session|
+        Current.session = session
+        cookies.signed.permanent[:session_id] = { value: session.id, httponly: true, same_site: :lax }
+      end
+    end
+
+    def terminate_session
+      Current.session.destroy
+      cookies.delete(:session_id)
+    end
+end

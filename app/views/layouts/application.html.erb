@@ -52,21 +52,21 @@
         <nav role="navigation">
           <ul>
             <li><%= nav_link_to "Home", root_path %></li>
-            <% if user_signed_in? %>
+            <% if authenticated? %>
               <li><%= nav_link_to "Accounts", accounts_path %></li>
               <li><%= nav_link_to "Integrations", integrations_path %></li>
               <li><%= nav_link_to "Import Rules", import_rules_path %></li>
               <li><%= nav_link_to "Categories", categories_path %></li>
               <li><%= nav_link_to "Transactions", transactions_path %></li>
               <li><%= nav_link_to "Currencies", currencies_path %></li>
-              <li><%= nav_link_to "Logout", destroy_user_session_path, data: { turbo_method: :delete, turbo_confirm: "Are you sure you want to log out?" } %></li>
+              <li><%= nav_link_to "Logout", session_path, data: { turbo_method: :delete, turbo_confirm: "Are you sure you want to log out?" } %></li>
             <% else %>
-              <li><%= nav_link_to "Login", new_user_session_path %></li>
-              <li><%= nav_link_to "Sign Up", new_user_registration_path %></li>
+              <li><%= nav_link_to "Login", new_session_path %></li>
+              <li><%= nav_link_to "Sign Up", new_registration_path %></li>
             <% end %>
           </ul>
 
-          <% if user_signed_in? %>
+          <% if authenticated? %>
             <%= render 'accounts/sidebar_nav' %>
           <% end %>
         </nav>

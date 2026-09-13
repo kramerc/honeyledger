@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_13_032101) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -180,6 +180,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
     t.index ["synced_at"], name: "index_lunchflow_transactions_on_synced_at"
   end
 
+  create_table "sessions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "ip_address", default: "", null: false
+    t.datetime "updated_at", null: false
+    t.string "user_agent", default: "", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id"], name: "index_sessions_on_user_id"
+  end
+
   create_table "simplefin_accounts", force: :cascade do |t|
     t.string "available_balance"
     t.string "balance"
@@ -274,19 +283,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
 
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.datetime "current_sign_in_at"
-    t.string "current_sign_in_ip"
     t.string "email", default: "", null: false
-    t.string "encrypted_password", default: "", null: false
-    t.datetime "last_sign_in_at"
-    t.string "last_sign_in_ip"
-    t.datetime "remember_created_at"
-    t.datetime "reset_password_sent_at"
-    t.string "reset_password_token"
-    t.integer "sign_in_count", default: 0, null: false
+    t.string "password_digest", default: "", null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
-    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
   add_foreign_key "account_sources", "accounts"
@@ -303,6 +303,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_26_185643) do
   add_foreign_key "lunchflow_accounts", "lunchflow_connections", column: "connection_id"
   add_foreign_key "lunchflow_connections", "users"
   add_foreign_key "lunchflow_transactions", "lunchflow_accounts", column: "account_id"
+  add_foreign_key "sessions", "users"
   add_foreign_key "simplefin_accounts", "simplefin_connections", column: "connection_id"
   add_foreign_key "simplefin_connections", "users"
   add_foreign_key "simplefin_transactions", "simplefin_accounts", column: "account_id"

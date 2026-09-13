@@ -10,6 +10,7 @@ SimpleCov.formatters = [
 ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
+require_relative "test_helpers/session_test_helper"
 require "minitest/mock"
 require "minitest/stub_any_instance"
 require "turbo/broadcastable/test_helper"

@@ -1,11 +1,9 @@
 require "test_helper"
 
 class TransactionsControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @user = users(:one)
-    sign_in @user
+    sign_in_as(@user)
     @transaction = transactions(:one)
   end
 
