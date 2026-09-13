@@ -20,7 +20,7 @@ class SettingsTest < ApplicationSystemTestCase
       assert_text "Laptop"
       assert_text passkeys(:laptop).created_at.strftime("%B %d, %Y")
       assert_text "Never"
-      assert_button "Rename"
+      assert_link "Rename"
       assert_button "Delete"
     end
     assert_no_text "Phone"
@@ -30,7 +30,7 @@ class SettingsTest < ApplicationSystemTestCase
     visit settings_path
 
     within "#passkey_#{passkeys(:laptop).id}" do
-      click_button "Rename"
+      click_link "Rename"
     end
     fill_in "Name", with: "Work laptop"
     click_button "Rename passkey"

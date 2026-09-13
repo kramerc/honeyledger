@@ -1,0 +1,42 @@
+/* Settings page. The passkeys table's action cluster mirrors the accounts and
+   transactions tables (accounts.css `.accounts .actions`): small honey-coloured
+   text links, and Delete as a red text-styled button so it still submits a real
+   DELETE form. Namespaced under .passkeys to avoid touching other tables. */
+
+.passkeys .actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.passkeys .actions a {
+  color: var(--honey-dark);
+  text-decoration: none;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.passkeys .actions a:hover {
+  color: var(--honey);
+  text-decoration: underline;
+}
+
+.passkeys .actions form.button_to {
+  margin: 0;
+  display: inline;
+}
+
+.passkeys .actions button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--color-negative);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.passkeys .actions button:hover {
+  text-decoration: underline;
+}

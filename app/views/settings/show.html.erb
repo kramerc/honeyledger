@@ -5,7 +5,7 @@
 <p>Passkeys let you log in with your device's screen lock or a security key instead of typing a password. Your password keeps working alongside them.</p>
 
 <% if @passkeys.any? %>
-  <table>
+  <table class="passkeys">
     <tr>
       <th>Name</th>
       <th>Added</th>
@@ -17,9 +17,9 @@
         <td><%= passkey.nickname %></td>
         <td><%= passkey.created_at.strftime("%B %d, %Y") %></td>
         <td><%= passkey.last_used_at ? passkey.last_used_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
-        <td style="display: flex; gap: 0.25em; align-items: center">
-          <%= button_to "Rename", edit_passkey_path(passkey), method: :get %>
-          <%= button_to "Delete", passkey_path(passkey), method: :delete, style: "color: var(--color-negative)", data: { turbo_confirm: "Remove the passkey \"#{passkey.nickname}\"? You can still log in with your password." } %>
+        <td class="actions">
+          <%= link_to "Rename", edit_passkey_path(passkey), "aria-label": "Rename #{passkey.nickname}" %>
+          <%= button_to "Delete", passkey_path(passkey), method: :delete, "aria-label": "Delete #{passkey.nickname}", data: { turbo_confirm: "Remove the passkey \"#{passkey.nickname}\"? You can still log in with your password." } %>
         </td>
       </tr>
     <% end %>
