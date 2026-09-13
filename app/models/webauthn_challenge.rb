@@ -29,6 +29,6 @@ class WebauthnChallenge < ApplicationRecord
     row = find_by(id: id, purpose: purpose, user_id: user&.id)
     return nil if row.nil?
 
-    row.challenge if where(id: row.id, expires_at: Time.current..).delete_all == 1
+    row.challenge if where(id: row.id).where("expires_at > ?", Time.current).delete_all == 1
   end
 end

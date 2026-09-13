@@ -42,6 +42,21 @@ class WebauthnChallengeTest < ActiveSupport::TestCase
     assert WebauthnChallenge.exists?(issued.id)
   end
 
+  test "consume refuses a challenge that expires between the read and the delete" do
+    issued = WebauthnChallenge.issue(purpose: "authentication", challenge: "racing")
+    # Hand back a row that still looks valid in memory while the database row
+    # expires underneath it, as a request paused past the deadline would see.
+    stale_read = ->(**) {
+      WebauthnChallenge.where(id: issued.id).update_all(expires_at: 1.second.ago)
+      issued
+    }
+
+    WebauthnChallenge.stub(:find_by, stale_read) do
+      assert_nil WebauthnChallenge.consume(issued.id, purpose: "authentication")
+    end
+    assert WebauthnChallenge.exists?(issued.id)
+  end
+
   test "consume tolerates a missing id" do
     assert_nil WebauthnChallenge.consume(nil, purpose: "authentication")
   end
