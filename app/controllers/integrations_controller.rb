@@ -1,6 +1,4 @@
 class IntegrationsController < ApplicationController
-  before_action :authenticate_user!
-
   def show
     @simplefin_connection = current_user.simplefin_connection
     @lunchflow_connection = current_user.lunchflow_connection

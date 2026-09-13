@@ -1,5 +1,7 @@
 Rails.application.routes.draw do
-  devise_for :users
+  resource :session, only: %i[ new create destroy ]
+  resources :passwords, only: %i[ new create edit update ], param: :token
+  resource :registration, only: %i[ new create ]
 
   resources :accounts do
     collection do

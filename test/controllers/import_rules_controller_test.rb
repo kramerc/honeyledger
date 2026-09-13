@@ -1,11 +1,9 @@
 require "test_helper"
 
 class ImportRulesControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @user = users(:one)
-    sign_in @user
+    sign_in_as(@user)
     @import_rule = import_rules(:fixture_rule_one)
   end
 

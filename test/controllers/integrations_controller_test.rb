@@ -1,11 +1,9 @@
 require "test_helper"
 
 class IntegrationsControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @user = users(:one)
-    sign_in @user
+    sign_in_as(@user)
   end
 
   test "should get show" do
@@ -22,10 +20,10 @@ class IntegrationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "requires authentication" do
-    sign_out @user
+    sign_out
 
     get integrations_url
-    assert_redirected_to new_user_session_url
+    assert_redirected_to new_session_url
   end
 
   test "should show with lunchflow connection error" do

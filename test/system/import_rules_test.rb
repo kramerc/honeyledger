@@ -3,7 +3,6 @@ require "application_system_test_case"
 class ImportRulesTest < ApplicationSystemTestCase
   setup do
     @user = users(:one)
-    @user.update!(password: "password123")
     sign_in_as(@user)
   end
 
@@ -71,7 +70,6 @@ class ImportRulesTest < ApplicationSystemTestCase
     # Sign in as a different user via a fresh browser session
     Capybara.reset_sessions!
     user_two = users(:two)
-    user_two.update!(password: "password123")
     sign_in_as(user_two)
 
     visit import_rules_path
@@ -81,13 +79,6 @@ class ImportRulesTest < ApplicationSystemTestCase
 
   private
 
-  def sign_in_as(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_link "Logout"
-  end
 
   def create_rule(pattern:, match_type:, account:)
     visit import_rules_path

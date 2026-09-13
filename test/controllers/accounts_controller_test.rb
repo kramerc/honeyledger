@@ -1,11 +1,9 @@
 require "test_helper"
 
 class AccountsControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @user = users(:one)
-    sign_in @user
+    sign_in_as(@user)
     @account = accounts(:one)
   end
 
@@ -17,7 +15,7 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
 
   test "should get index for a user with no accounts" do
     empty_user = User.create!(email: "empty-index@example.com", password: "password123")
-    sign_in empty_user
+    sign_in_as(empty_user)
 
     get accounts_url
 

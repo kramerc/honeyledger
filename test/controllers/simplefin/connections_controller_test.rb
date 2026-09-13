@@ -1,12 +1,10 @@
 require "test_helper"
 
 class Simplefin::ConnectionsControllerTest < ActionDispatch::IntegrationTest
-  include Devise::Test::IntegrationHelpers
-
   setup do
     @simplefin_connection = simplefin_connections(:one)
     @user = users(:one)
-    sign_in @user
+    sign_in_as(@user)
   end
 
   test "should get new" do

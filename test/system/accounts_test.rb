@@ -3,7 +3,6 @@ require "application_system_test_case"
 class AccountsTest < ApplicationSystemTestCase
   setup do
     @user = users(:one)
-    @user.update!(password: "password123")
     sign_in_as(@user)
   end
 
@@ -434,13 +433,5 @@ class AccountsTest < ApplicationSystemTestCase
 
   def toggle_select(account)
     find("input.selection-checkbox[data-account-id='#{account.id}']").click
-  end
-
-  def sign_in_as(user)
-    visit new_user_session_path
-    fill_in "Email", with: user.email
-    fill_in "Password", with: "password123"
-    click_button "Log in"
-    assert_link "Logout"
   end
 end
