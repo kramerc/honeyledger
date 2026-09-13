@@ -5,7 +5,7 @@
 Everything shared with other agents lives in `AGENTS.md` (imported above). Only Claude Code-specific tooling belongs here.
 
 - **Worktrees.** Start isolated work with the `EnterWorktree` tool; it creates `.claude/worktrees/<name>` on a new branch. `bin/worktree-setup` runs automatically as a `SessionStart` hook, so secrets and the worktree database are ready without a manual step.
-- **Review sweep.** `/sweep-pr <number>` runs the bounded review workflow from `AGENTS.md` ("Review sweep"); `bin/sweep-pr` is the script it drives.
+- **Review sweep.** `/sweep-pr <number>` runs the bounded review workflow from `AGENTS.md` ("Review sweep"). The skill file under `.claude/skills/` is a link to the agent-neutral canonical copy in `.agents/skills/`; edit that one.
 - **Projects v2 IDs** for the Priority and Size fields described in `AGENTS.md` — re-query if they stop resolving:
   - Project: `PVT_kwHOAAG9iM4BPFrE`
   - Priority field `PVTSSF_lAHOAAG9iM4BPFrEzg9mcIE` — P0 `79628723`, P1 `0a877460`, P2 `da944a9c`
