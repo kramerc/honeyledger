@@ -62,6 +62,19 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_match(/Password confirmation doesn't match/, flash[:alert])
   end
 
+  test "update without a password neither changes the digest nor signs anyone out" do
+    sign_in_as(@user)
+    token = @user.password_reset_token
+
+    assert_no_changes -> { @user.reload.password_digest } do
+      put password_path(token)
+      assert_redirected_to edit_password_path(token)
+    end
+
+    assert_equal 1, @user.sessions.count
+    assert_equal "Password can't be blank", flash[:alert]
+  end
+
   test "update with a too-short password" do
     token = @user.password_reset_token
     assert_no_changes -> { @user.reload.password_digest } do
