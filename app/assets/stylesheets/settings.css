@@ -3,20 +3,22 @@
    the accounts and transactions tables; every selector is namespaced under
    .passkeys so nothing here reaches those tables. */
 
-/* Table wrapper */
+/* Table wrapper. Unlike the accounts page this list is short and sits among
+   other settings, so it hugs its columns instead of spanning the page. */
 .passkeys {
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--divider);
   border-radius: 8px;
 }
 
-/* Name is the only flexing column; the dates and Actions are pinned so the
+/* Name grows with the longest name; the dates and Actions are pinned so the
    action cluster lines up down the list. */
 .passkeys .row {
   display: grid;
   grid-template-columns:
-    minmax(140px, 1fr)    /* Name */
+    minmax(160px, auto)   /* Name */
     170px                 /* Added */
     220px                 /* Last Used */
     150px;                /* Actions */
@@ -100,6 +102,7 @@
 /* ========== Mobile (< 768px): collapse each row to a card ========== */
 @media (max-width: 767px) {
   .passkeys {
+    width: auto;
     border: none;
     border-radius: 0;
     overflow-x: visible;
