@@ -59,6 +59,7 @@
               <li><%= nav_link_to "Categories", categories_path %></li>
               <li><%= nav_link_to "Transactions", transactions_path %></li>
               <li><%= nav_link_to "Currencies", currencies_path %></li>
+              <li><%= nav_link_to "Settings", settings_path %></li>
               <li><%= nav_link_to "Logout", session_path, data: { turbo_method: :delete, turbo_confirm: "Are you sure you want to log out?" } %></li>
             <% else %>
               <li><%= nav_link_to "Login", new_session_path %></li>

@@ -1,0 +1,17 @@
+# Placeholder credentials for rendering and ownership checks. They cannot
+# complete a WebAuthn ceremony; tests that need one enrol a real credential
+# through WebAuthn::FakeClient (see test/test_helpers/passkey_test_helper.rb).
+
+laptop:
+  user: one
+  external_id: Zml4dHVyZS1sYXB0b3A
+  public_key: Zml4dHVyZS1wdWJsaWMta2V5
+  nickname: Laptop
+  sign_count: 3
+
+phone:
+  user: two
+  external_id: Zml4dHVyZS1waG9uZQ
+  public_key: Zml4dHVyZS1wdWJsaWMta2V5LXR3bw
+  nickname: Phone
+  sign_count: 0

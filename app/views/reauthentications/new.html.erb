@@ -1,0 +1,18 @@
+<h1>Confirm your password</h1>
+
+<p>Adding a passkey changes how you log in, so please confirm it is you first.</p>
+
+<%= form_with url: reauthentication_path do |form| %>
+  <div>
+    <%= form.label :password, style: "display: block" %>
+    <%= form.password_field :password, required: true, autofocus: true, autocomplete: "current-password", maxlength: 72 %>
+  </div>
+
+  <div>
+    <%= form.submit "Confirm password" %>
+  </div>
+<% end %>
+
+<p>
+  <%= link_to "Back to settings", settings_path %>
+</p>

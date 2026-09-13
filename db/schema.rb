@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_032101) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_13_050000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -180,6 +180,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_032101) do
     t.index ["synced_at"], name: "index_lunchflow_transactions_on_synced_at"
   end
 
+  create_table "passkeys", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_id", null: false
+    t.datetime "last_used_at"
+    t.string "nickname", default: "", null: false
+    t.text "public_key", default: "", null: false
+    t.bigint "sign_count", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["external_id"], name: "index_passkeys_on_external_id", unique: true
+    t.index ["user_id"], name: "index_passkeys_on_user_id"
+  end
+
   create_table "sessions", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "ip_address", default: "", null: false
@@ -286,7 +299,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_032101) do
     t.string "email", default: "", null: false
     t.string "password_digest", default: "", null: false
     t.datetime "updated_at", null: false
+    t.string "webauthn_id", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
   end
 
   add_foreign_key "account_sources", "accounts"
@@ -303,6 +318,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_032101) do
   add_foreign_key "lunchflow_accounts", "lunchflow_connections", column: "connection_id"
   add_foreign_key "lunchflow_connections", "users"
   add_foreign_key "lunchflow_transactions", "lunchflow_accounts", column: "account_id"
+  add_foreign_key "passkeys", "users"
   add_foreign_key "sessions", "users"
   add_foreign_key "simplefin_accounts", "simplefin_connections", column: "connection_id"
   add_foreign_key "simplefin_connections", "users"

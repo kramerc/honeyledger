@@ -3,7 +3,7 @@
 <%= form_with url: session_path do |form| %>
   <div>
     <%= form.label :email, style: "display: block" %>
-    <%= form.email_field :email, required: true, autofocus: true, autocomplete: "username", value: params[:email] %>
+    <%= form.email_field :email, required: true, autofocus: true, autocomplete: "username webauthn", value: params[:email] %>
   </div>
 
   <div>
@@ -13,6 +13,15 @@
 
   <div>
     <%= form.submit "Log in" %>
+  </div>
+<% end %>
+
+<% if passkeys_available? %>
+  <div data-controller="passkey" data-passkey-options-url-value="<%= passkey_session_options_path %>" data-passkey-submit-url-value="<%= passkey_session_path %>">
+    <p data-passkey-target="form">
+      <button type="button" data-action="passkey#authenticate">Sign in with a passkey</button>
+    </p>
+    <p data-passkey-target="error" style="color: var(--color-negative)" hidden></p>
   </div>
 <% end %>
 

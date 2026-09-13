@@ -1,6 +1,7 @@
 class User < ApplicationRecord
   has_secure_password
   has_many :sessions, dependent: :destroy
+  has_many :passkeys, dependent: :destroy
 
   normalizes :email, with: ->(email) { email.strip.downcase }
 
@@ -11,6 +12,9 @@ class User < ApplicationRecord
   # existing user is invalidated. has_secure_password enforces the 72-byte
   # bcrypt ceiling and presence on create.
   validates :password, length: { minimum: 6 }, allow_nil: true
+
+  # Opaque handle authenticators store alongside a passkey; never the email.
+  before_create { self.webauthn_id ||= WebAuthn.generate_user_id }
 
   has_many :accounts, dependent: :destroy
   has_many :import_rules, dependent: :destroy

@@ -1,0 +1,53 @@
+<h1>Settings</h1>
+
+<h2>Passkeys</h2>
+
+<p>Passkeys let you log in with your device's screen lock or a security key instead of typing a password. Your password keeps working alongside them.</p>
+
+<% if @passkeys.any? %>
+  <table>
+    <tr>
+      <th>Name</th>
+      <th>Added</th>
+      <th>Last Used</th>
+      <th style="white-space: nowrap">Actions</th>
+    </tr>
+    <% @passkeys.each do |passkey| %>
+      <tr id="<%= dom_id(passkey) %>">
+        <td><%= passkey.nickname %></td>
+        <td><%= passkey.created_at.strftime("%B %d, %Y") %></td>
+        <td><%= passkey.last_used_at ? passkey.last_used_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
+        <td style="display: flex; gap: 0.25em; align-items: center">
+          <%= button_to "Delete", passkey_path(passkey), method: :delete, style: "color: var(--color-negative)", data: { turbo_confirm: "Remove the passkey \"#{passkey.nickname}\"? You can still log in with your password." } %>
+        </td>
+      </tr>
+    <% end %>
+  </table>
+<% else %>
+  <p>No passkeys yet.</p>
+<% end %>
+
+<h3>Add a passkey</h3>
+
+<% if !passkeys_available? %>
+  <p>Passkeys are not configured for this deployment.</p>
+<% elsif recently_authenticated? %>
+  <div data-controller="passkey" data-passkey-options-url-value="<%= options_passkeys_path %>" data-passkey-submit-url-value="<%= passkeys_path %>">
+    <div data-passkey-target="form">
+      <div>
+        <label for="passkey_nickname" style="display: block">Name</label>
+        <input type="text" id="passkey_nickname" maxlength="64" data-passkey-target="nickname">
+        <br><small>Something that identifies the device this passkey lives on.</small>
+      </div>
+
+      <div>
+        <button type="button" data-action="passkey#register">Add passkey</button>
+      </div>
+    </div>
+
+    <p data-passkey-target="error" style="color: var(--color-negative)" hidden></p>
+    <p data-passkey-target="unsupported" hidden>This browser does not support passkeys.</p>
+  </div>
+<% else %>
+  <p><%= link_to "Confirm your password to add a passkey", new_reauthentication_path %></p>
+<% end %>

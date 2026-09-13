@@ -5,7 +5,9 @@
 one:
   email: one@example.com
   password_digest: <%= password_digest %>
+  webauthn_id: <%= WebAuthn.generate_user_id %>
 
 two:
   email: two@example.com
   password_digest: <%= password_digest %>
+  webauthn_id: <%= WebAuthn.generate_user_id %>
