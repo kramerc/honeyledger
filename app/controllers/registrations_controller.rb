@@ -12,7 +12,9 @@ class RegistrationsController < ApplicationController
 
     if @user.save
       start_new_session_for @user
-      redirect_to root_path, notice: "Welcome! You have signed up successfully."
+      # Consume any page that sent the visitor to sign up in the first place,
+      # as Devise did; left in the session it would be replayed by a later login.
+      redirect_to after_authentication_url, notice: "Welcome! You have signed up successfully."
     else
       render :new, status: :unprocessable_content
     end

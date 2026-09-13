@@ -86,4 +86,15 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_empty cookies[:session_id]
     assert_equal 0, @user.sessions.count
   end
+
+  test "the sign_out helper ends a session that was started through the login form" do
+    post session_path, params: { email: @user.email, password: "password123" }
+    assert_equal 1, @user.sessions.count
+
+    sign_out
+
+    assert_equal 0, @user.sessions.count
+    get accounts_url
+    assert_redirected_to new_session_path
+  end
 end

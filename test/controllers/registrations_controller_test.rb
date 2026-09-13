@@ -16,6 +16,25 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "new@example.com", User.last.email
   end
 
+  test "create returns to the page that required authentication" do
+    get accounts_url
+    assert_redirected_to new_session_path
+
+    post registration_path, params: { user: { email: "new@example.com", password: "password123", password_confirmation: "password123" } }
+
+    assert_redirected_to accounts_url
+  end
+
+  test "a later login does not replay the page that led to sign-up" do
+    get accounts_url
+    post registration_path, params: { user: { email: "new@example.com", password: "password123", password_confirmation: "password123" } }
+    delete session_path
+
+    post session_path, params: { email: "new@example.com", password: "password123" }
+
+    assert_redirected_to root_path
+  end
+
   test "a signed-in user is sent home instead of the sign-up form" do
     sign_in_as(users(:one))
 
