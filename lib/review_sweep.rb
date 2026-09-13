@@ -94,11 +94,11 @@ module ReviewSweep
 
   # ---- Assembly ------------------------------------------------------------
 
-  # pr is `gh pr view --json` output; the three lists are the raw REST payloads
+  # pull_request is `gh pr view --json` output; the three lists are the raw REST payloads
   # (every page); check_runs are the head commit's runs named COPILOT_CHECK_RUN;
   # ledger is the parsed ledger comment, or {} when none exists yet.
-  def assemble(pr, reviews, review_comments, issue_comments, check_runs: [], ledger: {}, now: Time.now.utc)
-    head = pr.fetch("headRefOid")
+  def assemble(pull_request, reviews, review_comments, issue_comments, check_runs: [], ledger: {}, now: Time.now.utc)
+    head = pull_request.fetch("headRefOid")
     head7 = head[0, 7]
     warnings = []
     reviews_by_id = reviews.to_h { |review| [ review["id"], review ] }
@@ -106,7 +106,8 @@ module ReviewSweep
     replies_by_parent = replies.group_by { |comment| comment["in_reply_to_id"] }
 
     copilot_reviews = reviews.select { |review| login(review) == COPILOT_REVIEWER }.sort_by { |review| review["submitted_at"] }
-    rounds = copilot_reviews.map { |review| review["commit_id"][0, 7] }.uniq
+    round_heads = copilot_reviews.map { |review| review["commit_id"] }.uniq # full SHAs: prefixes can collide
+    rounds = round_heads.map { |sha| sha[0, 7] }
 
     findings = []
     copilot_reviews.each do |review|
@@ -146,12 +147,27 @@ module ReviewSweep
       )
     end
 
-    ledger_statuses = Array(ledger["findings"]).to_h { |entry| [ entry["id"], entry["status"] ] }
-    findings.each { |finding| finding["ledger_status"] = ledger_statuses.fetch(finding["id"], "open") }
+    # A ledger status counts only when the entry justifies it, and a finding
+    # marked fixed that Copilot raises again on a later head is open again.
+    ledger_entries = Array(ledger["findings"]).to_h { |entry| [ entry["id"], entry ] }
+    findings.each do |finding|
+      entry = ledger_entries[finding["id"]]
+      finding["ledger_status"] = if entry.nil?
+        "open"
+      elsif (problem = entry_problem(entry, ledger_entries.keys))
+        warnings << "ledger entry #{finding["id"]}: #{problem}; treated as open"
+        "open"
+      elsif resurfaced?(entry, finding)
+        warnings << "#{finding["id"]} resurfaced at #{finding["sha"]} after being fixed in #{entry["fixed_in"]}; treated as open"
+        "open"
+      else
+        entry["status"]
+      end
+    end
 
     copilot_head_review = copilot_reviews.reverse.find { |review| review["commit_id"] == head }
-    copilot_check = check_runs.find { |run| run["name"] == COPILOT_CHECK_RUN }
-    copilot_requested = Array(pr["reviewRequests"]).any? { |request| request.to_json.match?(/copilot/i) }
+    copilot_running = check_runs.any? { |run| run["name"] == COPILOT_CHECK_RUN && run["status"] != "completed" }
+    copilot_requested = Array(pull_request["reviewRequests"]).any? { |request| request.to_json.match?(/copilot/i) }
     copilot = {
       "sha" => copilot_reviews.last&.dig("commit_id")&.slice(0, 7),
       "review_id" => copilot_head_review&.dig("id"),
@@ -159,7 +175,7 @@ module ReviewSweep
       "inline" => findings.count { |finding| finding["reviewer"] == "copilot" && finding["source"] == "inline" && finding["sha"] == head7 },
       "suppressed" => findings.count { |finding| finding["reviewer"] == "copilot" && finding["source"] == "suppressed" && finding["sha"] == head7 },
       "done_for_head" => !copilot_head_review.nil?,
-      "pending" => copilot_requested || (!copilot_check.nil? && copilot_check["status"] != "completed")
+      "pending" => copilot_requested || copilot_running
     }
 
     codex_outputs = reviews.select { |review| login(review) == CODEX }.map do |review|
@@ -172,10 +188,14 @@ module ReviewSweep
     end
     codex_outputs.sort_by! { |output| output["at"].to_s }
     codex_head = codex_outputs.reverse.find { |output| sha_match?(output["sha"], head) }
-    latest_output_at = codex_outputs.last && Time.iso8601(codex_outputs.last["at"])
     request = issue_comments.select { |comment| codex_request?(comment["body"]) }.max_by { |comment| comment["created_at"].to_s }
+    # Only output for the head, produced after the request, answers it; a late
+    # review of an older head must not clear a request for this one.
+    answered = request && codex_outputs.any? do |output|
+      sha_match?(output["sha"], head) && Time.iso8601(output["at"]) > Time.iso8601(request["created_at"])
+    end
     outstanding = nil
-    if request && (latest_output_at.nil? || Time.iso8601(request["created_at"]) > latest_output_at)
+    if request && !answered
       # The 👀 reaction only says Codex started; a request with no durable output
       # after the timeout is dropped whether or not the reaction is still there.
       age = (now - Time.iso8601(request["created_at"])).to_i
@@ -190,7 +210,7 @@ module ReviewSweep
       "outstanding_request" => outstanding
     }
 
-    checks = Array(pr["statusCheckRollup"]).reject { |check| check_name(check).match?(/copilot/i) }
+    checks = Array(pull_request["statusCheckRollup"]).reject { |check| check_name(check).match?(/copilot/i) }
     failing = checks.reject { |check| check_green?(check) || check_pending?(check) }.map { |check| check_name(check) }
     pending_checks = checks.select { |check| check_pending?(check) }.map { |check| check_name(check) }
     ci = { "green" => checks.any? && failing.empty? && pending_checks.empty?, "failing" => failing, "pending" => pending_checks }
@@ -199,9 +219,14 @@ module ReviewSweep
     # live finding, but until it reaches a terminal state it still blocks.
     live_ids = findings.map { |finding| finding["id"] }
     open_count = findings.count { |finding| !TERMINAL_STATUSES.include?(finding["ledger_status"]) }
-    stale_open = Array(ledger["findings"]).count { |entry| !TERMINAL_STATUSES.include?(entry["status"]) && !live_ids.include?(entry["id"]) }
+    stale_open = ledger_entries.values.count do |entry|
+      !live_ids.include?(entry["id"]) && (!TERMINAL_STATUSES.include?(entry["status"]) || entry_problem(entry, ledger_entries.keys))
+    end
     reasons = []
     reasons << "no Copilot review on this PR yet" if rounds.empty?
+    if rounds.any? && codex_outputs.none? { |output| sha_match?(output["sha"], round_heads.last) }
+      reasons << "Codex has not reviewed round head #{rounds.last}"
+    end
     if open_count + stale_open > 0
       reasons << "#{open_count + stale_open} finding(s) not in a terminal state" \
                  "#{" (#{stale_open} no longer on the PR but still open in the ledger)" if stale_open > 0}"
@@ -212,12 +237,15 @@ module ReviewSweep
       reasons << "fix delta not verified at head #{head7}"
     elsif verification["result"] != "clean"
       reasons << "fix delta verification at head #{head7} is #{verification["result"].inspect}, not clean"
+    elsif round_heads.none? { |sha| sha_match?(verification["base"], sha) }
+      reasons << "fix delta verification base #{verification["base"].inspect} is not a bot-reviewed head"
     end
-    warnings << "base branch is #{pr["baseRefName"]}, not main: stacked PR, sweep the parent to a met stop state first" if pr["baseRefName"] != "main"
+    reasons << "a review request is still pending" if copilot["pending"] || codex["pending"]
+    warnings << "base branch is #{pull_request["baseRefName"]}, not main: stacked PR, sweep the parent to a met stop state first" if pull_request["baseRefName"] != "main"
 
     {
-      "pr" => pr["number"], "url" => pr["url"], "head" => head, "head7" => head7, "base" => pr["baseRefName"],
-      "branch" => pr["headRefName"], "draft" => pr["isDraft"], "merge_state" => pr["mergeStateStatus"],
+      "pr" => pull_request["number"], "url" => pull_request["url"], "head" => head, "head7" => head7, "base" => pull_request["baseRefName"],
+      "branch" => pull_request["headRefName"], "draft" => pull_request["isDraft"], "merge_state" => pull_request["mergeStateStatus"],
       "ci" => ci, "rounds" => rounds, "rounds_exhausted" => rounds.size >= MAX_ROUNDS,
       "reviews" => { "copilot" => copilot, "codex" => codex },
       "findings" => findings, "stop" => { "met" => reasons.empty?, "reasons" => reasons }, "warnings" => warnings
@@ -252,18 +280,18 @@ module ReviewSweep
   # entry leaves the ledger by reaching a terminal state, not by omission.
   def upsert_ledger(input, state, existing: {}, now: Time.now.utc)
     live = state["findings"].to_h { |finding| [ finding["id"], finding ] }
+    raise ArgumentError, "every ledger entry needs an id" if Array(input["findings"]).any? { |entry| entry["id"].to_s.strip.empty? }
     entries = Array(input["findings"]).to_h { |entry| [ entry["id"], entry ] }
     dropped = Array(existing["findings"]).map { |entry| entry["id"] } - entries.keys
     raise ArgumentError, "input drops ledger entries #{dropped.join(", ")}; start from `bin/sweep-pr ledger N` output" if dropped.any?
     ids = entries.keys | live.keys
     findings = ids.map do |id|
-      entry = entries[id] || {}
+      entry = (entries[id] || {}).merge("id" => id)
       status = entry.fetch("status", "open")
-      raise ArgumentError, "#{id}: unknown status #{status.inspect}" unless STATUSES.include?(status)
-      raise ArgumentError, "#{id}: #{status} needs a note" if %w[rejected deferred].include?(status) && entry["note"].to_s.strip.empty?
-      raise ArgumentError, "#{id}: fixed needs fixed_in set to a commit SHA" if status == "fixed" && !entry["fixed_in"].to_s.match?(/\A\h{7,40}\z/)
-      if status == "duplicate" && (entry["duplicate_of"] == id || !ids.include?(entry["duplicate_of"]))
-        raise ArgumentError, "#{id}: duplicate needs duplicate_of naming another ledger id"
+      raise ArgumentError, "#{id}: #{entry_problem(entry, ids)}" if entry_problem(entry, ids)
+      if live[id] && resurfaced?(entry, live[id])
+        raise ArgumentError, "#{id} resurfaced at #{live[id]["sha"]} after being fixed in #{entry["fixed_in"]}; " \
+                             "re-adjudicate it and set its sha to #{live[id]["sha"]}"
       end
       (live[id] || entry).slice(*FINDING_FIELDS).merge(
         "status" => status, "note" => entry["note"].to_s, "fixed_in" => entry["fixed_in"], "duplicate_of" => entry["duplicate_of"]
@@ -363,6 +391,23 @@ module ReviewSweep
   end
 
   # ---- Helpers -------------------------------------------------------------
+
+  # Why a ledger entry does not justify its status, or nil when it does.
+  def entry_problem(entry, ids)
+    status = entry.fetch("status", "open")
+    return "unknown status #{status.inspect}" unless STATUSES.include?(status)
+    return "#{status} needs a note" if %w[rejected deferred].include?(status) && entry["note"].to_s.strip.empty?
+    return "fixed needs fixed_in set to a commit SHA" if status == "fixed" && !entry["fixed_in"].to_s.match?(/\A\h{7,40}\z/)
+    if status == "duplicate" && (entry["duplicate_of"] == entry["id"] || !ids.include?(entry["duplicate_of"]))
+      return "duplicate needs duplicate_of naming another ledger id"
+    end
+    nil
+  end
+
+  # A fixed finding seen again on a different head than the ledger recorded.
+  def resurfaced?(entry, finding)
+    entry["status"] == "fixed" && !entry["sha"].to_s.empty? && finding["sha"] != entry["sha"]
+  end
 
   def suppressed_id(path, body)
     "copilot-suppressed:#{path}:#{Digest::SHA1.hexdigest(body.to_s.downcase.gsub(/\s+/, " ").strip)[0, 10]}"

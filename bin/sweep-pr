@@ -66,17 +66,17 @@ if number.nil?
   number = JSON.parse(current)["number"].to_s
   warn "Sweeping PR #{number}, the pull request for the current branch."
 end
-pr = gh_json("pr", "view", number, "--json",
+pull_request = gh_json("pr", "view", number, "--json",
              "number,url,isDraft,headRefOid,headRefName,baseRefName,reviewRequests,mergeStateStatus,statusCheckRollup")
 reviews = paginate("repos/#{repo}/pulls/#{number}/reviews")
 review_comments = paginate("repos/#{repo}/pulls/#{number}/comments")
 issue_comments = paginate("repos/#{repo}/issues/#{number}/comments")
-check_runs = paginate("repos/#{repo}/commits/#{pr["headRefOid"]}/check-runs?check_name=#{ReviewSweep::COPILOT_CHECK_RUN}", key: "check_runs")
+check_runs = paginate("repos/#{repo}/commits/#{pull_request["headRefOid"]}/check-runs?check_name=#{ReviewSweep::COPILOT_CHECK_RUN}", key: "check_runs")
 ledger_comment = issue_comments.find { |comment| comment["body"].to_s.start_with?(ReviewSweep::LEDGER_MARKER) }
 
 begin
   ledger = ledger_comment ? ReviewSweep.parse_ledger(ledger_comment["body"]) : {}
-  state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, check_runs: check_runs, ledger: ledger)
+  state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, check_runs: check_runs, ledger: ledger)
 rescue ReviewSweep::FormatError => error
   abort error.message
 end

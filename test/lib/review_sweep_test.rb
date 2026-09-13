@@ -84,7 +84,7 @@ class ReviewSweepTest < ActiveSupport::TestCase
   end
 
   test "assembles rounds, per-reviewer state, findings, and stop conditions from the raw payloads" do
-    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, check_runs: [], now: NOW)
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, check_runs: [], now: NOW)
 
     assert_equal [ OLD_HEAD[0, 7], HEAD[0, 7] ], state["rounds"]
     assert state["rounds_exhausted"]
@@ -123,35 +123,35 @@ class ReviewSweepTest < ActiveSupport::TestCase
     stale = issue_comment(id: 901, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
     acknowledged = stale.merge("reactions" => { "eyes" => 1 })
 
-    pending = ReviewSweep.assemble(pr, [], [], [ young ], now: NOW).dig("reviews", "codex")
+    pending = ReviewSweep.assemble(pull_request, [], [], [ young ], now: NOW).dig("reviews", "codex")
     assert pending["pending"]
     assert_not pending.dig("outstanding_request", "dropped")
 
-    dropped = ReviewSweep.assemble(pr, [], [], [ stale ], now: NOW).dig("reviews", "codex")
+    dropped = ReviewSweep.assemble(pull_request, [], [], [ stale ], now: NOW).dig("reviews", "codex")
     assert_not dropped["pending"]
     assert dropped.dig("outstanding_request", "dropped")
 
-    stale_but_acknowledged = ReviewSweep.assemble(pr, [], [], [ acknowledged ], now: NOW).dig("reviews", "codex")
+    stale_but_acknowledged = ReviewSweep.assemble(pull_request, [], [], [ acknowledged ], now: NOW).dig("reviews", "codex")
     assert_not stale_but_acknowledged["pending"]
     assert stale_but_acknowledged.dig("outstanding_request", "eyes")
     assert stale_but_acknowledged.dig("outstanding_request", "dropped")
 
     assert_equal [ "no Copilot review on this PR yet", "1 finding(s) not in a terminal state", "fix delta not verified at head #{HEAD[0, 7]}" ],
-                 ReviewSweep.assemble(pr, [], [ review_comments.last ], [], now: NOW).dig("stop", "reasons").tap { |reasons| reasons.delete_if { |reason| reason.start_with?("CI") } }
+                 ReviewSweep.assemble(pull_request, [], [ review_comments.last ], [], now: NOW).dig("stop", "reasons").tap { |reasons| reasons.delete_if { |reason| reason.start_with?("CI") } }
   end
 
   test "the stop conditions require a clean verification and count open ledger entries whose comment vanished" do
     terminal = { "findings" => [], "verification" => { "base" => OLD_HEAD[0, 7], "head" => HEAD[0, 7], "result" => "clean" } }
-    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, now: NOW)
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
     terminal["findings"] = state["findings"].map { |finding| { "id" => finding["id"], "status" => "fixed", "fixed_in" => "c" * 7 } }
-    assert ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: terminal, now: NOW).dig("stop", "met")
+    assert ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: terminal, now: NOW).dig("stop", "met")
 
     not_clean = terminal.merge("verification" => terminal["verification"].merge("result" => "issues found"))
-    reasons = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: not_clean, now: NOW).dig("stop", "reasons")
+    reasons = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: not_clean, now: NOW).dig("stop", "reasons")
     assert_equal [ "fix delta verification at head #{HEAD[0, 7]} is \"issues found\", not clean" ], reasons
 
     stale_entry = terminal.merge("findings" => terminal["findings"] + [ { "id" => "copilot:999", "status" => "accepted" } ])
-    reasons = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: stale_entry, now: NOW).dig("stop", "reasons")
+    reasons = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: stale_entry, now: NOW).dig("stop", "reasons")
     assert_equal [ "1 finding(s) not in a terminal state (1 no longer on the PR but still open in the ledger)" ], reasons
   end
 
@@ -171,8 +171,80 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_not_equal ReviewSweep.suppressed_id("a.rb", "#{long} first"), ReviewSweep.suppressed_id("a.rb", "#{long} second")
   end
 
+  test "rounds are counted on full commit ids and Copilot is pending while any check-run attempt is running" do
+    near_miss = HEAD[0, 7] + "c" * 33
+    two_rounds = [
+      review(id: 20, login: ReviewSweep::COPILOT_REVIEWER, sha: HEAD, at: NOW - 600, body: COPILOT_BODY),
+      review(id: 21, login: ReviewSweep::COPILOT_REVIEWER, sha: near_miss, at: NOW - 300, body: "### 🟢 Looks good")
+    ]
+    assert_equal 2, ReviewSweep.assemble(pull_request, two_rounds, [], [], now: NOW)["rounds"].size
+
+    attempts = [
+      { "name" => ReviewSweep::COPILOT_CHECK_RUN, "status" => "completed" },
+      { "name" => ReviewSweep::COPILOT_CHECK_RUN, "status" => "in_progress" }
+    ]
+    assert ReviewSweep.assemble(pull_request, [], [], [], check_runs: attempts, now: NOW).dig("reviews", "copilot", "pending")
+  end
+
+  test "a Codex request is answered only by output for the head that arrives after it" do
+    request = issue_comment(id: 900, login: "kramerc", body: "@codex review", at: NOW - 5 * 60)
+    old_head_output = issue_comment(id: 901, login: ReviewSweep::CODEX, body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `#{OLD_HEAD[0, 10]}`", at: NOW - 60)
+    head_output = issue_comment(id: 902, login: ReviewSweep::CODEX, body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `#{HEAD[0, 10]}`", at: NOW - 60)
+
+    late_old = ReviewSweep.assemble(pull_request, [], [], [ request, old_head_output ], now: NOW).dig("reviews", "codex")
+    assert late_old["pending"]
+    assert_not late_old["done_for_head"]
+
+    answered = ReviewSweep.assemble(pull_request, [], [], [ request, head_output ], now: NOW).dig("reviews", "codex")
+    assert answered["done_for_head"]
+    assert_nil answered["outstanding_request"]
+  end
+
+  test "a fixed finding that resurfaces on a later head is open again and must be re-adjudicated" do
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
+    resurfaced_id = state["findings"].find { |finding| finding["source"] == "suppressed" }["id"]
+    ledger = { "findings" => [ { "id" => resurfaced_id, "status" => "fixed", "fixed_in" => "c" * 7, "sha" => OLD_HEAD[0, 7] } ] }
+
+    reopened = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: ledger, now: NOW)
+    assert_equal "open", reopened["findings"].find { |finding| finding["id"] == resurfaced_id }["ledger_status"]
+    assert_match(/resurfaced at #{HEAD[0, 7]} after being fixed in ccccccc/, reopened["warnings"].first)
+
+    error = assert_raises(ArgumentError) { ReviewSweep.upsert_ledger(ledger, state, now: NOW) }
+    assert_match(/resurfaced/, error.message)
+    acknowledged = { "findings" => [ ledger["findings"].first.merge("sha" => HEAD[0, 7]) ] }
+    assert_equal "fixed", ReviewSweep.upsert_ledger(acknowledged, state, now: NOW)["findings"].find { |finding| finding["id"] == resurfaced_id }["status"]
+  end
+
+  test "a ledger entry that does not justify its status is treated as open, and entries need ids" do
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
+    corrupt = { "findings" => [ { "id" => "copilot:100", "status" => "fixed" }, { "id" => "copilot:200", "status" => "rejected", "note" => "" } ] }
+
+    checked = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: corrupt, now: NOW)
+    assert_equal %w[open open], checked["findings"].select { |finding| %w[copilot:100 copilot:200].include?(finding["id"]) }.map { |finding| finding["ledger_status"] }
+    assert_equal 2, checked["warnings"].count { |warning| warning.include?("treated as open") }
+
+    assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "status" => "accepted" } ] }, state) }
+  end
+
+  test "the stop conditions need Codex on the latest round head, a bot-reviewed verification base, and no pending request" do
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
+    terminal = state["findings"].map { |finding| { "id" => finding["id"], "status" => "fixed", "fixed_in" => "c" * 7 } }
+    ledger = { "findings" => terminal, "verification" => { "base" => "d" * 7, "head" => HEAD[0, 7], "result" => "clean" } }
+    reasons = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: ledger, now: NOW).dig("stop", "reasons")
+    assert_equal [ "fix delta verification base \"ddddddd\" is not a bot-reviewed head" ], reasons
+
+    ledger["verification"]["base"] = OLD_HEAD[0, 7]
+    without_codex = issue_comments.reject { |comment| [ 501, 502 ].include?(comment["id"]) }
+    reasons = ReviewSweep.assemble(pull_request, reviews, review_comments, without_codex, ledger: ledger, now: NOW).dig("stop", "reasons")
+    assert_equal [ "Codex has not reviewed round head #{HEAD[0, 7]}" ], reasons
+
+    requested = pull_request.merge("reviewRequests" => [ { "login" => "copilot-pull-request-reviewer" } ])
+    reasons = ReviewSweep.assemble(requested, reviews, review_comments, issue_comments, ledger: ledger, now: NOW).dig("stop", "reasons")
+    assert_equal [ "a review request is still pending" ], reasons
+  end
+
   test "the ledger table shows the fixing commit, the duplicate target, and the verification line" do
-    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, now: NOW)
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
     input = {
       "verification" => { "base" => OLD_HEAD[0, 7], "head" => HEAD[0, 7], "result" => "clean", "note" => "fresh subagent" },
       "findings" => [
@@ -186,12 +258,12 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_includes rendered, "| fixed | #{"c" * 7} |"
     assert_includes rendered, "| duplicate | copilot:100 |"
 
-    older_only = ReviewSweep.assemble(pr, [ reviews[2] ], [], [], now: NOW)
+    older_only = ReviewSweep.assemble(pull_request, [ reviews[2] ], [], [], now: NOW)
     assert_includes ReviewSweep.format_status(older_only, {}), "Codex: no review for #{HEAD[0, 7]} (last reviewed #{OLD_HEAD[0, 7]})"
   end
 
   test "status and ledger text describe pending, dropped, failing, and unreviewed states" do
-    stalled = pr.merge(
+    stalled = pull_request.merge(
       "reviewRequests" => [ { "__typename" => "Bot", "login" => "copilot-pull-request-reviewer" } ],
       "statusCheckRollup" => [
         { "__typename" => "CheckRun", "name" => "test", "status" => "COMPLETED", "conclusion" => "FAILURE" },
@@ -214,13 +286,13 @@ class ReviewSweepTest < ActiveSupport::TestCase
 
     young = issue_comment(id: 902, login: "kramerc", body: "@codex review", at: NOW - 60).merge("reactions" => { "eyes" => 1 })
     codex_findings_review = review(id: 31, login: ReviewSweep::CODEX, sha: HEAD, at: NOW - 30, body: "### 💡 Codex Review\n\n**Reviewed commit:** `#{HEAD[0, 10]}`")
-    quiet = pr.merge("statusCheckRollup" => [])
+    quiet = pull_request.merge("statusCheckRollup" => [])
     state = ReviewSweep.assemble(quiet, [], [], [ young ], now: NOW)
     assert_includes ReviewSweep.format_status(state, {}), "Codex: review pending for #{HEAD[0, 7]} (request 902, 1 min old, eyes: yes)"
     assert_includes ReviewSweep.format_status(state, {}), "CI: no checks reported"
     assert_includes ReviewSweep.render_ledger(ReviewSweep.upsert_ledger({}, state, now: NOW), state), "Copilot has not reviewed #{HEAD[0, 7]} · Codex review pending · CI pending"
 
-    state = ReviewSweep.assemble(pr.merge("statusCheckRollup" => [ { "__typename" => "CheckRun", "name" => "test", "status" => "IN_PROGRESS", "conclusion" => nil } ]),
+    state = ReviewSweep.assemble(pull_request.merge("statusCheckRollup" => [ { "__typename" => "CheckRun", "name" => "test", "status" => "IN_PROGRESS", "conclusion" => nil } ]),
                                  [ codex_findings_review ], [], [], now: NOW)
     assert_includes ReviewSweep.format_status(state, {}), "Codex: reviewed #{HEAD[0, 7]}: findings"
     assert_includes ReviewSweep.format_status(state, {}), "CI: pending (test)"
@@ -228,23 +300,23 @@ class ReviewSweepTest < ActiveSupport::TestCase
   end
 
   test "Copilot is pending when requested or when its check run has not completed" do
-    requested = pr.merge("reviewRequests" => [ { "__typename" => "Bot", "login" => "copilot-pull-request-reviewer" } ])
+    requested = pull_request.merge("reviewRequests" => [ { "__typename" => "Bot", "login" => "copilot-pull-request-reviewer" } ])
     assert ReviewSweep.assemble(requested, [], [], [], now: NOW).dig("reviews", "copilot", "pending")
 
     running = [ { "name" => ReviewSweep::COPILOT_CHECK_RUN, "status" => "in_progress" } ]
-    assert ReviewSweep.assemble(pr, [], [], [], check_runs: running, now: NOW).dig("reviews", "copilot", "pending")
-    assert_not ReviewSweep.assemble(pr, [], [], [], now: NOW).dig("reviews", "copilot", "pending")
+    assert ReviewSweep.assemble(pull_request, [], [], [], check_runs: running, now: NOW).dig("reviews", "copilot", "pending")
+    assert_not ReviewSweep.assemble(pull_request, [], [], [], now: NOW).dig("reviews", "copilot", "pending")
   end
 
   test "a mismatch between Copilot's generated count and the inline comments present is a warning, not an error" do
-    state = ReviewSweep.assemble(pr, reviews, review_comments.reject { |comment| comment["id"] == 200 }, issue_comments, now: NOW)
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments.reject { |comment| comment["id"] == 200 }, issue_comments, now: NOW)
 
     assert_equal 1, state["warnings"].size
     assert_match(/says it generated 1 comments but 0 are present/, state["warnings"].first)
   end
 
   test "upsert_ledger validates every entry, adds missing live findings as open, and refreshes identifying fields" do
-    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, now: NOW)
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
     input = {
       "verification" => { "base" => OLD_HEAD[0, 7], "head" => HEAD[0, 7], "result" => "clean" },
       "findings" => [
@@ -276,7 +348,7 @@ class ReviewSweepTest < ActiveSupport::TestCase
   end
 
   test "the rendered ledger round-trips through parse_ledger and feeds the next assemble" do
-    state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, now: NOW)
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
     input = { "findings" => [ { "id" => "copilot:200", "status" => "deferred", "note" => "Tracked in #12 | later" } ] }
     ledger = ReviewSweep.upsert_ledger(input, state, now: NOW)
 
@@ -291,15 +363,15 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_equal 6, body.scan(/^\| \S+ \| (?:copilot|codex|codeql) \|/).size
     assert_equal ledger, ReviewSweep.parse_ledger(body)
 
-    next_state = ReviewSweep.assemble(pr, reviews, review_comments, issue_comments, ledger: ReviewSweep.parse_ledger(body), now: NOW)
+    next_state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: ReviewSweep.parse_ledger(body), now: NOW)
     assert_equal "deferred", next_state["findings"].find { |finding| finding["id"] == "copilot:200" }["ledger_status"]
     assert_includes ReviewSweep.format_status(next_state, ledger), "Findings: 6 (5 open, 1 deferred)"
   end
 
   private
-    def pr
+    def pull_request
       {
-        "number" => 1, "url" => "https://example.test/pr/1", "isDraft" => false, "headRefOid" => HEAD,
+        "number" => 1, "url" => "https://example.test/pull_request/1", "isDraft" => false, "headRefOid" => HEAD,
         "headRefName" => "feature", "baseRefName" => "main", "reviewRequests" => [], "mergeStateStatus" => "CLEAN",
         "statusCheckRollup" => [
           { "__typename" => "CheckRun", "name" => "test", "status" => "COMPLETED", "conclusion" => "SUCCESS" },
@@ -345,13 +417,13 @@ class ReviewSweepTest < ActiveSupport::TestCase
 
     def review(id:, login:, sha:, at:, body:)
       { "id" => id, "user" => { "login" => login }, "commit_id" => sha, "submitted_at" => at.iso8601, "body" => body,
-        "html_url" => "https://example.test/pr/1#pullrequestreview-#{id}" }
+        "html_url" => "https://example.test/pull_request/1#pullrequestreview-#{id}" }
     end
 
     def review_comment(id:, login:, review_id:, path:, line:, original_line:, body:, at:, in_reply_to: nil)
       { "id" => id, "user" => { "login" => login }, "pull_request_review_id" => review_id, "path" => path, "line" => line,
         "original_line" => original_line, "original_commit_id" => OLD_HEAD, "body" => body, "created_at" => at.iso8601,
-        "in_reply_to_id" => in_reply_to, "html_url" => "https://example.test/pr/1#discussion_r#{id}" }
+        "in_reply_to_id" => in_reply_to, "html_url" => "https://example.test/pull_request/1#discussion_r#{id}" }
     end
 
     def issue_comment(id:, login:, body:, at:)
