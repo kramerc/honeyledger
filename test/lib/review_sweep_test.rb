@@ -449,6 +449,37 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_not ReviewSweep.assemble(pull_request, [], [], [ issue_comment(id: 901, login: ReviewSweep::CODEX, body: security_only, at: NOW - 60) ], now: NOW).dig("reviews", "codex", "done_for_head")
   end
 
+  test "a completed Codex summary row without a completion time is dated by the comment's last edit" do
+    request = issue_comment(id: 900, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
+    summary = issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: HEAD, status: "✅ **Completed**"), at: NOW - 3600, updated_at: NOW - 60)
+
+    codex = ReviewSweep.assemble(pull_request, [], [], [ request, summary ], now: NOW).dig("reviews", "codex")
+    assert codex["done_for_head"]
+    assert_equal "clean", codex["verdict"]
+    assert_nil codex["outstanding_request"]
+  end
+
+  test "findings for the head outrank a later clean Codex output for the same commit" do
+    codex_review = review(id: 31, login: ReviewSweep::CODEX, sha: HEAD, at: NOW - 600, body: "### 💡 Codex Review")
+    clean = issue_comment(id: 902, login: ReviewSweep::CODEX, at: NOW - 60,
+                          body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `#{HEAD[0, 7]}`")
+
+    codex = ReviewSweep.assemble(pull_request, [ codex_review ], [], [ clean ], now: NOW).dig("reviews", "codex")
+    assert codex["done_for_head"]
+    assert_equal "findings", codex["verdict"]
+  end
+
+  test "a fresh running Codex summary row keeps Codex pending after an earlier review of the head" do
+    codex_review = review(id: 31, login: ReviewSweep::CODEX, sha: HEAD, at: NOW - 3000, body: "### 💡 Codex Review")
+    running = issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: HEAD, status: "⏳ **In progress**"), at: NOW - 3600, updated_at: NOW - 120)
+
+    state = ReviewSweep.assemble(pull_request, [ codex_review ], [], [ running ], now: NOW)
+    assert state.dig("reviews", "codex", "done_for_head")
+    assert state.dig("reviews", "codex", "pending")
+    assert_includes state.dig("stop", "reasons").join, "a review request is still pending"
+    assert_includes ReviewSweep.format_status(state, {}), "Codex: reviewed #{HEAD[0, 7]}: findings, re-review running"
+  end
+
   test "a Codex summary table with no row that parses is a warning" do
     broken = issue_comment(id: 901, login: ReviewSweep::CODEX, body: "#{ReviewSweep::CODEX_SUMMARY_MARKER}\n\n| Review | Status |\n| --- | --- |", at: NOW - 60)
 

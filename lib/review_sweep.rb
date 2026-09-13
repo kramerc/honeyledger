@@ -236,7 +236,13 @@ module ReviewSweep
     end
     codex_outputs.concat(summary_outputs)
     codex_outputs.sort_by! { |output| Time.iso8601(output["at"]) }
-    codex_head = codex_outputs.reverse.find { |output| sha_match?(output["sha"], head) }
+    # Findings for the head are decisive: a later clean output for the same
+    # commit does not erase what an earlier review raised.
+    codex_head_outputs = codex_outputs.select { |output| sha_match?(output["sha"], head) }
+    codex_head_verdict = if codex_head_outputs.empty? then nil
+    elsif codex_head_outputs.any? { |output| output["verdict"] == "findings" } then "findings"
+    else "clean"
+    end
     request = issue_comments.select { |comment| codex_request?(comment["body"]) }.max_by { |comment| comment["created_at"].to_s }
     # Output produced after the request answers it when it reviewed the head or
     # the latest round head (a fix pushed after the round moves the head on
@@ -255,9 +261,11 @@ module ReviewSweep
     end
     codex = {
       "sha" => codex_outputs.last&.dig("sha")&.slice(0, 7),
-      "verdict" => codex_head&.dig("verdict"),
-      "done_for_head" => !codex_head.nil?,
-      "pending" => codex_head.nil? && (codex_running || (!outstanding.nil? && !outstanding["dropped"])),
+      "verdict" => codex_head_verdict,
+      "done_for_head" => !codex_head_verdict.nil?,
+      # A fresh running row is a re-review in progress even when the head was
+      # already reviewed, so it blocks the stop conditions until it posts.
+      "pending" => codex_running || (codex_head_verdict.nil? && !outstanding.nil? && !outstanding["dropped"]),
       "outstanding_request" => outstanding
     }
 
@@ -427,7 +435,7 @@ module ReviewSweep
     end
     lines << "Copilot: #{copilot_text}"
     request = codex["outstanding_request"]
-    codex_text = if codex["done_for_head"] then "reviewed #{state["head7"]}: #{codex["verdict"]}"
+    codex_text = if codex["done_for_head"] then "reviewed #{state["head7"]}: #{codex["verdict"]}#{", re-review running" if codex["pending"]}"
     elsif codex["pending"] && request.nil? then "review running for #{state["head7"]}"
     elsif codex["pending"]
       "review pending for #{state["head7"]} (request #{request["id"]}, #{request["age_seconds"] / 60} min old, eyes: #{request["eyes"] ? "yes" : "no"})"
