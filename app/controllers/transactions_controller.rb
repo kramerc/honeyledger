@@ -1,5 +1,4 @@
 class TransactionsController < ApplicationController
-  before_action :authenticate_user!
   before_action :set_filter_account
   before_action :set_transaction, only: %i[ show edit update destroy ]
   before_action :set_form_collections, only: %i[ index new create edit update show ]

@@ -5,7 +5,7 @@ class CurrenciesControllerTest < ActionDispatch::IntegrationTest
     @currency = currencies(:usd)
   end
 
-  test "should get index" do
+  test "should get index without signing in" do
     get currencies_url
     assert_response :success
   end

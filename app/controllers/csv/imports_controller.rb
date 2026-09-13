@@ -1,5 +1,4 @@
 class Csv::ImportsController < ApplicationController
-  before_action :authenticate_user!
   before_action :set_account, except: :index
   before_action :set_csv_import, only: %i[ show update destroy confirm parse ]
 
