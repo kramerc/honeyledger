@@ -5,25 +5,25 @@
 <p>Passkeys let you log in with your device's screen lock or a security key instead of typing a password. Your password keeps working alongside them.</p>
 
 <% if @passkeys.any? %>
-  <table class="passkeys">
-    <tr>
-      <th>Name</th>
-      <th>Added</th>
-      <th>Last Used</th>
-      <th style="white-space: nowrap">Actions</th>
-    </tr>
+  <div class="passkeys">
+    <div class="row header">
+      <div>Name</div>
+      <div>Added</div>
+      <div>Last Used</div>
+      <div>Actions</div>
+    </div>
     <% @passkeys.each do |passkey| %>
-      <tr id="<%= dom_id(passkey) %>">
-        <td><%= passkey.nickname %></td>
-        <td><%= passkey.created_at.strftime("%B %d, %Y") %></td>
-        <td><%= passkey.last_used_at ? passkey.last_used_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
-        <td class="actions">
+      <div id="<%= dom_id(passkey) %>" class="row">
+        <div data-label="Name"><%= passkey.nickname %></div>
+        <div data-label="Added"><%= passkey.created_at.strftime("%B %d, %Y") %></div>
+        <div data-label="Last Used"><%= passkey.last_used_at ? passkey.last_used_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></div>
+        <div class="actions">
           <%= link_to "Rename", edit_passkey_path(passkey), "aria-label": "Rename #{passkey.nickname}" %>
           <%= button_to "Delete", passkey_path(passkey), method: :delete, "aria-label": "Delete #{passkey.nickname}", data: { turbo_confirm: "Remove the passkey \"#{passkey.nickname}\"? You can still log in with your password." } %>
-        </td>
-      </tr>
+        </div>
+      </div>
     <% end %>
-  </table>
+  </div>
 <% else %>
   <p>No passkeys yet.</p>
 <% end %>

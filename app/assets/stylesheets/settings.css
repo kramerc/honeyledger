@@ -1,11 +1,67 @@
-/* Settings page. The passkeys table's action cluster mirrors the accounts and
-   transactions tables (accounts.css `.accounts .actions`): small honey-coloured
-   text links, and Delete as a red text-styled button so it still submits a real
-   DELETE form. Namespaced under .passkeys to avoid touching other tables. */
+/* Settings page — passkeys grid-table.
+   Mirrors accounts.css's grid-collapses-to-card mechanic so the list looks like
+   the accounts and transactions tables; every selector is namespaced under
+   .passkeys so nothing here reaches those tables. */
 
-.passkeys .actions {
+/* Table wrapper */
+.passkeys {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+}
+
+/* Name is the only flexing column; the dates and Actions are pinned so the
+   action cluster lines up down the list. */
+.passkeys .row {
+  display: grid;
+  grid-template-columns:
+    minmax(140px, 1fr)    /* Name */
+    170px                 /* Added */
+    220px                 /* Last Used */
+    150px;                /* Actions */
+  gap: 0;
+  align-items: stretch;
+}
+
+.passkeys .row.header {
+  background-color: var(--honey-pale);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-text);
+}
+
+/* Cells */
+.passkeys .row > div {
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  padding: 7px 10px;
   display: flex;
   align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--bark-medium);
+  font-size: 0.875rem;
+}
+
+.passkeys .row > div:last-child {
+  border-right: 0;
+}
+
+.passkeys .row:last-child > div {
+  border-bottom: 0;
+}
+
+/* Row hover on desktop only */
+@media (min-width: 768px) {
+  .passkeys .row:hover:not(.header) {
+    background-color: var(--honey-light);
+  }
+}
+
+/* Action cluster (adjacent controls, no delimiter) */
+.passkeys .actions {
   gap: 12px;
 }
 
@@ -39,4 +95,43 @@
 
 .passkeys .actions button:hover {
   text-decoration: underline;
+}
+
+/* ========== Mobile (< 768px): collapse each row to a card ========== */
+@media (max-width: 767px) {
+  .passkeys {
+    border: none;
+    border-radius: 0;
+    overflow-x: visible;
+  }
+
+  .passkeys .row.header {
+    display: none;
+  }
+
+  .passkeys .row {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 10px 14px;
+    background-color: var(--cream);
+  }
+
+  .passkeys .row > div {
+    border: none;
+    padding: 3px 0;
+  }
+
+  /* Surface the column name as an inline label */
+  .passkeys .row > div[data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--accent-text);
+    min-width: 70px;
+    display: inline;
+  }
 }
