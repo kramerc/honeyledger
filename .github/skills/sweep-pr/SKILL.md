@@ -1,1 +1,1 @@
-../../../.agents/skills/sweep-pr/SKILL.md
+../../../.claude/skills/sweep-pr/SKILL.md

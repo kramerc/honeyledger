@@ -175,7 +175,7 @@ Naming a vendor as the *subject of an integration* — "support a provider's acc
 
 ## Review sweep
 
-Bot reviews are nondeterministic, so a PR is reviewed in bounded rounds, not until both bots fall silent. The step-by-step procedure is the `sweep-pr` skill: the canonical copy is `.agents/skills/sweep-pr/SKILL.md` (where Codex looks), and `.claude/skills/sweep-pr/SKILL.md` (Claude Code, invoked as `/sweep-pr N`) and `.github/skills/sweep-pr/SKILL.md` (Copilot) are links to it — edit only the canonical file. `bin/sweep-pr` is the script behind it and works for any agent.
+Bot reviews are nondeterministic, so a PR is reviewed in bounded rounds, not until both bots fall silent. The step-by-step procedure is the `sweep-pr` skill: the canonical copy is `.claude/skills/sweep-pr/SKILL.md` (Claude Code, invoked as `/sweep-pr N`, only loads a real file there), and `.agents/skills/sweep-pr/SKILL.md` (Codex) and `.github/skills/sweep-pr/SKILL.md` (Copilot) are links to it — edit only the canonical file. `bin/sweep-pr` is the script behind it and works for any agent.
 
 1. Implement while the PR is a draft. Run the CI checks locally until they pass, then mark the PR ready; that alone triggers both Copilot and Codex, which is round one.
 2. Request both bots together, at most once per round (`bin/sweep-pr request N` is idempotent and refuses a third round). Collect every finding for the reviewed head, including Copilot's suppressed comments.
