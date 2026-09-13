@@ -23,6 +23,7 @@ bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
 bin/rails db:create db:migrate                   # Set up database
 bin/worktree-clean --drop                        # Drop test databases left by deleted worktrees
+bin/sweep-pr status 123                          # Review-sweep state of a PR (see "Review sweep")
 kamal deploy                                     # Deploy to production
 ```
 
@@ -168,8 +169,19 @@ Naming a vendor as the *subject of an integration* — "support a provider's acc
 - **Commit SHAs** go bare in comments (`Fixed in bdcffff`) so GitHub auto-links them; backticks suppress the link. Keep backticks for code identifiers.
 - **Bare `#N`** anywhere in issue/PR text creates a permanent backlink on item N. Only write it for an intentional reference — never as a list label (`(first)`, not `(#1)`).
 - **`gh api --paginate`** on every list endpoint (`pulls/N/comments`, `pulls/N/reviews`, `issues/N/comments`). The default 30-item page silently truncates, and a truncated list looks complete.
-- **Requesting AI reviews.** The two automated reviewers are Copilot and Codex, and "request an AI review" — whether a maintainer asks for one or a change warrants another look — means requesting both. Neither re-reviews on push, and a re-request is not owed after every commit. Copilot: `gh api -X POST repos/{owner}/{repo}/pulls/N/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'` — the requested-reviewers list empties as soon as Copilot accepts, so an empty list is not a failed request. Codex: comment `@codex review` on the PR; Codex acknowledges with a 👀 reaction on that comment, and no reaction means the request was dropped. A request made while that bot's previous review is still running is ignored (confirmed for Codex; assume the same for Copilot), so wait for the in-progress review to post before asking again.
+- **Requesting AI reviews.** The two automated reviewers are Copilot and Codex, and "request an AI review" — whether a maintainer asks for one or a change warrants another look — means requesting both. Marking a draft ready for review triggers both on its own, so the first round needs no request. Neither re-reviews on push, and a re-request is not owed after every commit. Prefer `bin/sweep-pr request N`, which applies the rules below and skips a bot that has already reviewed the head. By hand — Copilot: `gh api -X POST repos/{owner}/{repo}/pulls/N/requested_reviewers -f 'reviewers[]=copilot-pull-request-reviewer[bot]'`; the requested-reviewers list empties as soon as Copilot accepts, so an empty list is not a failed request, and Copilot's durable trace is a check run named `copilot-pull-request-reviewer` on the reviewed commit. Codex: comment `@codex review` on the PR; its 👀 reaction is transient and only means "running" — the durable proof is a review or comment naming the reviewed commit, and no output within about fifteen minutes means the request was dropped. A request made while that bot's previous review is still running is ignored (confirmed for Codex; assume the same for Copilot), so wait for the in-progress review to post before asking again.
 - **Copilot's login** differs by endpoint: `Copilot` on `pulls/N/comments`, `copilot-pull-request-reviewer[bot]` on `pulls/N/reviews`. Filter on both or match case-insensitively on `copilot`.
+- **Copilot's suppressed comments.** Its low-confidence findings appear only inside the review body (`### Suppressed comments (N)` under "Review details"), never as line comments, so there is no thread to reply in. `bin/sweep-pr findings N` collects them alongside the inline ones; the ledger comment is where their adjudication is recorded.
+
+## Review sweep
+
+Bot reviews are nondeterministic, so a PR is reviewed in bounded rounds, not until both bots fall silent. Claude Code runs this as `/sweep-pr N`; `bin/sweep-pr` is the script behind it and works for any agent.
+
+1. Implement while the PR is a draft. Run the CI checks locally until they pass, then mark the PR ready; that alone triggers both Copilot and Codex, which is round one.
+2. Request both bots together, at most once per round (`bin/sweep-pr request N` is idempotent and refuses a third round). Collect every finding for the reviewed head, including Copilot's suppressed comments.
+3. Adjudicate each finding as accepted, rejected with rationale, duplicate, or deferred in the PR's single ledger comment (starts with `<!-- sweep-ledger -->`, written only by `bin/sweep-pr ledger N --write`); reply in-thread to inline findings per the rules above; fix everything accepted in one batch and re-run the checks. No other summary comments.
+4. Verify the fix delta with one local review of `git diff <reviewed-head>..HEAD`. No bot is re-requested for a delta.
+5. Stop when every finding is in a terminal state, CI is green on the head, and the delta is reviewed. Two full rounds is the limit; findings that surface later get human adjudication in the ledger, not another round. A bot's "clean" is evidence, not certification; Copilot is the primary defect finder for Rails changes and Codex is independent coverage, and they need not agree. For stacked PRs, stabilize and merge the parent before the child's final round.
 
 ## Known Design Decisions
 
