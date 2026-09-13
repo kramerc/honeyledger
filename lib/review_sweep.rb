@@ -230,12 +230,15 @@ module ReviewSweep
   # not an empty one: treating it as empty would let the next write discard
   # every adjudication it held.
   def parse_ledger(body)
-    json = body.to_s[/```json\n(.*?)\n```/m, 1]
+    body = body.to_s.gsub("\r\n", "\n") # comments edited in the web UI come back with CRLF
+    json = body[/```json\n(.*?)\n```/m, 1]
     if json.nil?
-      raise FormatError, "the ledger comment carries the marker but no JSON block; refusing to treat it as empty" if body.to_s.start_with?(LEDGER_MARKER)
+      raise FormatError, "the ledger comment carries the marker but no JSON block; refusing to treat it as empty" if body.start_with?(LEDGER_MARKER)
       return {}
     end
-    JSON.parse(json)
+    parsed = JSON.parse(json)
+    raise FormatError, "the ledger comment's JSON is not an object" unless parsed.is_a?(Hash)
+    parsed
   rescue JSON::ParserError => error
     raise FormatError, "the ledger comment's JSON does not parse: #{error.message}"
   end
@@ -244,10 +247,14 @@ module ReviewSweep
   # the live findings in `state`: live findings missing from the input are added
   # as open, entries for findings that have since vanished are kept as written,
   # and the identifying fields of every live finding are refreshed. Raises
-  # ArgumentError on an entry that does not justify its status.
-  def upsert_ledger(input, state, now: Time.now.utc)
+  # ArgumentError on an entry that does not justify its status, or when the
+  # input silently drops an entry the `existing` ledger already holds — an
+  # entry leaves the ledger by reaching a terminal state, not by omission.
+  def upsert_ledger(input, state, existing: {}, now: Time.now.utc)
     live = state["findings"].to_h { |finding| [ finding["id"], finding ] }
     entries = Array(input["findings"]).to_h { |entry| [ entry["id"], entry ] }
+    dropped = Array(existing["findings"]).map { |entry| entry["id"] } - entries.keys
+    raise ArgumentError, "input drops ledger entries #{dropped.join(", ")}; start from `bin/sweep-pr ledger N` output" if dropped.any?
     ids = entries.keys | live.keys
     findings = ids.map do |id|
       entry = entries[id] || {}

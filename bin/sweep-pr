@@ -43,7 +43,7 @@ end
 # object (with the list under a key) for endpoints such as check-runs.
 def paginate(path, key: nil)
   pages = gh_json("api", "--paginate", "--slurp", path)
-  key ? pages.flat_map { |page| page.fetch(key) } : pages.flatten(1)
+  key ? pages.flat_map { |page| page.fetch(key) { abort "#{path}: a page has no #{key.inspect} key" } } : pages.flatten(1)
 end
 
 def option_value(options, flag)
@@ -132,7 +132,7 @@ when "ledger"
   if (file = option_value(options, "--write"))
     input = JSON.parse(File.read(file))
     begin
-      updated = ReviewSweep.upsert_ledger(input, state)
+      updated = ReviewSweep.upsert_ledger(input, state, existing: ledger)
     rescue ArgumentError => error
       abort "Ledger not written: #{error.message}"
     end

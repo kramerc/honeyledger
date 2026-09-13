@@ -159,6 +159,9 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_copilot_review("### Suppressed comments (many)\n\n**a.rb:1**\n* text") }
     assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\n## Review sweep\n\nno data") }
     assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\n```json\n{ not json\n```") }
+    assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\n```json\nnull\n```") }
+    assert_raises(ReviewSweep::FormatError) { ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\n```json\n[]\n```") }
+    assert_equal({ "pr" => 1 }, ReviewSweep.parse_ledger("#{ReviewSweep::LEDGER_MARKER}\r\n## Review sweep\r\n```json\r\n{ \"pr\": 1 }\r\n```\r\n"))
     assert_equal({}, ReviewSweep.parse_ledger("An unrelated comment"))
   end
 
@@ -265,6 +268,10 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "id" => "copilot:100", "status" => "done" } ] }, state) }
     assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "id" => "copilot:100", "status" => "rejected" } ] }, state) }
     assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "id" => "copilot:100", "status" => "fixed" } ] }, state) }
+    assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "id" => "copilot:100", "status" => "fixed", "fixed_in" => "later" } ] }, state) }
+    error = assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [] }, state, existing: ledger) }
+    assert_match(/drops ledger entries copilot:100/, error.message)
+    assert_equal 7, ReviewSweep.upsert_ledger({ "findings" => ledger["findings"] }, state, existing: ledger)["findings"].size
     assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "id" => "copilot:100", "status" => "duplicate", "duplicate_of" => "copilot:100" } ] }, state) }
   end
 
