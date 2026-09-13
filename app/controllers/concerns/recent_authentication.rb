@@ -24,7 +24,7 @@ module RecentAuthentication
       return if recently_authenticated?
 
       if request.format.json?
-        head :forbidden
+        render json: { error: "Confirm your password before adding a passkey." }, status: :forbidden
       else
         redirect_to new_reauthentication_path
       end

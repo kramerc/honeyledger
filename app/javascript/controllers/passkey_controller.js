@@ -58,12 +58,35 @@ export default class extends Controller {
       const result = await ceremony()
       Turbo.visit(result.redirect_url)
     } catch (error) {
-      // NotAllowedError is the browser reporting that the person dismissed the prompt.
-      if (error.name !== "NotAllowedError") {
-        this.showError(error instanceof RequestError ? error.message : failureMessage)
-      }
+      this.showError(this.describeError(error, failureMessage))
     } finally {
       this.setBusy(false)
+    }
+  }
+
+  // The WebAuthn API reports a fixed set of DOMException names; each gets a
+  // plain sentence. Errors from our own endpoints arrive as RequestError with
+  // their message already set.
+  describeError(error, failureMessage) {
+    if (error instanceof RequestError) return error.message
+
+    switch (error.name) {
+      case "NotAllowedError":
+        return "The passkey prompt was cancelled or timed out. Nothing was changed."
+      case "InvalidStateError":
+        return "This device already has a passkey for your account."
+      case "ConstraintError":
+        return "This device cannot verify it is you. A screen lock, PIN, or biometric is required for passkeys."
+      case "NotSupportedError":
+        return "This device cannot create the kind of passkey the app asks for."
+      case "SecurityError":
+        return "This site's passkey settings do not match the address you are using."
+      case "AbortError":
+        return "The passkey request was interrupted. Please try again."
+      case "TypeError":
+        return "Could not reach the server. Check your connection and try again."
+      default:
+        return `${failureMessage} (${error.name || "unknown error"})`
     }
   }
 
@@ -103,8 +126,10 @@ export default class extends Controller {
     return response.json()
   }
 
+  // Our endpoints explain refusals in a JSON `error` field; rate limiting
+  // is the one response that carries no body.
   async describeFailure(response) {
-    if (response.status === 403) return "Confirm your password before adding a passkey."
+    if (response.status === 429) return "Too many attempts. Please wait a few minutes and try again."
 
     try {
       const body = await response.json()

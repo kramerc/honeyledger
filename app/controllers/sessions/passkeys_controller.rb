@@ -34,7 +34,7 @@ module Sessions
       # The JSON counterpart of Authentication#redirect_signed_in_users: a
       # browser that already holds a session must not open a second one.
       def reject_signed_in_users
-        head :forbidden if authenticated?
+        render json: { error: "You are already logged in." }, status: :forbidden if authenticated?
       end
 
       def credential_params
