@@ -88,6 +88,31 @@ module ReviewSweep
     body.to_s.include?("Didn't find any major issues")
   end
 
+  # Codex keeps one summary issue comment, edited in place, with a table row per
+  # review it has run: | Review | Status | Commit | Review trigger |. A review
+  # that finds nothing leaves no other trace on the PR (only a 👍 reaction that
+  # names no commit), so a completed row is Codex's durable proof of review.
+  # Statuses other than completed or a failure are read as still running.
+  def parse_codex_summary(body)
+    body.to_s.each_line(chomp: true).filter_map do |line|
+      next unless line.strip.start_with?("|")
+      cells = line.strip.delete_prefix("|").delete_suffix("|").split("|").map(&:strip)
+      next if cells.size < 3
+      sha = cells[2][/`(\h{7,40})`/, 1] or next
+      status = cells[1].gsub(/<relative-time.*?<\/relative-time>/m, "").gsub(/[^\p{Alnum} ]/, "").strip.downcase
+      {
+        "review" => cells[0].gsub(/[^\p{Alnum} ]/, "").strip,
+        "status" => case status
+                    when /\Acompleted/ then "completed"
+                    when /fail|error|cancel/ then "failed"
+                    else "running"
+                    end,
+        "sha" => sha,
+        "completed_at" => cells[1][/datetime="([^"]+)"/, 1]
+      }
+    end
+  end
+
   def codex_request?(body)
     body.to_s.strip.match?(/\A@codex review\z/i)
   end
@@ -181,12 +206,36 @@ module ReviewSweep
     codex_outputs = reviews.select { |review| login(review) == CODEX }.map do |review|
       { "sha" => review["commit_id"], "at" => review["submitted_at"], "verdict" => "findings" }
     end
+    summary_outputs = []
+    codex_running = false
     issue_comments.each do |comment|
-      next unless login(comment) == CODEX && !comment["body"].to_s.include?(CODEX_SUMMARY_MARKER)
-      sha = codex_reviewed_sha(comment["body"]) or next
-      codex_outputs << { "sha" => sha, "at" => comment["created_at"], "verdict" => codex_clean?(comment["body"]) ? "clean" : "findings" }
+      next unless login(comment) == CODEX
+      body = comment["body"].to_s
+      if body.include?(CODEX_SUMMARY_MARKER)
+        rows = parse_codex_summary(body)
+        warnings << "Codex summary comment #{comment["id"]} has a table but no row parsed; the format may have changed" if rows.empty? && body.match?(/^\|/)
+        edited_at = comment["updated_at"] || comment["created_at"]
+        rows.select { |row| row["review"].casecmp?("Code Review") }.each do |row|
+          if row["status"] == "completed"
+            summary_outputs << { "sha" => row["sha"], "at" => row["completed_at"] || edited_at }
+          elsif row["status"] == "running" && sha_match?(row["sha"], head)
+            codex_running ||= (now - Time.iso8601(edited_at)) <= REQUEST_TIMEOUT
+          end
+        end
+        next
+      end
+      sha = codex_reviewed_sha(body) or next
+      codex_outputs << { "sha" => sha, "at" => comment["created_at"], "verdict" => codex_clean?(body) ? "clean" : "findings" }
     end
-    codex_outputs.sort_by! { |output| output["at"].to_s }
+    # A completed summary row never says whether Codex found anything: it is
+    # clean unless Codex also left a review or inline comments for that commit.
+    summary_outputs.each do |output|
+      found = codex_outputs.any? { |other| other["verdict"] == "findings" && sha_match?(other["sha"], output["sha"]) } ||
+              findings.any? { |finding| finding["reviewer"] == "codex" && sha_match?(finding["sha"], output["sha"]) }
+      output["verdict"] = found ? "findings" : "clean"
+    end
+    codex_outputs.concat(summary_outputs)
+    codex_outputs.sort_by! { |output| Time.iso8601(output["at"]) }
     codex_head = codex_outputs.reverse.find { |output| sha_match?(output["sha"], head) }
     request = issue_comments.select { |comment| codex_request?(comment["body"]) }.max_by { |comment| comment["created_at"].to_s }
     # Output produced after the request answers it when it reviewed the head or
@@ -202,13 +251,13 @@ module ReviewSweep
       # after the timeout is dropped whether or not the reaction is still there.
       age = (now - Time.iso8601(request["created_at"])).to_i
       eyes = request.dig("reactions", "eyes").to_i.positive?
-      outstanding = { "id" => request["id"], "created_at" => request["created_at"], "age_seconds" => age, "eyes" => eyes, "dropped" => age > REQUEST_TIMEOUT }
+      outstanding = { "id" => request["id"], "created_at" => request["created_at"], "age_seconds" => age, "eyes" => eyes, "dropped" => age > REQUEST_TIMEOUT && !codex_running }
     end
     codex = {
       "sha" => codex_outputs.last&.dig("sha")&.slice(0, 7),
       "verdict" => codex_head&.dig("verdict"),
       "done_for_head" => !codex_head.nil?,
-      "pending" => codex_head.nil? && !outstanding.nil? && !outstanding["dropped"],
+      "pending" => codex_head.nil? && (codex_running || (!outstanding.nil? && !outstanding["dropped"])),
       "outstanding_request" => outstanding
     }
 
@@ -379,6 +428,7 @@ module ReviewSweep
     lines << "Copilot: #{copilot_text}"
     request = codex["outstanding_request"]
     codex_text = if codex["done_for_head"] then "reviewed #{state["head7"]}: #{codex["verdict"]}"
+    elsif codex["pending"] && request.nil? then "review running for #{state["head7"]}"
     elsif codex["pending"]
       "review pending for #{state["head7"]} (request #{request["id"]}, #{request["age_seconds"] / 60} min old, eyes: #{request["eyes"] ? "yes" : "no"})"
     elsif request then "request #{request["id"]} looks dropped (#{request["age_seconds"] / 60} min, no output)"

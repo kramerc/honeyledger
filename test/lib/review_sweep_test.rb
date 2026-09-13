@@ -368,6 +368,83 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "id" => "copilot:100", "status" => "duplicate", "duplicate_of" => "copilot:100" } ] }, state) }
   end
 
+  test "parses the Codex summary table into review, status, commit, and completion time" do
+    completed = ReviewSweep.parse_codex_summary(codex_summary(sha: HEAD, status: "✅ **Completed**", completed_at: NOW))
+    assert_equal [ { "review" => "Code Review", "status" => "completed", "sha" => HEAD[0, 7], "completed_at" => NOW.utc.iso8601(6) } ], completed
+
+    assert_equal "running", ReviewSweep.parse_codex_summary(codex_summary(sha: HEAD, status: "⏳ **In progress**")).first["status"]
+    assert_equal "failed", ReviewSweep.parse_codex_summary(codex_summary(sha: HEAD, status: "❌ **Failed**")).first["status"]
+    assert_equal [], ReviewSweep.parse_codex_summary("#{ReviewSweep::CODEX_SUMMARY_MARKER}\n\nNo reviews yet.")
+  end
+
+  test "a completed Codex summary row at the head is a clean review that answers a request and is never a finding" do
+    request = issue_comment(id: 900, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
+    summary = issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: HEAD, status: "✅ **Completed**", completed_at: NOW - 60),
+                            at: NOW - 3600, updated_at: NOW - 59)
+    copilot_round = [ review(id: 20, login: ReviewSweep::COPILOT_REVIEWER, sha: HEAD, at: NOW - 600, body: "### 🟢 Looks good") ]
+
+    state = ReviewSweep.assemble(pull_request, copilot_round, [], [ request, summary ], now: NOW)
+    codex = state.dig("reviews", "codex")
+    assert codex["done_for_head"]
+    assert_equal "clean", codex["verdict"]
+    assert_not codex["pending"]
+    assert_nil codex["outstanding_request"]
+    assert_empty state["findings"]
+    assert_empty state["warnings"]
+    assert_not_includes state.dig("stop", "reasons").join, "Codex"
+    assert_includes ReviewSweep.format_status(state, {}), "Codex: reviewed #{HEAD[0, 7]}: clean"
+  end
+
+  test "a Codex summary row for an older commit does not count for the head" do
+    summary = issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: OLD_HEAD, status: "✅ **Completed**", completed_at: NOW - 60), at: NOW - 3600)
+
+    state = ReviewSweep.assemble(pull_request, [], [], [ summary ], now: NOW)
+    assert_not state.dig("reviews", "codex", "done_for_head")
+    assert_not state.dig("reviews", "codex", "pending")
+    assert_includes ReviewSweep.format_status(state, {}), "Codex: no review for #{HEAD[0, 7]} (last reviewed #{OLD_HEAD[0, 7]})"
+  end
+
+  test "a completed Codex summary row is findings when Codex left a review for that commit" do
+    summary = issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: HEAD, status: "✅ **Completed**", completed_at: NOW - 30), at: NOW - 3600)
+    codex_review = review(id: 31, login: ReviewSweep::CODEX, sha: HEAD, at: NOW - 60, body: "### 💡 Codex Review")
+    inline = review_comment(id: 301, login: ReviewSweep::CODEX, review_id: 31, path: "app/models/widget.rb", line: 4, original_line: 4, body: CODEX_INLINE, at: NOW - 60)
+
+    state = ReviewSweep.assemble(pull_request, [ codex_review ], [ inline ], [ summary ], now: NOW)
+    assert state.dig("reviews", "codex", "done_for_head")
+    assert_equal "findings", state.dig("reviews", "codex", "verdict")
+    assert_equal %w[codex:301], state["findings"].map { |finding| finding["id"] }
+  end
+
+  test "a running Codex summary row at the head is pending until it goes stale, and keeps a request from looking dropped" do
+    running = codex_summary(sha: HEAD, status: "⏳ **In progress**")
+    request = issue_comment(id: 900, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
+
+    fresh = ReviewSweep.assemble(pull_request, [], [], [ issue_comment(id: 901, login: ReviewSweep::CODEX, body: running, at: NOW - 3600, updated_at: NOW - 120) ], now: NOW)
+    assert fresh.dig("reviews", "codex", "pending")
+    assert_not fresh.dig("reviews", "codex", "done_for_head")
+    assert_includes ReviewSweep.format_status(fresh, {}), "Codex: review running for #{HEAD[0, 7]}"
+
+    with_request = ReviewSweep.assemble(pull_request, [], [], [ request, issue_comment(id: 901, login: ReviewSweep::CODEX, body: running, at: NOW - 3600, updated_at: NOW - 120) ], now: NOW)
+    assert with_request.dig("reviews", "codex", "pending")
+    assert_not with_request.dig("reviews", "codex", "outstanding_request", "dropped")
+
+    stale = ReviewSweep.assemble(pull_request, [], [], [ issue_comment(id: 901, login: ReviewSweep::CODEX, body: running, at: NOW - 3600, updated_at: NOW - 3600) ], now: NOW)
+    assert_not stale.dig("reviews", "codex", "pending")
+
+    failed = ReviewSweep.assemble(pull_request, [], [], [ issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: HEAD, status: "❌ **Failed**"), at: NOW - 60) ], now: NOW)
+    assert_not failed.dig("reviews", "codex", "pending")
+    assert_not failed.dig("reviews", "codex", "done_for_head")
+
+    security_only = codex_summary(sha: HEAD, status: "✅ **Completed**", completed_at: NOW - 60, review: "🔒 **Security Review**")
+    assert_not ReviewSweep.assemble(pull_request, [], [], [ issue_comment(id: 901, login: ReviewSweep::CODEX, body: security_only, at: NOW - 60) ], now: NOW).dig("reviews", "codex", "done_for_head")
+  end
+
+  test "a Codex summary table with no row that parses is a warning" do
+    broken = issue_comment(id: 901, login: ReviewSweep::CODEX, body: "#{ReviewSweep::CODEX_SUMMARY_MARKER}\n\n| Review | Status |\n| --- | --- |", at: NOW - 60)
+
+    assert_includes ReviewSweep.assemble(pull_request, [], [], [ broken ], now: NOW)["warnings"].join, "Codex summary comment 901 has a table but no row parsed"
+  end
+
   test "the rendered ledger round-trips through parse_ledger and feeds the next assemble" do
     state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
     input = { "findings" => [ { "id" => "copilot:200", "status" => "deferred", "note" => "Tracked in #12 | later" } ] }
@@ -429,7 +506,7 @@ class ReviewSweepTest < ActiveSupport::TestCase
 
     def issue_comments
       [
-        issue_comment(id: 500, login: ReviewSweep::CODEX, body: "#{ReviewSweep::CODEX_SUMMARY_MARKER}\n\n| Review | Status |", at: NOW - 3600),
+        issue_comment(id: 500, login: ReviewSweep::CODEX, body: codex_summary(sha: OLD_HEAD, status: "✅ **Completed**", completed_at: NOW - 3500), at: NOW - 3600),
         issue_comment(id: 501, login: "kramerc", body: "@codex review", at: NOW - 900),
         issue_comment(id: 502, login: ReviewSweep::CODEX, body: "Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `#{HEAD[0, 10]}`", at: NOW - 500),
         issue_comment(id: 503, login: "codecov[bot]", body: "All modified lines are covered.", at: NOW - 400)
@@ -447,7 +524,28 @@ class ReviewSweepTest < ActiveSupport::TestCase
         "in_reply_to_id" => in_reply_to, "html_url" => "https://example.test/pr/1#discussion_r#{id}" }
     end
 
-    def issue_comment(id:, login:, body:, at:)
-      { "id" => id, "user" => { "login" => login }, "body" => body, "created_at" => at.iso8601, "reactions" => { "eyes" => 0 } }
+    def issue_comment(id:, login:, body:, at:, updated_at: at)
+      { "id" => id, "user" => { "login" => login }, "body" => body, "created_at" => at.iso8601, "updated_at" => updated_at.iso8601,
+        "reactions" => { "eyes" => 0 } }
+    end
+
+    def codex_summary(sha:, status:, completed_at: nil, review: "📝 **Code Review**")
+      timestamp = completed_at && completed_at.utc.iso8601(6)
+      status_cell = timestamp ? "#{status} <relative-time datetime=\"#{timestamp}\">#{timestamp}</relative-time>" : status
+      <<~MARKDOWN
+        #{ReviewSweep::CODEX_SUMMARY_MARKER}
+
+        ## Codex Review Summary
+
+        | Review | Status | Commit | Review trigger |
+        | --- | --- | --- | --- |
+        | #{review} | #{status_cell} | `#{sha[0, 7]}` | PR opened |
+
+        <details> <summary>About Codex in GitHub</summary>
+
+        Codex reacts with 👀 while any review is running, comments if it has suggestions, and reacts with 👍 once all reviews finish with no findings.
+
+        </details>
+      MARKDOWN
     end
 end
