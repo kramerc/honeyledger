@@ -189,10 +189,12 @@ module ReviewSweep
     codex_outputs.sort_by! { |output| output["at"].to_s }
     codex_head = codex_outputs.reverse.find { |output| sha_match?(output["sha"], head) }
     request = issue_comments.select { |comment| codex_request?(comment["body"]) }.max_by { |comment| comment["created_at"].to_s }
-    # Only output for the head, produced after the request, answers it; a late
-    # review of an older head must not clear a request for this one.
+    # Output produced after the request answers it when it reviewed the head or
+    # the latest round head (a fix pushed after the round moves the head on
+    # without a new request); a late review of an older head does not.
     answered = request && codex_outputs.any? do |output|
-      sha_match?(output["sha"], head) && Time.iso8601(output["at"]) > Time.iso8601(request["created_at"])
+      (sha_match?(output["sha"], head) || (round_heads.last && sha_match?(output["sha"], round_heads.last))) &&
+        Time.iso8601(output["at"]) > Time.iso8601(request["created_at"])
     end
     outstanding = nil
     if request && !answered
@@ -220,7 +222,11 @@ module ReviewSweep
     live_ids = findings.map { |finding| finding["id"] }
     open_count = findings.count { |finding| !TERMINAL_STATUSES.include?(finding["ledger_status"]) }
     stale_open = ledger_entries.values.count do |entry|
-      !live_ids.include?(entry["id"]) && (!TERMINAL_STATUSES.include?(entry["status"]) || entry_problem(entry, ledger_entries.keys))
+      next false if live_ids.include?(entry["id"])
+      if (problem = entry_problem(entry, ledger_entries.keys))
+        warnings << "ledger entry #{entry["id"]}: #{problem}; treated as open"
+      end
+      problem || !TERMINAL_STATUSES.include?(entry["status"])
     end
     reasons = []
     reasons << "no Copilot review on this PR yet" if rounds.empty?
@@ -406,7 +412,7 @@ module ReviewSweep
 
   # A fixed finding seen again on a different head than the ledger recorded.
   def resurfaced?(entry, finding)
-    entry["status"] == "fixed" && !entry["sha"].to_s.empty? && finding["sha"] != entry["sha"]
+    entry["status"] == "fixed" && !entry["sha"].to_s.empty? && !sha_match?(finding["sha"], entry["sha"])
   end
 
   def suppressed_id(path, body)

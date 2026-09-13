@@ -198,6 +198,14 @@ class ReviewSweepTest < ActiveSupport::TestCase
     answered = ReviewSweep.assemble(pull_request, [], [], [ request, head_output ], now: NOW).dig("reviews", "codex")
     assert answered["done_for_head"]
     assert_nil answered["outstanding_request"]
+
+    # A fix pushed after the round moves the head on; the answer for the round head still counts.
+    moved_on = pull_request.merge("headRefOid" => "e" * 40)
+    round_at_head = [ review(id: 20, login: ReviewSweep::COPILOT_REVIEWER, sha: HEAD, at: NOW - 600, body: "### 🟢 Looks good") ]
+    after_fix = ReviewSweep.assemble(moved_on, round_at_head, [], [ request, head_output ], now: NOW).dig("reviews", "codex")
+    assert_not after_fix["done_for_head"]
+    assert_not after_fix["pending"]
+    assert_nil after_fix["outstanding_request"]
   end
 
   test "a fixed finding that resurfaces on a later head is open again and must be re-adjudicated" do
@@ -211,8 +219,16 @@ class ReviewSweepTest < ActiveSupport::TestCase
 
     error = assert_raises(ArgumentError) { ReviewSweep.upsert_ledger(ledger, state, now: NOW) }
     assert_match(/resurfaced/, error.message)
-    acknowledged = { "findings" => [ ledger["findings"].first.merge("sha" => HEAD[0, 7]) ] }
+    acknowledged = { "findings" => [ ledger["findings"].first.merge("sha" => HEAD) ] } # a full SHA matches the short live one
     assert_equal "fixed", ReviewSweep.upsert_ledger(acknowledged, state, now: NOW)["findings"].find { |finding| finding["id"] == resurfaced_id }["status"]
+
+    untouched = { "findings" => [
+      { "id" => resurfaced_id, "status" => "fixed", "fixed_in" => "c" * 7 }, # written before entries carried a sha
+      { "id" => "copilot:100", "status" => "fixed", "fixed_in" => "c" * 7, "sha" => OLD_HEAD[0, 7] } # inline: sha never moves
+    ] }
+    statuses = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: untouched, now: NOW)["findings"]
+      .select { |finding| [ resurfaced_id, "copilot:100" ].include?(finding["id"]) }.map { |finding| finding["ledger_status"] }
+    assert_equal %w[fixed fixed], statuses
   end
 
   test "a ledger entry that does not justify its status is treated as open, and entries need ids" do
@@ -222,6 +238,11 @@ class ReviewSweepTest < ActiveSupport::TestCase
     checked = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: corrupt, now: NOW)
     assert_equal %w[open open], checked["findings"].select { |finding| %w[copilot:100 copilot:200].include?(finding["id"]) }.map { |finding| finding["ledger_status"] }
     assert_equal 2, checked["warnings"].count { |warning| warning.include?("treated as open") }
+
+    stale_corrupt = { "findings" => [ { "id" => "copilot:999", "status" => "fixed" } ] }
+    stale_state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: stale_corrupt, now: NOW)
+    assert_includes stale_state["warnings"], "ledger entry copilot:999: fixed needs fixed_in set to a commit SHA; treated as open"
+    assert_includes stale_state.dig("stop", "reasons").join, "(1 no longer on the PR but still open in the ledger)"
 
     assert_raises(ArgumentError) { ReviewSweep.upsert_ledger({ "findings" => [ { "status" => "accepted" } ] }, state) }
   end
@@ -371,7 +392,7 @@ class ReviewSweepTest < ActiveSupport::TestCase
   private
     def pull_request
       {
-        "number" => 1, "url" => "https://example.test/pull_request/1", "isDraft" => false, "headRefOid" => HEAD,
+        "number" => 1, "url" => "https://example.test/pr/1", "isDraft" => false, "headRefOid" => HEAD,
         "headRefName" => "feature", "baseRefName" => "main", "reviewRequests" => [], "mergeStateStatus" => "CLEAN",
         "statusCheckRollup" => [
           { "__typename" => "CheckRun", "name" => "test", "status" => "COMPLETED", "conclusion" => "SUCCESS" },
@@ -417,13 +438,13 @@ class ReviewSweepTest < ActiveSupport::TestCase
 
     def review(id:, login:, sha:, at:, body:)
       { "id" => id, "user" => { "login" => login }, "commit_id" => sha, "submitted_at" => at.iso8601, "body" => body,
-        "html_url" => "https://example.test/pull_request/1#pullrequestreview-#{id}" }
+        "html_url" => "https://example.test/pr/1#pullrequestreview-#{id}" }
     end
 
     def review_comment(id:, login:, review_id:, path:, line:, original_line:, body:, at:, in_reply_to: nil)
       { "id" => id, "user" => { "login" => login }, "pull_request_review_id" => review_id, "path" => path, "line" => line,
         "original_line" => original_line, "original_commit_id" => OLD_HEAD, "body" => body, "created_at" => at.iso8601,
-        "in_reply_to_id" => in_reply_to, "html_url" => "https://example.test/pull_request/1#discussion_r#{id}" }
+        "in_reply_to_id" => in_reply_to, "html_url" => "https://example.test/pr/1#discussion_r#{id}" }
     end
 
     def issue_comment(id:, login:, body:, at:)
