@@ -415,6 +415,16 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_equal %w[codex:301], state["findings"].map { |finding| finding["id"] }
   end
 
+  test "a completed Codex summary row is findings when Codex left only inline comments for that commit" do
+    summary = issue_comment(id: 901, login: ReviewSweep::CODEX, body: codex_summary(sha: HEAD, status: "✅ **Completed**", completed_at: NOW - 30), at: NOW - 3600)
+    inline = review_comment(id: 301, login: ReviewSweep::CODEX, review_id: 31, path: "app/models/widget.rb", line: 4, original_line: 4, body: CODEX_INLINE,
+                            at: NOW - 60, original_commit: HEAD)
+
+    state = ReviewSweep.assemble(pull_request, [], [ inline ], [ summary ], now: NOW)
+    assert state.dig("reviews", "codex", "done_for_head")
+    assert_equal "findings", state.dig("reviews", "codex", "verdict")
+  end
+
   test "a running Codex summary row at the head is pending until it goes stale, and keeps a request from looking dropped" do
     running = codex_summary(sha: HEAD, status: "⏳ **In progress**")
     request = issue_comment(id: 900, login: "kramerc", body: "@codex review", at: NOW - 20 * 60)
@@ -518,9 +528,9 @@ class ReviewSweepTest < ActiveSupport::TestCase
         "html_url" => "https://example.test/pr/1#pullrequestreview-#{id}" }
     end
 
-    def review_comment(id:, login:, review_id:, path:, line:, original_line:, body:, at:, in_reply_to: nil)
+    def review_comment(id:, login:, review_id:, path:, line:, original_line:, body:, at:, in_reply_to: nil, original_commit: OLD_HEAD)
       { "id" => id, "user" => { "login" => login }, "pull_request_review_id" => review_id, "path" => path, "line" => line,
-        "original_line" => original_line, "original_commit_id" => OLD_HEAD, "body" => body, "created_at" => at.iso8601,
+        "original_line" => original_line, "original_commit_id" => original_commit, "body" => body, "created_at" => at.iso8601,
         "in_reply_to_id" => in_reply_to, "html_url" => "https://example.test/pr/1#discussion_r#{id}" }
     end
 
