@@ -126,13 +126,13 @@ module Sessions
       post passkey_session_path, params: { credential: assertion }, as: :json
       assert_response :success
 
-      # Sign out so the replay is judged on the consumed challenge alone,
-      # not refused for already holding a session.
+      # Sign out (which also removes the session row) so the replay is judged
+      # on the consumed challenge alone, not refused for holding a session.
       sign_out
       post passkey_session_path, params: { credential: assertion }, as: :json
 
       assert_response :unprocessable_content
-      assert_equal 1, @user.sessions.count
+      assert_equal 0, @user.sessions.count
     end
   end
 end
