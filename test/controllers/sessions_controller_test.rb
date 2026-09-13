@@ -39,6 +39,16 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to accounts_url
   end
 
+  test "create never returns to another host, whatever the original Host header said" do
+    get accounts_url, headers: { "Host" => "attacker.example" }
+    assert_response :redirect
+
+    host! "www.example.com"
+    post session_path, params: { email: @user.email, password: "password123" }
+
+    assert_redirected_to "http://www.example.com/accounts"
+  end
+
   test "create does not return to a page that was requested with a non-GET verb" do
     delete session_path
     assert_redirected_to new_session_path

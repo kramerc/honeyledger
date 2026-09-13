@@ -35,13 +35,15 @@ module Authentication
 
     def request_authentication
       # Only a GET can be replayed by the post-login redirect; a stale POST or
-      # DELETE would send the user to a route that does not answer GET.
-      session[:return_to_after_authenticating] = request.url if request.get? || request.head?
+      # DELETE would send the user to a route that does not answer GET. Store
+      # the path rather than the full URL so a forged Host header can never
+      # turn the redirect into one that leaves this site.
+      session[:return_to_after_authenticating] = request.fullpath if request.get? || request.head?
       redirect_to new_session_path
     end
 
     def after_authentication_url
-      session.delete(:return_to_after_authenticating) || root_url
+      session.delete(:return_to_after_authenticating) || root_path
     end
 
     def start_new_session_for(user)
