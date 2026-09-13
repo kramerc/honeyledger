@@ -27,7 +27,10 @@ export default class extends Controller {
       const nickname = this.hasNicknameTarget ? this.nicknameTarget.value : ""
 
       return this.post(this.submitUrlValue, { nickname, credential: credential.toJSON() })
-    }, "Could not add the passkey.")
+    }, {
+      cancelled: "The passkey prompt was cancelled or timed out. No passkey was added.",
+      failure: "Could not add the passkey."
+    })
   }
 
   async authenticate(event) {
@@ -39,7 +42,10 @@ export default class extends Controller {
       const credential = await navigator.credentials.get({ publicKey })
 
       return this.post(this.submitUrlValue, { credential: credential.toJSON() })
-    }, "Passkey sign-in failed.")
+    }, {
+      cancelled: "The passkey prompt was cancelled or timed out. You are not logged in.",
+      failure: "Passkey sign-in failed."
+    })
   }
 
   get supported() {
@@ -48,7 +54,9 @@ export default class extends Controller {
       typeof PublicKeyCredential.parseRequestOptionsFromJSON === "function"
   }
 
-  async run(ceremony, failureMessage) {
+  // `messages` carries the two sentences that differ per ceremony: what a
+  // cancelled prompt means, and the generic failure.
+  async run(ceremony, messages) {
     if (this.busy) return
 
     this.hideError()
@@ -58,7 +66,7 @@ export default class extends Controller {
       const result = await ceremony()
       Turbo.visit(result.redirect_url)
     } catch (error) {
-      this.showError(this.describeError(error, failureMessage))
+      this.showError(this.describeError(error, messages))
     } finally {
       this.setBusy(false)
     }
@@ -67,12 +75,12 @@ export default class extends Controller {
   // The WebAuthn API reports a fixed set of DOMException names; each gets a
   // plain sentence. Errors from our own endpoints arrive as RequestError with
   // their message already set.
-  describeError(error, failureMessage) {
+  describeError(error, messages) {
     if (error instanceof RequestError) return error.message
 
     switch (error.name) {
       case "NotAllowedError":
-        return "The passkey prompt was cancelled or timed out. Nothing was changed."
+        return messages.cancelled
       case "InvalidStateError":
         return "This device already has a passkey for your account."
       case "ConstraintError":
@@ -86,7 +94,7 @@ export default class extends Controller {
       case "TypeError":
         return "Could not reach the server. Check your connection and try again."
       default:
-        return `${failureMessage} (${error.name || "unknown error"})`
+        return `${messages.failure} (${error.name || "unknown error"})`
     }
   }
 

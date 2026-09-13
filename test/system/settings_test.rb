@@ -20,9 +20,43 @@ class SettingsTest < ApplicationSystemTestCase
       assert_text "Laptop"
       assert_text passkeys(:laptop).created_at.strftime("%B %d, %Y")
       assert_text "Never"
+      assert_button "Rename"
       assert_button "Delete"
     end
     assert_no_text "Phone"
+  end
+
+  test "renaming a passkey updates the list" do
+    visit settings_path
+
+    within "#passkey_#{passkeys(:laptop).id}" do
+      click_button "Rename"
+    end
+    fill_in "Name", with: "Work laptop"
+    click_button "Rename passkey"
+
+    assert_text "Passkey renamed."
+    within "#passkey_#{passkeys(:laptop).id}" do
+      assert_text "Work laptop"
+    end
+  end
+
+  test "renaming to a blank name is refused" do
+    visit edit_passkey_path(passkeys(:laptop))
+    fill_in "Name", with: ""
+    # The field is required, so submit through the form's own validation by removing it.
+    page.execute_script("document.getElementById('passkey_nickname').removeAttribute('required')")
+    click_button "Rename passkey"
+
+    within "#error_explanation" do
+      assert_text "Nickname can't be blank"
+    end
+  end
+
+  test "the name field says it is optional" do
+    visit settings_path
+
+    assert_field "Name (optional)"
   end
 
   test "shows an empty state when there are no passkeys" do

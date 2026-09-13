@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_050000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_13_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -304,6 +304,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_050000) do
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
   end
 
+  create_table "webauthn_challenges", force: :cascade do |t|
+    t.string "challenge", default: "", null: false
+    t.datetime "created_at", null: false
+    t.datetime "expires_at", null: false
+    t.string "purpose", default: "", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id"
+    t.index ["expires_at"], name: "index_webauthn_challenges_on_expires_at"
+    t.index ["user_id"], name: "index_webauthn_challenges_on_user_id"
+  end
+
   add_foreign_key "account_sources", "accounts"
   add_foreign_key "accounts", "currencies"
   add_foreign_key "accounts", "users"
@@ -332,4 +343,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_050000) do
   add_foreign_key "transactions", "transactions", column: "merged_into_id"
   add_foreign_key "transactions", "transactions", column: "parent_transaction_id"
   add_foreign_key "transactions", "users"
+  add_foreign_key "webauthn_challenges", "users"
 end

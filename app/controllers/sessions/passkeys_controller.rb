@@ -10,24 +10,32 @@ module Sessions
 
     def options
       request_options = webauthn_relying_party.options_for_authentication(allow: [], user_verification: "required")
-      session[:passkey_authentication_challenge] = request_options.challenge
+      challenge = WebauthnChallenge.issue(purpose: "authentication", challenge: request_options.challenge)
+      session[:passkey_authentication_challenge_id] = challenge.id
 
       render json: request_options
     end
 
     def create
-      challenge = session.delete(:passkey_authentication_challenge)
-      return head :unprocessable_content if challenge.blank?
-
-      webauthn_credential, passkey = webauthn_relying_party.verify_authentication(credential_params.to_h, challenge, user_verification: true) do |presented_credential|
-        Passkey.find_by!(external_id: presented_credential.id)
+      challenge = WebauthnChallenge.consume(session.delete(:passkey_authentication_challenge_id), purpose: "authentication")
+      if challenge.nil?
+        return render json: { error: "This sign-in request has expired. Please try again." }, status: :unprocessable_content
       end
-      passkey.update!(sign_count: webauthn_credential.sign_count, last_used_at: Time.current)
+
+      passkey = Passkey.transaction do
+        webauthn_credential, locked_passkey = webauthn_relying_party.verify_authentication(credential_params.to_h, challenge, user_verification: true) do |presented_credential|
+          # Locked so a concurrent assertion waits and then sees the advanced
+          # counter, instead of both verifying against the same stale value.
+          Passkey.lock.find_by!(external_id: presented_credential.id)
+        end
+        locked_passkey.update!(sign_count: webauthn_credential.sign_count, last_used_at: Time.current)
+        locked_passkey
+      end
       start_new_session_for passkey.user
 
       render json: { redirect_url: after_authentication_url }
     rescue WebAuthn::Error, ActiveRecord::RecordNotFound
-      head :unprocessable_content
+      render json: { error: "That passkey was not accepted. Try again, or log in with your password." }, status: :unprocessable_content
     end
 
     private

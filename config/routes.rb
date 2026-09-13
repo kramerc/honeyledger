@@ -6,7 +6,7 @@ Rails.application.routes.draw do
   # Passkeys: JSON endpoints driven by the passkey Stimulus controller.
   post "session/passkey/options", to: "sessions/passkeys#options", as: :passkey_session_options
   post "session/passkey", to: "sessions/passkeys#create", as: :passkey_session
-  resources :passkeys, only: %i[ create destroy ] do
+  resources :passkeys, only: %i[ create edit update destroy ] do
     post :options, on: :collection
   end
   resource :reauthentication, only: %i[ new create ]

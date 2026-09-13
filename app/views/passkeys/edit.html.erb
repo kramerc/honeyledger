@@ -1,0 +1,27 @@
+<h1>Rename passkey</h1>
+
+<%= form_with model: @passkey do |form| %>
+  <% if @passkey.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(@passkey.errors.count, "error") %> prohibited this passkey from being renamed:</h2>
+      <ul>
+        <% @passkey.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div>
+    <%= form.label :nickname, "Name", style: "display: block" %>
+    <%= form.text_field :nickname, required: true, maxlength: 64, autofocus: true %>
+  </div>
+
+  <div>
+    <%= form.submit "Rename passkey" %>
+  </div>
+<% end %>
+
+<p>
+  <%= link_to "Back to settings", settings_path %>
+</p>
