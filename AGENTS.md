@@ -133,6 +133,10 @@ Controllers that are intentionally public (for example, `HomeController` and `Cu
 
 Tests: integration tests call `sign_in_as(user)` / `sign_out` from `test/test_helpers/session_test_helper.rb` (sets the cookie directly); system tests call the `sign_in_as(user)` defined in `ApplicationSystemTestCase`, which logs in through the form. Every user fixture carries the `"password123"` digest.
 
+### Passkeys
+
+Passkeys are usernameless WebAuthn credentials (`webauthn` gem) stored in `Passkey` (`external_id`, `public_key`, `sign_count`, `nickname`) and enrolled from the Settings page; each user carries an opaque `webauthn_id` handle. `PasskeysController` runs the registration ceremony and `Sessions::PasskeysController` the login ceremony; both are JSON endpoints driven by `app/javascript/controllers/passkey_controller.js`, which uses the browser's own `parseCreationOptionsFromJSON` / `toJSON` helpers. Enrolment is gated by `RecentAuthentication`: the session must be under ten minutes old or the password re-confirmed through `ReauthenticationsController`. The relying party (`WebauthnRelyingParty` concern) derives its origin from the request in development and test; production pins it with `WEBAUTHN_ALLOWED_ORIGINS` (and optionally `WEBAUTHN_RP_ID`) and hides passkeys until that is set. Tests drive the ceremonies with `WebAuthn::FakeClient` through `test/test_helpers/passkey_test_helper.rb`.
+
 ## Testing
 
 - Framework: Minitest (not RSpec). Use `test "description" do ... end` syntax.
