@@ -20,6 +20,12 @@ servers:
 #
 # Don't use this when deploying to multiple web servers (then you have to terminate SSL at your load balancer).
 #
+#
+# config/environments/production.rb enables assume_ssl and force_ssl, so the
+# app expects TLS to terminate here (or at a load balancer in front). Without
+# it the session cookie is marked Secure, browsers never send it back over
+# plain HTTP, and nobody can stay logged in.
+#
 # proxy:
 #   ssl: true
 #   host: app.example.com
