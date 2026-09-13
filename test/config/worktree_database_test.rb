@@ -46,6 +46,20 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     assert_not_equal WorktreeDatabase.suffix(linked_worktree("same")), WorktreeDatabase.suffix(linked_worktree("same"))
   end
 
+  test "same-named Claude and Codex worktrees have distinct database suffixes" do
+    repository_root = tmpdir
+    suffixes = %w[.claude .codex].map do |agent_directory|
+      root = File.join(repository_root, agent_directory, "worktrees", "sample")
+      FileUtils.mkdir_p(root)
+      File.write(File.join(root, ".git"), "gitdir: elsewhere")
+      WorktreeDatabase.suffix(root)
+    end
+
+    assert_match(/\A_wt_sample_\h{8}\z/, suffixes.first)
+    assert_match(/\A_wt_sample_\h{8}\z/, suffixes.last)
+    assert_not_equal suffixes.first, suffixes.last
+  end
+
   test "a symlink to a worktree resolves to the same suffix as the worktree" do
     root = linked_worktree
     link = File.join(tmpdir, "alias")

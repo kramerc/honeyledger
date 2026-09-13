@@ -30,9 +30,19 @@ kamal deploy                                     # Deploy to production
 
 The repo supports several agent sessions working at once, each in its own git
 worktree. **Start isolated work in a worktree**
-(`git worktree add .claude/worktrees/<name> -b <branch>`) and reserve the primary
-checkout — the main clone that the worktrees are linked from — for review,
-merging, and anything that must see `main`.
+and reserve the primary checkout — the main clone that the worktrees are linked
+from — for review, merging, and anything that must see `main`.
+
+- **Claude Code:** `.claude/worktrees/<name>` (see `CLAUDE.md`).
+- **Codex:** `.codex/worktrees/<name>`, created with
+  `git worktree add .codex/worktrees/<name> -b codex/<name>` from the primary
+  checkout. See [.codex/README.md](.codex/README.md) for session setup.
+
+Choose a unique directory and branch for each session. Reuse the session's
+existing worktree when continuing its work; do not create nested worktrees.
+Run `bin/worktree-setup` inside a newly created worktree, then keep subsequent
+commands and edits in that checkout. A session-start hook cannot prepare a
+worktree created later in the session.
 
 Everything derives from the worktree's path, via `config/worktree_database.rb`:
 
