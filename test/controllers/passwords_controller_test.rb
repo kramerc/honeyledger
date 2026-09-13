@@ -43,13 +43,26 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert @user.reload.authenticate("newpassword1")
   end
 
-  test "update signs out every existing session" do
+  test "update signs out every existing session, not just the current one" do
+    @user.sessions.create!(user_agent: "another browser")
     sign_in_as(@user)
     token = @user.password_reset_token
+    assert_equal 2, @user.sessions.count
 
     put password_path(token), params: { password: "newpassword1", password_confirmation: "newpassword1" }
 
     assert_equal 0, @user.sessions.count
+  end
+
+  test "edit with a token for a user that no longer exists" do
+    user = User.create!(email: "leaving@example.com", password: "password123")
+    token = user.password_reset_token
+    user.destroy!
+
+    get edit_password_path(token)
+
+    assert_redirected_to new_password_path
+    assert_match(/reset link is invalid/, flash[:alert])
   end
 
   test "update with non matching passwords" do

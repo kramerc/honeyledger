@@ -34,6 +34,21 @@ class UserTest < ActiveSupport::TestCase
     assert user.update(email: "renamed@example.com")
   end
 
+  # Devise stored `BCrypt::Password.create(password, cost: 12)` with no pepper
+  # in `encrypted_password`; the migration renames that column to
+  # `password_digest`. This digest was produced that way, so it proves an
+  # account created under Devise still authenticates without a reset.
+  DEVISE_ERA_DIGEST = "$2a$12$pzOijLgU8H8oUF8xTnphIurEYAyCSDUzoltxADZQG6K4f8UTl/Nr2".freeze
+
+  test "a digest stored by Devise still authenticates" do
+    user = User.create!(email: "legacy@example.com", password_digest: DEVISE_ERA_DIGEST)
+
+    assert_equal DEVISE_ERA_DIGEST, user.reload.password_digest
+    assert user.authenticate("password123")
+    assert_not user.authenticate("wrong")
+    assert_equal user, User.authenticate_by(email: "legacy@example.com", password: "password123")
+  end
+
   test "authenticate_by matches the fixture password" do
     assert_equal users(:one), User.authenticate_by(email: "one@example.com", password: "password123")
     assert_nil User.authenticate_by(email: "one@example.com", password: "wrong")
