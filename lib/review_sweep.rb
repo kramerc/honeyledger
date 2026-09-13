@@ -213,7 +213,7 @@ module ReviewSweep
     elsif verification["result"] != "clean"
       reasons << "fix delta verification at head #{head7} is #{verification["result"].inspect}, not clean"
     end
-    warnings << "base branch is #{pr["baseRefName"]}, not main: stacked PR, stabilize and merge the parent first" if pr["baseRefName"] != "main"
+    warnings << "base branch is #{pr["baseRefName"]}, not main: stacked PR, sweep the parent to a met stop state first" if pr["baseRefName"] != "main"
 
     {
       "pr" => pr["number"], "url" => pr["url"], "head" => head, "head7" => head7, "base" => pr["baseRefName"],

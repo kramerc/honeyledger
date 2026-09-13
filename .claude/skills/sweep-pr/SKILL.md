@@ -19,7 +19,7 @@ bin/sweep-pr status $ARGUMENTS
 bin/sweep-pr ledger $ARGUMENTS
 ```
 
-Work in the worktree that has the PR branch checked out (`git worktree list`); enter one if none exists. The tree must be clean and at the PR head — `status` warns when it is not. If the base branch is not `main`, this is a stacked child: run the gates, then stop and report that the parent merges first. Continue only when the user says the parent is merged and the child is retargeted.
+Work in the worktree that has the PR branch checked out (`git worktree list`); enter one if none exists. The tree must be clean and at the PR head — `status` warns when it is not. If the base branch is not `main`, this is a stacked child: run the gates, then check the parent with `bin/sweep-pr status <parent>` and continue only once the parent reports its stop conditions met. The stack is merged as one unit from GitHub's stack view when every PR in it is met, so nothing is retargeted.
 
 ## 2. Gates
 
