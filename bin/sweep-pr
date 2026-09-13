@@ -1,0 +1,163 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The deterministic GitHub half of the bounded review sweep described in
+# AGENTS.md ("Review sweep"). Every read is pure; only `request` and
+# `ledger --write` post anything, and both are safe to rerun.
+#
+#   bin/sweep-pr status [N]                 # head, CI, per-bot state, rounds, stop conditions
+#   bin/sweep-pr findings [N] [--sha SHA]   # every bot finding as JSON (all heads; --sha filters)
+#   bin/sweep-pr request [N] [--force]      # ask Copilot and Codex to review the head, once
+#   bin/sweep-pr ledger [N]                 # print the ledger comment's JSON ({} if none)
+#   bin/sweep-pr ledger [N] --write FILE    # upsert the single ledger comment from FILE
+#
+# N is the pull request number; leave it out to use the pull request for the
+# branch checked out here.
+#
+# Findings come from Copilot (inline comments plus the suppressed comments in
+# its review bodies, which appear nowhere else), Codex, and CodeQL, keyed by
+# stable ids so a rerun sees the same finding under the same id. The ledger is
+# one issue comment starting with `<!-- sweep-ledger -->`, edited in place. The
+# parsing lives in lib/review_sweep.rb, which has tests; this file only talks
+# to `gh`.
+
+require "json"
+
+APP_ROOT = File.expand_path("..", __dir__)
+require File.join(APP_ROOT, "lib", "review_sweep")
+
+USAGE = File.read(__FILE__).lines.grep(/\A#   bin\/sweep-pr/).map { |line| line.delete_prefix("# ") }.join.freeze
+
+def gh(*args, input: nil)
+  output = IO.popen([ "gh", *args ], "r+", chdir: APP_ROOT) do |io|
+    io.write(input) if input
+    io.close_write
+    io.read
+  end
+  abort "gh #{args.take(2).join(" ")} failed" unless $?.success?
+  output
+end
+
+def gh_json(*args, input: nil)
+  JSON.parse(gh(*args, input: input))
+end
+
+# `--slurp` returns one element per page: an array for list endpoints, an
+# object (with the list under a key) for endpoints such as check-runs.
+def paginate(path, key: nil)
+  pages = gh_json("api", "--paginate", "--slurp", path)
+  key ? pages.flat_map { |page| page.fetch(key) { abort "#{path}: a page has no #{key.inspect} key" } } : pages.flatten(1)
+end
+
+def option_value(options, flag)
+  index = options.index(flag) or return nil
+  options[index + 1] or abort("#{flag} needs a value\n#{USAGE}")
+end
+
+command, *options = ARGV
+abort USAGE unless %w[status findings request ledger].include?(command)
+number = options.shift if options.first.to_s.match?(/\A\d+\z/)
+
+repo = gh_json("repo", "view", "--json", "nameWithOwner")["nameWithOwner"]
+if number.nil?
+  # No number given: the PR for the branch checked out where this script lives.
+  current = IO.popen([ "gh", "pr", "view", "--json", "number" ], chdir: APP_ROOT, err: File::NULL, &:read)
+  abort "No pull request for the current branch; pass a PR number.\n#{USAGE}" unless $?.success?
+  number = JSON.parse(current)["number"].to_s
+  warn "Sweeping PR #{number}, the pull request for the current branch."
+end
+pull_request = gh_json("pr", "view", number, "--json",
+             "number,url,isDraft,headRefOid,headRefName,baseRefName,reviewRequests,mergeStateStatus,statusCheckRollup")
+reviews = paginate("repos/#{repo}/pulls/#{number}/reviews")
+review_comments = paginate("repos/#{repo}/pulls/#{number}/comments")
+issue_comments = paginate("repos/#{repo}/issues/#{number}/comments")
+check_runs = paginate("repos/#{repo}/commits/#{pull_request["headRefOid"]}/check-runs?check_name=#{ReviewSweep::COPILOT_CHECK_RUN}", key: "check_runs")
+ledger_comment = issue_comments.find { |comment| comment["body"].to_s.start_with?(ReviewSweep::LEDGER_MARKER) }
+
+begin
+  ledger = ledger_comment ? ReviewSweep.parse_ledger(ledger_comment["body"]) : {}
+  state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, check_runs: check_runs, ledger: ledger)
+rescue ReviewSweep::FormatError => error
+  abort error.message
+end
+
+# A worktree that has the PR branch checked out but sits on a different commit
+# or carries uncommitted changes means the bots would review something other
+# than what is on disk.
+listing = IO.popen([ "git", "-C", APP_ROOT, "worktree", "list", "--porcelain" ], &:read)
+if $?.success?
+  listing.split("\n\n").each do |block|
+    next unless block[/^branch refs\/heads\/(.+)$/, 1] == state["branch"]
+    path = block[/^worktree (.+)$/, 1]
+    local_head = block[/^HEAD (\h+)$/, 1]
+    if local_head && local_head != state["head"]
+      state["warnings"] << "worktree #{path} has #{state["branch"]} at #{local_head[0, 7]} but the PR head is #{state["head7"]} (unpushed or behind)"
+    end
+    changes = IO.popen([ "git", "-C", path, "status", "--porcelain" ], &:read)
+    state["warnings"] << "worktree #{path} has uncommitted changes" if $?.success? && !changes.strip.empty?
+  end
+end
+
+case command
+when "status"
+  puts ReviewSweep.format_status(state, ledger)
+
+when "findings"
+  findings = state["findings"]
+  if (sha = option_value(options, "--sha"))
+    findings = findings.select { |finding| ReviewSweep.sha_match?(finding["sha"], sha) }
+  end
+  puts JSON.pretty_generate(state.merge("findings" => findings))
+
+when "request"
+  abort "PR #{number} is a draft: `gh pr ready #{number}` alone triggers both Copilot and Codex." if state["draft"]
+  copilot = state.dig("reviews", "copilot")
+  codex = state.dig("reviews", "codex")
+  if state["rounds_exhausted"] && !copilot["done_for_head"] && !options.include?("--force")
+    abort "PR #{number} has had #{state["rounds"].size} Copilot rounds and #{ReviewSweep::MAX_ROUNDS} is the limit: " \
+          "new findings get human adjudication, not another round. Pass --force to override."
+  end
+
+  if copilot["done_for_head"]
+    puts "Copilot: skipped, already reviewed #{state["head7"]}"
+  elsif copilot["pending"]
+    puts "Copilot: skipped, review pending"
+  else
+    gh("api", "-X", "POST", "repos/#{repo}/pulls/#{number}/requested_reviewers", "-f", "reviewers[]=#{ReviewSweep::COPILOT_REVIEWER}")
+    puts "Copilot: requested"
+  end
+
+  if codex["done_for_head"]
+    puts "Codex: skipped, already reviewed #{state["head7"]}"
+  elsif codex["pending"]
+    puts "Codex: skipped, request #{codex.dig("outstanding_request", "id")} still pending"
+  else
+    if (dropped = codex["outstanding_request"])
+      puts "Codex: request #{dropped["id"]} produced nothing in #{dropped["age_seconds"] / 60} minutes, treating it as dropped"
+    end
+    gh("api", "-X", "POST", "repos/#{repo}/issues/#{number}/comments", "-f", "body=@codex review")
+    puts "Codex: requested"
+  end
+
+when "ledger"
+  if (file = option_value(options, "--write"))
+    input = JSON.parse(File.read(file))
+    begin
+      updated = ReviewSweep.upsert_ledger(input, state, existing: ledger)
+    rescue ArgumentError => error
+      abort "Ledger not written: #{error.message}"
+    end
+    (updated["findings"].map { |finding| finding["id"] } - Array(input["findings"]).map { |finding| finding["id"] }).each do |id|
+      puts "Added as open: #{id}"
+    end
+    payload = JSON.generate("body" => ReviewSweep.render_ledger(updated, state))
+    comment = if ledger_comment
+      gh_json("api", "-X", "PATCH", "repos/#{repo}/issues/comments/#{ledger_comment["id"]}", "--input", "-", input: payload)
+    else
+      gh_json("api", "-X", "POST", "repos/#{repo}/issues/#{number}/comments", "--input", "-", input: payload)
+    end
+    puts "#{ledger_comment ? "Updated" : "Created"} ledger comment #{comment["html_url"]}"
+  else
+    puts JSON.pretty_generate(ledger)
+  end
+end
