@@ -587,6 +587,66 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     end
   end
 
+  test "a re-imported row with the same remote_id attaches to an excluded original without reviving it (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    import_a = create_csv_import
+    csv_a = import_a.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "PENDING PURCHASE", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+    Csv::ImportTransactionsJob.perform_now(import_a.id)
+    original = csv_a.reload.ledger_transactions.sole
+    assert Transaction::Exclude.new(original, user: @user).call
+    assert original.reload.excluded?
+    balance_before = @bank_account.reload.balance_minor
+
+    import_b = create_csv_import
+    csv_b = import_b.transactions.create!(
+      row_index: 0, transacted_at: same_at + 1.day, description: "SAMPLE VENDOR -PURCHASE CITY ST", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+
+    assert_no_difference "Transaction.count" do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+
+    assert_equal original, csv_b.reload.ledger_transactions.sole
+    assert original.reload.excluded?
+    assert_equal balance_before, @bank_account.reload.balance_minor
+  end
+
+  test "an id repeated inside the incoming import is not adopted by identity when a prior import has it once (#253)" do
+    same_at = 1.day.ago.beginning_of_day + 12.hours
+    import_a = create_csv_import
+    csv_a = import_a.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "PENDING PURCHASE", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+    Csv::ImportTransactionsJob.perform_now(import_a.id)
+    original = csv_a.reload.ledger_transactions.sole
+    balance_before = @bank_account.reload.balance_minor
+
+    import_b = create_csv_import
+    pending = import_b.transactions.create!(
+      row_index: 0, transacted_at: same_at, description: "PENDING PURCHASE", amount_minor: -5000,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+    posted = import_b.transactions.create!(
+      row_index: 1, transacted_at: same_at + 1.day, description: "SAMPLE VENDOR -PURCHASE CITY ST", amount_minor: -5200,
+      remote_id: "8521853000000001", synced_at: Time.current
+    )
+
+    # Identity abstains for the repeated id; the identical row still reconciles
+    # by content and the posted row is imported with its own amount.
+    assert_difference "Transaction.count", 1 do
+      Csv::ImportTransactionsJob.perform_now(import_b.id)
+    end
+
+    assert_equal original, pending.reload.ledger_transactions.sole
+    assert_not_equal original, posted.reload.ledger_transactions.sole
+    assert_equal balance_before - 5200, @bank_account.reload.balance_minor
+  end
+
   test "a row without remote_id whose description changed is not adopted by identity (#253)" do
     same_at = 1.day.ago.beginning_of_day + 12.hours
     import_a = create_csv_import

@@ -104,9 +104,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_200000) do
     t.datetime "synced_at"
     t.datetime "transacted_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["import_id", "remote_id"], name: "index_csv_transactions_on_import_id_and_remote_id", where: "(remote_id IS NOT NULL)"
     t.index ["import_id", "row_index"], name: "index_csv_transactions_on_import_id_and_row_index", unique: true
     t.index ["import_id"], name: "index_csv_transactions_on_import_id"
+    t.index ["remote_id", "import_id"], name: "index_csv_transactions_on_remote_id_and_import_id", where: "(remote_id IS NOT NULL)"
     t.index ["synced_at"], name: "index_csv_transactions_on_synced_at"
   end
 

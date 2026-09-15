@@ -157,11 +157,19 @@ class Csv::ImportTransactionsJob < ApplicationJob
     # ledger account with the same remote_id and return the single ledger
     # transaction they belong to. Identity is exact, so unlike
     # find_merged_duplicate_target this ignores description, sign, and merge
-    # state: a live, merged (zeroed), or excluded original all qualify. Rows in
-    # the current import are excluded so an export that repeats an id (a pending
-    # row and its posted replacement) still imports both rows as before.
+    # state: a live, merged (zeroed), or excluded original all qualify. An
+    # export that repeats an id (a pending row and its posted replacement)
+    # imports every such row, and a single prior transaction cannot stand for
+    # two of them, so identity abstains for the whole group and the heuristics
+    # decide row by row, exactly as they do for an import with no id column.
     def find_identity_target(csv_transaction, ledger_account)
       return nil if csv_transaction.remote_id.blank?
+
+      repeated_in_this_import = Csv::Transaction
+        .where(import_id: csv_transaction.import_id, remote_id: csv_transaction.remote_id)
+        .where.not(id: csv_transaction.id)
+        .exists?
+      return nil if repeated_in_this_import
 
       prior_csv_ids = Csv::Transaction
         .joins(:import)
