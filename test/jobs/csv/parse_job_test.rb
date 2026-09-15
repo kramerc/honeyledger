@@ -37,6 +37,43 @@ class Csv::ParseJobTest < ActiveJob::TestCase
     end
   end
 
+  test "persists remote_id from the mapped id column" do
+    csv_import = build_csv_import_with_file(<<~CSV, mappings: signed_mappings.merge("id_column" => "Id"))
+      Date,Description,Amount,Id
+      2026-01-15,Coffee,-4.75,8521853000000001
+    CSV
+
+    Csv::ParseJob.perform_now(csv_import.id)
+    assert_equal "8521853000000001", csv_import.transactions.sole.remote_id
+  end
+
+  test "re-parsing after adding an id column backfills remote_id and keeps existing sources" do
+    csv_import = build_csv_import_with_file(<<~CSV)
+      Date,Description,Amount,Id
+      2026-01-15,Coffee,-4.75,8521853000000001
+    CSV
+
+    Csv::ParseJob.perform_now(csv_import.id)
+    csv_transaction = csv_import.transactions.sole
+    assert_nil csv_transaction.remote_id
+
+    expense = Account.create!(user: @user, currency: @bank_account.currency, name: "Coffee", kind: :expense)
+    ledger_transaction = Transaction.create!(
+      user: @user, currency: @bank_account.currency, src_account: @bank_account, dest_account: expense,
+      amount_minor: 475, description: "Coffee", transacted_at: Time.zone.local(2026, 1, 15)
+    )
+    TransactionSource.create!(ledger_transaction: ledger_transaction, sourceable: csv_transaction)
+
+    csv_import.update!(column_mappings: signed_mappings.merge("id_column" => "Id"))
+    assert_no_difference [ "Csv::Transaction.count", "TransactionSource.count" ] do
+      Csv::ParseJob.perform_now(csv_import.id)
+    end
+
+    csv_transaction.reload
+    assert_equal "8521853000000001", csv_transaction.remote_id
+    assert_equal ledger_transaction, csv_transaction.ledger_transactions.sole
+  end
+
   test "marks the import as failed when the CSV cannot be parsed" do
     content = <<~CSV
       Date,Description,Amount
