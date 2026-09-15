@@ -67,6 +67,8 @@ class CsvImportsTest < ApplicationSystemTestCase
 
     assert_text "Step 3: Confirm and import"
     assert_text "Coffee Shop"
+    assert_selector "th", text: "Transaction id"
+    assert_selector "td", text: "1001"
     click_button "Parse and import these rows"
     assert_text "Parse and import enqueued"
 

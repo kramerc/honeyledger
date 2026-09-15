@@ -1,5 +1,6 @@
 <% parsed_rows = (@preview && @preview[:parsed_rows]) || [] %>
 <% preview_error = @preview && @preview[:error] %>
+<% show_remote_id = @csv_import.column_mappings.with_indifferent_access[:id_column].present? %>
 
 <h1>CSV Import — <%= @account.name %></h1>
 
@@ -32,6 +33,9 @@
       <th>Transacted at</th>
       <th>Description</th>
       <th>Amount</th>
+      <% if show_remote_id %>
+        <th>Transaction id</th>
+      <% end %>
     </tr>
     <% parsed_rows.each do |row| %>
       <tr>
@@ -39,6 +43,9 @@
         <td><%= row.transacted_at.strftime("%Y-%m-%d") %></td>
         <td><%= row.description %></td>
         <td><%= number_with_precision(row.amount_minor.to_d / (10 ** @account.currency.decimal_places), precision: @account.currency.decimal_places) %></td>
+        <% if show_remote_id %>
+          <td><%= row.remote_id %></td>
+        <% end %>
       </tr>
     <% end %>
   </table>
