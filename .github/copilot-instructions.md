@@ -7,4 +7,5 @@ Both Copilot's coding agent and Copilot code review on GitHub.com read `AGENTS.m
 - **Coding agent environment.** Copilot runs in its own ephemeral checkout on GitHub Actions, so the worktree setup in `AGENTS.md` does not apply. The test database comes from CI's `DATABASE_URL`; run `bin/rails db:prepare` before tests if it has not been created.
 - **PRs you open** follow the Git & PR Workflow in `AGENTS.md`: `AI generated` plus a category label, a closing keyword once in the PR body, no `(#NN)` in commit subjects. Never merge, force-push, or deploy (`kamal deploy`) yourself.
 - **Reviews you post** follow the GitHub Interaction rules in `AGENTS.md`; the Known Design Decisions listed there are not findings.
-- **Skills.** `.github/skills/sweep-pr/SKILL.md` is a link to the canonical copy in `.agents/skills/`; edit that one.
+- **Skills.** `.github/skills/sweep-pr/SKILL.md` and `.github/skills/triage-issues/SKILL.md` are links to the canonical copies in `.agents/skills/`; edit those.
+- **Issue triage.** Setting Priority and Size needs a token with the `project` scope, which the coding agent's token may lack. If `bin/triage set` fails, list the values you would have chosen in the PR body instead.

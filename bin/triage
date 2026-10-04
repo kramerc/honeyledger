@@ -1,0 +1,159 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Reads and sets the Priority and Size fields of this repository's issues on
+# the "Honeyledger" Projects v2 board. The rubric for choosing values is the
+# triage-issues skill (.agents/skills/triage-issues/SKILL.md); this script only
+# talks to GitHub. Project, field, and option IDs are looked up by name on
+# every run, so nothing breaks when the board is edited.
+#
+#   bin/triage list [--all] [--json]                          # open issues missing Priority or Size (--all: every open issue)
+#   bin/triage set N [--priority P0|P1|P2] [--size XS|S|M|L|XL] [--force]
+#
+# `set` adds the issue to the board if it is not there yet, and refuses to
+# replace a value that is already set (the maintainer's call) unless --force
+# is given. Needs a gh token with the `project` scope.
+#
+# The parsing lives in lib/project_board.rb, which has tests.
+
+require "json"
+
+APP_ROOT = File.expand_path("..", __dir__)
+require File.join(APP_ROOT, "lib", "project_board")
+
+USAGE = File.read(__FILE__).lines.grep(/\A#   bin\/triage/).map { |line| line.delete_prefix("# ") }.join.freeze
+
+def gh(*args, input: nil)
+  output = IO.popen([ "gh", *args ], "r+", chdir: APP_ROOT) do |io|
+    io.write(input) if input
+    io.close_write
+    io.read
+  end
+  abort "gh #{args.take(2).join(" ")} failed (does the token have the project scope? `gh auth refresh -s project`)" unless $?.success?
+  output
+end
+
+def graphql(query, **variables)
+  args = [ "api", "graphql", "-f", "query=#{query}" ]
+  variables.each { |name, value| args.push("-f", "#{name}=#{value}") }
+  JSON.parse(gh(*args)).fetch("data")
+end
+
+def option_value(options, flag)
+  index = options.index(flag) or return nil
+  options[index + 1] or abort("#{flag} needs a value\n#{USAGE}")
+end
+
+command, *options = ARGV
+abort USAGE unless %w[list set].include?(command)
+
+repository = JSON.parse(gh("repo", "view", "--json", "nameWithOwner,owner"))
+owner = repository.dig("owner", "login")
+
+projects = graphql(<<~GRAPHQL, login: owner, title: ProjectBoard::PROJECT_TITLE)
+  query($login: String!, $title: String!) {
+    repositoryOwner(login: $login) {
+      ... on ProjectV2Owner { projectsV2(first: 20, query: $title) { nodes { id title } } }
+    }
+  }
+GRAPHQL
+project = projects.dig("repositoryOwner", "projectsV2", "nodes").to_a.find { |node| node["title"] == ProjectBoard::PROJECT_TITLE }
+abort "No project titled #{ProjectBoard::PROJECT_TITLE.inspect} under #{owner}" unless project
+project_id = project["id"]
+
+field_nodes = graphql(<<~GRAPHQL, id: project_id).dig("node", "fields", "nodes")
+  query($id: ID!) {
+    node(id: $id) {
+      ... on ProjectV2 {
+        fields(first: 50) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } }
+      }
+    }
+  }
+GRAPHQL
+fields = ProjectBoard.single_select_fields(field_nodes.reject(&:empty?))
+
+items_query = <<~GRAPHQL
+  query($id: ID!, $endCursor: String) {
+    node(id: $id) {
+      ... on ProjectV2 {
+        items(first: 100, after: $endCursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            content {
+              __typename
+              ... on Issue { number title state repository { nameWithOwner } labels(first: 20) { nodes { name } } }
+            }
+            fieldValues(first: 20) {
+              nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } }
+            }
+          }
+        }
+      }
+    }
+  }
+GRAPHQL
+pages = JSON.parse(gh("api", "graphql", "--paginate", "--slurp", "-f", "id=#{project_id}", "-f", "query=#{items_query}"))
+item_nodes = pages.flat_map { |page| page.dig("data", "node", "items", "nodes") }
+issues = ProjectBoard.issues(item_nodes).select { |issue| issue["repository"] == repository["nameWithOwner"] }
+
+case command
+when "list"
+  shown = issues.select { |issue| issue["state"] == "OPEN" }
+  shown = shown.select { |issue| ProjectBoard.untriaged?(issue) } unless options.include?("--all")
+
+  # Open issues the board's auto-add has not picked up yet need triage too.
+  on_board = issues.map { |issue| issue["number"] }
+  missing = JSON.parse(gh("issue", "list", "--state", "open", "--limit", "1000", "--json", "number,title,labels"))
+    .reject { |issue| on_board.include?(issue["number"]) }
+    .map do |issue|
+      { "number" => issue["number"], "title" => issue["title"], "state" => "OPEN",
+        "labels" => issue["labels"].map { |label| label["name"] }, "Status" => "not on board" }
+    end
+  shown += missing
+
+  puts options.include?("--json") ? JSON.pretty_generate(shown.sort_by { |issue| issue["number"] }) : ProjectBoard.format_table(shown)
+
+when "set"
+  number = options.shift.to_s
+  abort "set needs an issue number\n#{USAGE}" unless number.match?(/\A\d+\z/)
+  requested = { "Priority" => option_value(options, "--priority"), "Size" => option_value(options, "--size") }
+  abort "set needs --priority, --size, or both\n#{USAGE}" if requested.values.all?(&:nil?)
+
+  issue = issues.find { |candidate| candidate["number"] == number.to_i }
+  begin
+    resolved = requested.compact.to_h { |field, value| [ field, ProjectBoard.option_id(fields, field, value) ] }
+    changes = ProjectBoard.changes(issue, requested, force: options.include?("--force"))
+  rescue ProjectBoard::Error => error
+    abort error.message
+  end
+
+  if changes.empty?
+    puts "Issue #{number}: already #{requested.compact.map { |field, value| "#{field} #{value}" }.join(", ")}"
+    exit
+  end
+
+  item_id = issue&.fetch("item_id")
+  unless item_id
+    content_id = JSON.parse(gh("issue", "view", number, "--json", "id"))["id"]
+    added = graphql(<<~GRAPHQL, project: project_id, content: content_id)
+      mutation($project: ID!, $content: ID!) {
+        addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } }
+      }
+    GRAPHQL
+    item_id = added.dig("addProjectV2ItemById", "item", "id")
+    puts "Issue #{number}: added to the #{ProjectBoard::PROJECT_TITLE} board"
+  end
+
+  resolved.slice(*changes.keys).each do |field, (field_id, option_id)|
+    graphql(<<~GRAPHQL, project: project_id, item: item_id, field: field_id, option: option_id)
+      mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+        updateProjectV2ItemFieldValue(input: {
+          projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option }
+        }) { projectV2Item { id } }
+      }
+    GRAPHQL
+    previous = issue&.fetch(field, nil)
+    puts "Issue #{number}: #{field} #{previous ? "#{previous} -> " : ""}#{changes[field]}"
+  end
+end
