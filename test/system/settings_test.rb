@@ -32,6 +32,8 @@ class SettingsTest < ApplicationSystemTestCase
     within "#passkey_#{passkeys(:laptop).id}" do
       click_link "Rename"
     end
+    # Settings has its own "Name (optional)" field, so wait for the edit page before filling in.
+    assert_selector "h1", text: "Rename passkey"
     fill_in "Name", with: "Work laptop"
     click_button "Rename passkey"
 
