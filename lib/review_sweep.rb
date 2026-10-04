@@ -396,7 +396,9 @@ module ReviewSweep
       else "CI pending"
       end
     ].join(" · ")
-    lines << "#{ledger["findings"].size} findings: " + STATUSES.filter_map { |status| "#{tallies[status].size} #{status}" if tallies[status] }.join(" · ")
+    count = ledger["findings"].size
+    breakdown = STATUSES.filter_map { |status| "#{tallies[status].size} #{status}" if tallies[status] }.join(" · ")
+    lines << "#{count} #{count == 1 ? "finding" : "findings"}#{": #{breakdown}" unless breakdown.empty?}"
     lines << if verification
       "Fix delta #{verification["base"]}..#{verification["head"]} reviewed locally: #{verification["result"]}#{" — #{verification["note"]}" unless verification["note"].to_s.empty?}"
     elsif state["head_bot_reviewed"]
@@ -450,7 +452,8 @@ module ReviewSweep
     lines << "Codex: #{codex_text}"
     lines << "Rounds: #{state["rounds"].size} of #{MAX_ROUNDS}#{" (exhausted)" if state["rounds_exhausted"]}#{" — #{state["rounds"].join(", ")}" if state["rounds"].any?}"
     tallies = state["findings"].group_by { |finding| finding["ledger_status"] }
-    lines << "Findings: #{state["findings"].size} (#{STATUSES.filter_map { |status| "#{tallies[status].size} #{status}" if tallies[status] }.join(", ")})"
+    breakdown = STATUSES.filter_map { |status| "#{tallies[status].size} #{status}" if tallies[status] }.join(", ")
+    lines << "Findings: #{state["findings"].size}#{" (#{breakdown})" unless breakdown.empty?}"
     lines << "Ledger: " + (ledger.empty? ? "none yet" : "updated #{ledger["updated_at"]} at head #{ledger["head"]}")
     verification = ledger["verification"]
     verification_text = if verification then "#{verification["base"]}..#{verification["head"]} #{verification["result"]}"
