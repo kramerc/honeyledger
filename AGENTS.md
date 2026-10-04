@@ -53,8 +53,10 @@ Everything derives from the worktree's path, via `config/worktree_database.rb`:
   once, and a migration on one branch cannot break another.
 - **Secrets and local settings.** Run `bin/worktree-setup` after creating a
   worktree: it symlinks the gitignored `config/master.key` and
-  `.claude/settings.local.json` from the primary checkout and runs
-  `db:prepare`. It is idempotent and a no-op in the primary checkout.
+  `.claude/settings.local.json` from the primary checkout, installs any
+  gems the worktree's `Gemfile.lock` needs (a merged dependency bump may not
+  be installed yet), and runs `db:prepare`. It is idempotent and a no-op in
+  the primary checkout.
 - **Ports.** `bin/dev` picks a stable port per worktree (the primary checkout
   prefers 3000) and falls forward if it is taken. Set `PORT` to pin one.
 

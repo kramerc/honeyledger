@@ -6,8 +6,8 @@
 #
 # Two things do not come along when git creates a worktree: gitignored files
 # (credentials, local Claude Code settings) and databases. This symlinks the
-# former from the primary checkout and creates the latter. It is a no-op in the
-# primary checkout.
+# former from the primary checkout and creates the latter, installing any gems
+# the checkout's Gemfile.lock needs first. It is a no-op in the primary checkout.
 
 require "fileutils"
 require "json"
@@ -40,6 +40,15 @@ linked = LINKED_PATHS.select do |relative_path|
   FileUtils.mkdir_p(File.dirname(destination))
   FileUtils.ln_s(source, destination)
   true
+end
+
+# A new worktree starts from the latest main, whose Gemfile.lock may name gems
+# not installed yet (a merged dependency bump). Without them db:prepare fails
+# inside Bundler before it reaches the database, so install them first.
+unless system("bundle", "check", chdir: APP_ROOT, out: File::NULL, err: File::NULL) ||
+       system("bundle", "install", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
+  say "Could not install this worktree's gems -- run bundle install to see why."
+  exit 0
 end
 
 # The symlinks above are useful regardless, but database preparation is only
