@@ -324,8 +324,14 @@ class ReviewSweepTest < ActiveSupport::TestCase
     assert_includes status, "Stop conditions: not met — no Copilot review on this PR yet; CI failing: test; fix delta not verified"
     rendered = ReviewSweep.render_ledger(ledger, state)
     assert_includes rendered, "round 0 of 2 · Copilot review pending · Codex has not reviewed #{HEAD[0, 7]} · CI failing: test"
-    assert_includes rendered, "0 findings: "
+    assert_match(/^0 findings$/, rendered)
+    assert_match(/^Findings: 0$/, status)
     assert_includes rendered, "Fix delta not yet verified"
+
+    single = ReviewSweep.assemble(pull_request, [], [ review_comments.last ], [], now: NOW)
+    single_ledger = ReviewSweep.upsert_ledger({}, single, now: NOW)
+    assert_match(/^1 finding: 1 open$/, ReviewSweep.render_ledger(single_ledger, single))
+    assert_match(/^Findings: 1 \(1 open\)$/, ReviewSweep.format_status(single, single_ledger))
 
     young = issue_comment(id: 902, login: "kramerc", body: "@codex review", at: NOW - 60).merge("reactions" => { "eyes" => 1 })
     codex_findings_review = review(id: 31, login: ReviewSweep::CODEX, sha: HEAD, at: NOW - 30, body: "### 💡 Codex Review\n\n**Reviewed commit:** `#{HEAD[0, 10]}`")
