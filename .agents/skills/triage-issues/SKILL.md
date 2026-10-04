@@ -10,7 +10,7 @@ allowed-tools: Bash(bin/triage:*) Bash(gh issue view:*) Bash(gh issue list:*) Ba
 
 Every open issue carries a **Priority** and a **Size** on the "Honeyledger" Projects v2 board, plus an **Estimate** derived from Size. They are board fields, not repo labels. This is the same procedure for every agent: the canonical copy lives at `.agents/skills/triage-issues/SKILL.md`, and the copies under `.claude/skills/` and `.github/skills/` are links to it.
 
-`bin/triage` does the GitHub side. It looks up the project, field, and option IDs by name on every run, adds an issue to the board if the auto-add has not caught it yet, and will not overwrite a value that is already set unless given `--force`.
+`bin/triage` does the GitHub side. It looks up the project, field, and option IDs by name on every run, adds an issue to the board if the auto-add has not caught it yet, and will not overwrite a Priority or Size that is already set unless given `--force`. Estimate is the exception, described below.
 
 ```
 bin/triage list                 # open issues missing Priority or Size, or with a stale Estimate (marked !)
