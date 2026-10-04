@@ -82,7 +82,9 @@ Targeted test files first, then all six gates from step 2.
 
 ## 8. Verify the fix delta locally
 
-Review only the diff from the head the bots reviewed (shown by `status`) to the new head, in a fresh context that has not seen the fix being written: a subagent where the tool offers one, otherwise a new session given only that diff. Ask for regressions and half-done fixes. Fold anything it finds back through step 5 and one small follow-up commit; if it needs more than that, treat it as a new round or hand it to the user. Record the result in the ledger as `verification: { base, head, result, note }` (the result must be `clean` for the sweep to finish) and write it. Do not request a bot for the delta.
+Skip this step when no commit has landed since the head the bots reviewed (no findings, or every one rejected, deferred, or duplicate): there is no delta, and `status` reports the verification as not needed. Do not record a self-referential verification.
+
+Otherwise, review only the diff from the head the bots reviewed (shown by `status`) to the new head, in a fresh context that has not seen the fix being written: a subagent where the tool offers one, otherwise a new session given only that diff. Ask for regressions and half-done fixes. Fold anything it finds back through step 5 and one small follow-up commit; if it needs more than that, treat it as a new round or hand it to the user. Record the result in the ledger as `verification: { base, head, result, note }` (the result must be `clean` for the sweep to finish) and write it. Do not request a bot for the delta.
 
 ## 9. Replies
 
@@ -98,7 +100,7 @@ Suppressed findings have no thread; the ledger row is their adjudication. Never 
 
 Final `bin/sweep-pr ledger N --write …`, then `bin/sweep-pr status N`.
 
-- **Stop** when it reports the stop conditions met: every finding terminal, CI green on the head, delta verified clean at the head.
+- **Stop** when it reports the stop conditions met: every finding terminal, CI green on the head, delta verified clean at the head, or no delta because the head is the one the bots reviewed.
 - **Round two, once**: if not met, fewer than two rounds have run, and round one produced at least one accepted finding, go back to step 3. Never a third round.
 - **Otherwise** list what remains for the user to adjudicate and stop. Anything a bot surfaces after the limit — a manual re-review, a late comment — is handled the same way: adjudicate in the ledger with the user, do not restart the loop.
 

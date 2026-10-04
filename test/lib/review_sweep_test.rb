@@ -114,8 +114,30 @@ class ReviewSweepTest < ActiveSupport::TestCase
 
     assert state.dig("ci", "green")
     assert_not state.dig("stop", "met")
-    assert_equal [ "6 finding(s) not in a terminal state", "fix delta not verified at head #{HEAD[0, 7]}" ], state.dig("stop", "reasons")
+    assert_equal [ "6 finding(s) not in a terminal state" ], state.dig("stop", "reasons")
     assert_empty state["warnings"]
+  end
+
+  test "a head the bots reviewed has no fix delta to verify, but a later commit or a recorded verification still counts" do
+    state = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, now: NOW)
+    rejected = state["findings"].map { |finding| { "id" => finding["id"], "status" => "rejected", "note" => "declined" } }
+    ledger = { "findings" => rejected }
+
+    unchanged = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: ledger, now: NOW)
+    assert unchanged["head_bot_reviewed"]
+    assert unchanged.dig("stop", "met")
+    assert_includes ReviewSweep.format_status(unchanged, ledger), "Verification: not needed, #{HEAD[0, 7]} is the bot-reviewed head"
+    rendered = ReviewSweep.render_ledger(ReviewSweep.upsert_ledger(ledger, unchanged, now: NOW), unchanged)
+    assert_includes rendered, "No fix delta: #{HEAD[0, 7]} is the bot-reviewed head"
+
+    not_clean = ledger.merge("verification" => { "base" => HEAD[0, 7], "head" => HEAD[0, 7], "result" => "issues found" })
+    reasons = ReviewSweep.assemble(pull_request, reviews, review_comments, issue_comments, ledger: not_clean, now: NOW).dig("stop", "reasons")
+    assert_equal [ "fix delta verification at head #{HEAD[0, 7]} is \"issues found\", not clean" ], reasons
+
+    newer_head = "c" * 40
+    moved = ReviewSweep.assemble(pull_request.merge("headRefOid" => newer_head), reviews, review_comments, issue_comments, ledger: ledger, now: NOW)
+    assert_not moved["head_bot_reviewed"]
+    assert_includes moved.dig("stop", "reasons"), "fix delta not verified at head #{newer_head[0, 7]}"
   end
 
   test "a Codex request is pending while young and dropped once stale, whether or not it was acknowledged" do

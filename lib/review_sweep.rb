@@ -295,9 +295,12 @@ module ReviewSweep
                  "#{" (#{stale_open} no longer on the PR but still open in the ledger)" if stale_open > 0}"
     end
     reasons << (ci["failing"].any? ? "CI failing: #{ci["failing"].join(", ")}" : "CI not green yet") unless ci["green"]
+    # With no commits since the latest bot-reviewed head there is no fix delta
+    # to verify, but a verification recorded for this head still has to be clean.
     verification = ledger["verification"]
+    no_delta = round_heads.any? && sha_match?(round_heads.last, head)
     if verification.nil? || !sha_match?(verification["head"], head)
-      reasons << "fix delta not verified at head #{head7}"
+      reasons << "fix delta not verified at head #{head7}" unless no_delta
     elsif verification["result"] != "clean"
       reasons << "fix delta verification at head #{head7} is #{verification["result"].inspect}, not clean"
     elsif round_heads.none? { |sha| sha_match?(verification["base"], sha) }
@@ -309,7 +312,7 @@ module ReviewSweep
     {
       "pr" => pull_request["number"], "url" => pull_request["url"], "head" => head, "head7" => head7, "base" => pull_request["baseRefName"],
       "branch" => pull_request["headRefName"], "draft" => pull_request["isDraft"], "merge_state" => pull_request["mergeStateStatus"],
-      "ci" => ci, "rounds" => rounds, "rounds_exhausted" => rounds.size >= MAX_ROUNDS,
+      "ci" => ci, "rounds" => rounds, "rounds_exhausted" => rounds.size >= MAX_ROUNDS, "head_bot_reviewed" => no_delta,
       "reviews" => { "copilot" => copilot, "codex" => codex },
       "findings" => findings, "stop" => { "met" => reasons.empty?, "reasons" => reasons }, "warnings" => warnings
     }
@@ -396,6 +399,8 @@ module ReviewSweep
     lines << "#{ledger["findings"].size} findings: " + STATUSES.filter_map { |status| "#{tallies[status].size} #{status}" if tallies[status] }.join(" · ")
     lines << if verification
       "Fix delta #{verification["base"]}..#{verification["head"]} reviewed locally: #{verification["result"]}#{" — #{verification["note"]}" unless verification["note"].to_s.empty?}"
+    elsif state["head_bot_reviewed"]
+      "No fix delta: #{head7} is the bot-reviewed head"
     else
       "Fix delta not yet verified"
     end
@@ -448,7 +453,11 @@ module ReviewSweep
     lines << "Findings: #{state["findings"].size} (#{STATUSES.filter_map { |status| "#{tallies[status].size} #{status}" if tallies[status] }.join(", ")})"
     lines << "Ledger: " + (ledger.empty? ? "none yet" : "updated #{ledger["updated_at"]} at head #{ledger["head"]}")
     verification = ledger["verification"]
-    lines << "Verification: " + (verification ? "#{verification["base"]}..#{verification["head"]} #{verification["result"]}" : "none")
+    verification_text = if verification then "#{verification["base"]}..#{verification["head"]} #{verification["result"]}"
+    elsif state["head_bot_reviewed"] then "not needed, #{state["head7"]} is the bot-reviewed head"
+    else "none"
+    end
+    lines << "Verification: #{verification_text}"
     state["warnings"].each { |warning| lines << "Warning: #{warning}" }
     lines << (state.dig("stop", "met") ? "Stop conditions: met" : "Stop conditions: not met — #{state.dig("stop", "reasons").join("; ")}")
     lines.join("\n") + "\n"
