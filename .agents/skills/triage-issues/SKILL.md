@@ -1,6 +1,6 @@
 ---
 name: triage-issues
-description: Set Priority (P0–P2) and Size (XS–XL), with Estimate derived from Size, on the Honeyledger project board — for one issue just filed, a list of issue numbers, or every open issue still missing either field.
+description: Set Priority (P0–P2) and Size (XS–XL), with Estimate derived from Size, on the Honeyledger project board — for one issue just filed, a list of issue numbers, or every open issue still missing either field or carrying a stale Estimate.
 # The keys below are read by Claude Code and ignored by other agents.
 argument-hint: "[issue-number ...]"
 allowed-tools: Bash(bin/triage:*) Bash(gh issue view:*) Bash(gh issue list:*) Bash(gh api:*) Read Grep Glob
@@ -24,7 +24,7 @@ bin/triage sync-estimates       # repair Estimate on every sized issue; --dry-ru
 ## When this runs
 
 - **Filing an issue.** An agent that opens an issue triages it right after `gh issue create`, in the same task, without being asked. The values follow from what the agent just wrote, so no separate request is needed.
-- **On request.** With issue numbers, triage those. Without, run `bin/triage list` and triage everything it prints.
+- **On request.** With issue numbers, triage those. Without, run `bin/triage list` and triage everything it prints. A row marked `!` whose Priority and Size are already set needs no judgment, only `bin/triage sync-estimates`.
 - **Not pull requests.** A PR's priority and size are those of the issue it closes, and a second copy on the PR would only drift. A PR with no issue is already sized by its diff by the time anyone looks at the board.
 
 ## Procedure

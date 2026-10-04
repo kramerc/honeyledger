@@ -12,8 +12,8 @@
 #   bin/triage sync-estimates [--dry-run]                     # set Estimate from Size on every issue where it differs
 #
 # `set` adds the issue to the board if it is not there yet, and refuses to
-# replace a value that is already set (the maintainer's call) unless --force
-# is given. Estimate is never set by hand: it is derived from Size
+# replace a Priority or Size that is already set (the maintainer's call)
+# unless --force is given. Estimate is never set by hand: it is derived from Size
 # (ProjectBoard::ESTIMATES) whenever an issue's Size is written or checked,
 # and `list` flags an issue whose Estimate is missing or does not match (`!`).
 # Needs a gh token with the `project` scope.
