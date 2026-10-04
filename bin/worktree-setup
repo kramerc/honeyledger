@@ -6,8 +6,8 @@
 #
 # Two things do not come along when git creates a worktree: gitignored files
 # (credentials, local Claude Code settings) and databases. This symlinks the
-# former from the primary checkout and creates the latter. It is a no-op in the
-# primary checkout.
+# former from the primary checkout and creates the latter, installing any gems
+# the checkout's Gemfile.lock needs first. It is a no-op in the primary checkout.
 
 require "fileutils"
 require "json"
@@ -42,6 +42,22 @@ linked = LINKED_PATHS.select do |relative_path|
   true
 end
 
+# Bundler re-resolves and rewrites Gemfile.lock whenever Gemfile has changed
+# since it was locked, even from bundle check or a Rails boot. This runs
+# silently at session start, so every Bundler call here is frozen: an
+# uncommitted Gemfile edit makes setup report failure instead.
+FROZEN_BUNDLE = { "BUNDLE_FROZEN" => "true" }.freeze
+
+# A new worktree starts from the latest main, whose Gemfile.lock may name gems
+# not installed yet (a merged dependency bump). Without them db:prepare fails
+# inside Bundler before it reaches the database, so install them first; with
+# everything present this is about as quick as bundle check.
+unless system(FROZEN_BUNDLE, "bundle", "install", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
+  say "Could not install this worktree's gems, or Gemfile has changed since Gemfile.lock " \
+      "was written -- run BUNDLE_FROZEN=true bundle install to see why without touching Gemfile.lock."
+  exit 0
+end
+
 # The symlinks above are useful regardless, but database preparation is only
 # worth doing when it prepares databases of this worktree's own.
 if WorktreeDatabase.database_url_names_database?
@@ -53,7 +69,7 @@ end
 # db:prepare creates both the development and test databases when they are
 # missing and loads the schema; once they exist it only runs pending
 # migrations, so repeating it every session is cheap.
-unless system("bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
+unless system(FROZEN_BUNDLE, "bin/rails", "db:prepare", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
   say "Could not prepare this worktree's databases -- is PostgreSQL running? Run bin/rails db:prepare to see why."
   exit 0
 end
