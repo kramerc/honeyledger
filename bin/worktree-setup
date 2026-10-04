@@ -54,7 +54,7 @@ FROZEN_BUNDLE = { "BUNDLE_FROZEN" => "true" }.freeze
 # everything present this is about as quick as bundle check.
 unless system(FROZEN_BUNDLE, "bundle", "install", chdir: APP_ROOT, out: File::NULL, err: File::NULL)
   say "Could not install this worktree's gems, or Gemfile has changed since Gemfile.lock " \
-      "was written -- run bundle install to see why."
+      "was written -- run BUNDLE_FROZEN=true bundle install to see why without touching Gemfile.lock."
   exit 0
 end
 
