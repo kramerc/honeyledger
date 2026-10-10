@@ -6,7 +6,7 @@ require "stringio"
 require "open3"
 require "tmpdir"
 require "fileutils"
-require Rails.root.join("lib/codex_worktree_setup_hook")
+require Rails.root.join("lib/dev/codex_worktree_setup_hook")
 
 class CodexWorktreeSetupHookTest < ActiveSupport::TestCase
   test "startup and resume run the shared setup in the adapter checkout" do
@@ -64,9 +64,9 @@ class CodexWorktreeSetupHookTest < ActiveSupport::TestCase
 
     Dir.mktmpdir("codex-hook") do |temporary_directory|
       root = File.join(temporary_directory, "checkout with spaces")
-      FileUtils.mkdir_p([ File.join(root, "bin"), File.join(root, "lib"), File.join(root, "nested directory") ])
+      FileUtils.mkdir_p([ File.join(root, "bin"), File.join(root, "lib", "dev"), File.join(root, "nested directory") ])
       FileUtils.cp(Rails.root.join("bin/codex-session-start"), File.join(root, "bin/codex-session-start"))
-      FileUtils.cp(Rails.root.join("lib/codex_worktree_setup_hook.rb"), File.join(root, "lib/codex_worktree_setup_hook.rb"))
+      FileUtils.cp(Rails.root.join("lib/dev/codex_worktree_setup_hook.rb"), File.join(root, "lib/dev/codex_worktree_setup_hook.rb"))
       setup_path = File.join(root, "bin/worktree-setup")
       File.write(setup_path, <<~RUBY)
         #!/usr/bin/env ruby

@@ -1,4 +1,5 @@
 require "test_helper"
+require Rails.root.join("lib/dev/project_board")
 
 class ProjectBoardTest < ActiveSupport::TestCase
   FIELD_NODES = [

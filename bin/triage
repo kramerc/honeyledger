@@ -20,12 +20,12 @@
 # its sub-issues carry the points, and needs no Size.
 # Needs a gh token with the `project` scope.
 #
-# The parsing lives in lib/project_board.rb, which has tests.
+# The parsing lives in lib/dev/project_board.rb, which has tests.
 
 require "json"
 
 APP_ROOT = File.expand_path("..", __dir__)
-require File.join(APP_ROOT, "lib", "project_board")
+require File.join(APP_ROOT, "lib", "dev", "project_board")
 
 USAGE = File.read(__FILE__).lines.grep(/\A#   bin\/triage/).map { |line| line.delete_prefix("# ") }.join.freeze
 
