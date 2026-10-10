@@ -11,7 +11,7 @@ class ProjectBoardTest < ActiveSupport::TestCase
     { "id" => "title-field", "name" => "Title" }
   ].freeze
 
-  def item(id, typename:, number: 1, state: "OPEN", values: {}, labels: [])
+  def item(id, typename:, number: 1, state: "OPEN", values: {}, labels: [], sub_issues: 0, parent: nil)
     {
       "id" => id,
       "content" => {
@@ -20,7 +20,9 @@ class ProjectBoardTest < ActiveSupport::TestCase
         "title" => "Sample issue #{number}",
         "state" => state,
         "repository" => { "nameWithOwner" => "owner/repo" },
-        "labels" => { "nodes" => labels.map { |name| { "name" => name } } }
+        "labels" => { "nodes" => labels.map { |name| { "name" => name } } },
+        "subIssuesSummary" => { "total" => sub_issues },
+        "parent" => parent && { "number" => parent }
       },
       "fieldValues" => { "nodes" => [ {} ] + values.map do |field, value|
         { (value.is_a?(Numeric) ? "number" : "name") => value, "field" => { "name" => field } }
@@ -136,6 +138,67 @@ class ProjectBoardTest < ActiveSupport::TestCase
     assert_equal({ "Estimate" => 2 }, ProjectBoard.changes(sized, { "Priority" => "P1", "Size" => nil }))
     assert_equal({ "Size" => "L", "Estimate" => 5 }, ProjectBoard.changes(sized, { "Size" => "L" }, force: true))
     assert_equal({}, ProjectBoard.changes(sized.merge("Estimate" => 2), { "Size" => "S" }))
+  end
+
+  test "reads the sub-issue count and parent number" do
+    parent, child, plain = ProjectBoard.issues([
+      item("item-1", typename: "Issue", number: 10, sub_issues: 3),
+      item("item-2", typename: "Issue", number: 11, parent: 10),
+      item("item-3", typename: "Issue", number: 12)
+    ])
+
+    assert_equal [ 3, nil ], parent.values_at("sub_issues", "parent")
+    assert_equal [ 0, 10 ], child.values_at("sub_issues", "parent")
+    assert ProjectBoard.parent?(parent)
+    assert_not ProjectBoard.parent?(child)
+    assert_not ProjectBoard.parent?(plain)
+    assert_not ProjectBoard.parent?(nil)
+  end
+
+  test "a parent's estimate is cleared rather than derived from its size" do
+    parent = { "number" => 10, "sub_issues" => 2, "Priority" => "P2", "Size" => "XL", "Estimate" => 8 }
+
+    assert_equal ProjectBoard::CLEAR, ProjectBoard.estimate_change(parent, "XL")
+    assert_nil ProjectBoard.estimate_change(parent.merge("Estimate" => nil), "XL")
+    assert ProjectBoard.estimate_mismatch?(parent)
+    assert_not ProjectBoard.estimate_mismatch?(parent.merge("Estimate" => nil))
+  end
+
+  test "a parent needs a priority but no size, and is untriaged while it still has an estimate" do
+    parent = { "state" => "OPEN", "sub_issues" => 2, "Priority" => "P2", "Size" => nil, "Estimate" => nil }
+
+    assert_not ProjectBoard.untriaged?(parent)
+    assert_not ProjectBoard.untriaged?(parent.merge("Size" => "XL"))
+    assert ProjectBoard.untriaged?(parent.merge("Priority" => nil))
+    assert ProjectBoard.untriaged?(parent.merge("Size" => "XL", "Estimate" => 8))
+  end
+
+  test "changes clears a parent's estimate even when its size is set or unchanged" do
+    parent = { "number" => 10, "sub_issues" => 2, "Priority" => "P2", "Size" => "XL", "Estimate" => 8 }
+
+    assert_equal({ "Estimate" => ProjectBoard::CLEAR }, ProjectBoard.changes(parent, { "Priority" => "P2", "Size" => nil }))
+    assert_equal({ "Size" => "L", "Estimate" => ProjectBoard::CLEAR }, ProjectBoard.changes(parent, { "Size" => "L" }, force: true))
+    assert_equal({}, ProjectBoard.changes(parent.merge("Estimate" => nil), { "Size" => "XL" }))
+  end
+
+  test "an issue not on the board yet is still recognised as a parent and gets no estimate" do
+    content = item("unused", typename: "Issue", number: 20, sub_issues: 3)["content"]
+
+    off_board = ProjectBoard.issue(content)
+
+    assert_nil off_board["item_id"]
+    assert_nil off_board["Priority"]
+    assert ProjectBoard.parent?(off_board)
+    assert_equal({ "Priority" => "P2", "Size" => "XL" }, ProjectBoard.changes(off_board, { "Priority" => "P2", "Size" => "XL" }))
+    plain = ProjectBoard.issue(content.merge("subIssuesSummary" => { "total" => 0 }))
+    assert_equal({ "Priority" => "P2", "Size" => "XL", "Estimate" => 8 }, ProjectBoard.changes(plain, { "Priority" => "P2", "Size" => "XL" }))
+  end
+
+  test "the table notes how many sub-issues a parent has" do
+    parent = { "number" => 10, "title" => "Epic", "labels" => %w[enhancement], "Status" => "Backlog",
+               "Priority" => "P2", "Size" => "XL", "Estimate" => 8, "sub_issues" => 4 }
+
+    assert_equal "  10  P2  XL  8!   Backlog      Epic  (4 sub-issues)  [enhancement]", ProjectBoard.format_table([ parent ]).rstrip
   end
 
   test "formats a table sorted by number with blanks shown as dashes and a stale estimate flagged" do

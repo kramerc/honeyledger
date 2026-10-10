@@ -9,13 +9,15 @@
 #
 #   bin/triage list [--all] [--json]                          # open issues needing triage (--all: every open issue)
 #   bin/triage set N [--priority P0|P1|P2] [--size XS|S|M|L|XL] [--force]
-#   bin/triage sync-estimates [--dry-run]                     # set Estimate from Size on every issue where it differs
+#   bin/triage sync-estimates [--dry-run]                     # derive Estimate from Size (cleared on parents) wherever it differs
 #
 # `set` adds the issue to the board if it is not there yet, and refuses to
 # replace a Priority or Size that is already set (the maintainer's call)
 # unless --force is given. Estimate is never set by hand: it is derived from Size
 # (ProjectBoard::ESTIMATES) whenever an issue's Size is written or checked,
 # and `list` flags an issue whose Estimate is missing or does not match (`!`).
+# A parent issue (one with sub-issues) has its Estimate cleared instead, since
+# its sub-issues carry the points, and needs no Size.
 # Needs a gh token with the `project` scope.
 #
 # The parsing lives in lib/project_board.rb, which has tests.
@@ -93,7 +95,10 @@ items_query = <<~GRAPHQL
             id
             content {
               __typename
-              ... on Issue { number title state repository { nameWithOwner } labels(first: 20) { nodes { name } } }
+              ... on Issue {
+                number title state repository { nameWithOwner } labels(first: 20) { nodes { name } }
+                subIssuesSummary { total } parent { number }
+              }
             }
             fieldValues(first: 20) {
               nodes {
@@ -131,6 +136,29 @@ def set_number(project_id, item_id, field_id, number)
   GRAPHQL
 end
 
+def clear_field(project_id, item_id, field_id)
+  graphql(<<~GRAPHQL, project: project_id, item: item_id, field: field_id)
+    mutation($project: ID!, $item: ID!, $field: ID!) {
+      clearProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field }) { projectV2Item { id } }
+    }
+  GRAPHQL
+end
+
+# Writes a derived Estimate, or clears it on a parent issue.
+def write_estimate(project_id, item_id, field_id, estimate)
+  if estimate == ProjectBoard::CLEAR
+    clear_field(project_id, item_id, field_id)
+  else
+    set_number(project_id, item_id, field_id, estimate)
+  end
+end
+
+def describe_estimate(previous, estimate)
+  return "Estimate #{previous} cleared (has sub-issues)" if estimate == ProjectBoard::CLEAR
+
+  "Estimate #{previous ? "#{previous} -> " : ""}#{estimate}"
+end
+
 def estimate_field_id(field_nodes)
   ProjectBoard.field_id(field_nodes, ProjectBoard::ESTIMATE_FIELD)
 rescue ProjectBoard::Error => error
@@ -161,6 +189,24 @@ when "set"
   abort "set needs --priority, --size, or both\n#{USAGE}" if requested.values.all?(&:nil?)
 
   issue = issues.find { |candidate| candidate["number"] == number.to_i }
+  unless issue
+    # Not on the board yet: read it from the repository so a parent issue is
+    # still recognised and gets no Estimate.
+    owner_name, repository_name = repository["nameWithOwner"].split("/", 2)
+    content = graphql(<<~GRAPHQL, owner: owner_name, name: repository_name, number: number.to_i).dig("repository", "issue")
+      query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+          issue(number: $number) {
+            id number title state repository { nameWithOwner } labels(first: 20) { nodes { name } }
+            subIssuesSummary { total } parent { number }
+          }
+        }
+      }
+    GRAPHQL
+    abort "Issue #{number} not found in #{repository["nameWithOwner"]}" unless content
+    content_id = content["id"]
+    issue = ProjectBoard.issue(content)
+  end
   begin
     resolved = requested.compact.to_h { |field, value| [ field, ProjectBoard.option_id(fields, field, value) ] }
     changes = ProjectBoard.changes(issue, requested, force: options.include?("--force"))
@@ -173,9 +219,8 @@ when "set"
     exit
   end
 
-  item_id = issue&.fetch("item_id")
+  item_id = issue["item_id"]
   unless item_id
-    content_id = JSON.parse(gh("issue", "view", number, "--json", "id"))["id"]
     added = graphql(<<~GRAPHQL, project: project_id, content: content_id)
       mutation($project: ID!, $content: ID!) {
         addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } }
@@ -186,13 +231,14 @@ when "set"
   end
 
   changes.each do |field, value|
+    previous = issue[field]
     if field == ProjectBoard::ESTIMATE_FIELD
-      set_number(project_id, item_id, estimate_field_id(field_nodes), value)
+      write_estimate(project_id, item_id, estimate_field_id(field_nodes), value)
+      puts "Issue #{number}: #{describe_estimate(previous, value)}"
     else
       set_single_select(project_id, item_id, *resolved.fetch(field))
+      puts "Issue #{number}: #{field} #{previous ? "#{previous} -> " : ""}#{value}"
     end
-    previous = issue&.fetch(field, nil)
-    puts "Issue #{number}: #{field} #{previous ? "#{previous} -> " : ""}#{value}"
   end
 
 when "sync-estimates"
@@ -202,14 +248,14 @@ when "sync-estimates"
     [ issue, estimate ] if estimate
   end
   if stale.empty?
-    puts "Every sized issue already has the matching Estimate."
+    puts "Every issue already has the right Estimate."
     exit
   end
 
   field_id = estimate_field_id(field_nodes) unless options.include?("--dry-run")
   stale.sort_by { |issue, _| issue["number"] }.each do |issue, estimate|
-    set_number(project_id, issue["item_id"], field_id, estimate) if field_id
-    previous = issue[ProjectBoard::ESTIMATE_FIELD]
-    puts "Issue #{issue["number"]}: Estimate #{previous ? "#{previous} -> " : ""}#{estimate} (Size #{issue["Size"]})#{" (dry run)" unless field_id}"
+    write_estimate(project_id, issue["item_id"], field_id, estimate) if field_id
+    puts "Issue #{issue["number"]}: #{describe_estimate(issue[ProjectBoard::ESTIMATE_FIELD], estimate)} " \
+         "(Size #{issue["Size"] || "-"})#{" (dry run)" unless field_id}"
   end
 end

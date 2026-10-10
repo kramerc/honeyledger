@@ -1,9 +1,9 @@
 ---
 name: triage-issues
-description: Set Priority (P0–P2) and Size (XS–XL), with Estimate derived from Size, on the Honeyledger project board — for one issue just filed, a list of issue numbers, or every open issue still missing either field or carrying a stale Estimate.
+description: Set Priority (P0–P2) and Size (XS–XL), with Estimate derived from Size, on the Honeyledger project board — for one issue just filed, a list of issue numbers, or every open issue still missing either field or carrying a stale Estimate — and split an approved XL epic into sub-issues.
 # The keys below are read by Claude Code and ignored by other agents.
 argument-hint: "[issue-number ...]"
-allowed-tools: Bash(bin/triage:*) Bash(gh issue view:*) Bash(gh issue list:*) Bash(gh api:*) Read Grep Glob
+allowed-tools: Bash(bin/triage:*) Bash(gh issue view:*) Bash(gh issue list:*) Bash(gh issue create:*) Bash(gh issue edit:*) Bash(gh api:*) Read Grep Glob
 ---
 
 # Triage issues on the project board
@@ -16,10 +16,12 @@ Every open issue carries a **Priority** and a **Size** on the "Honeyledger" Proj
 bin/triage list                 # open issues missing Priority or Size, or with a stale Estimate (marked !)
 bin/triage list --all           # every open issue with its current values (calibration)
 bin/triage set N --priority P1 --size M
-bin/triage sync-estimates       # repair Estimate on every sized issue; --dry-run to preview
+bin/triage sync-estimates       # repair Estimate everywhere (cleared on parents); --dry-run to preview
 ```
 
 **Estimate is never chosen.** Board columns can only total a number field, so Estimate is Size as a number: XS 1, S 2, M 3, L 5, XL 8 (`ProjectBoard::ESTIMATES`). `bin/triage set` writes it whenever it touches an issue with a Size, and corrects a stale one without `--force`. There is no option to set it by hand, and an Estimate edited on the board is put back the next time triage touches that issue.
+
+**A parent issue has no Estimate.** Once an issue has sub-issues, the children carry the points. `bin/triage` clears the parent's Estimate so column totals count the work once, and `list` shows the parent's sub-issue count. The parent keeps its Priority, and its Size stays as an optional overall rating. The board's **Sub-issues progress** field shows how far along it is.
 
 ## When this runs
 
@@ -35,6 +37,16 @@ bin/triage sync-estimates       # repair Estimate on every sized issue; --dry-ru
 4. `bin/triage set N --priority … --size …`. Estimate follows automatically. Fill only the fields that are empty. Never pass `--force` unless the user asked to re-triage that issue, because an existing value is the maintainer's call.
 5. Leave **Status** and every field other than these three alone. Triage does not move an issue between columns.
 6. Report a table to the user with the number, title, priority, size, and a one-line reason for each. Do not post comments on the issues; the board is the record.
+
+## Splitting an epic into sub-issues
+
+An XL issue is a signal to split it, but only with the user's approval. Rating something XL leads to a proposal, not to filing.
+
+1. **Propose.** List the children in build order, each with a one-line scope and a Size of L or smaller. Name any child that is useful on its own, and any child whose shape depends on a decision that hasn't been made yet.
+2. **File only what is ready.** If a child's shape hinges on an unmade decision (often one in another epic), hold it back and file it once that decision lands. A child filed early is a child rewritten later. Splitting part of an epic is fine; it is still a parent.
+3. **File each approved child as a sub-issue.** Run `gh issue create --parent N` with the usual labels. Phrase each body so that it stands on its own and names its parent.
+4. **Link dependencies.** When one child needs another (in this epic or another), run `gh issue edit CHILD --add-blocked-by OTHER`. Don't rely on prose in the body for ordering.
+5. **Triage each child** with `bin/triage set`, then run `bin/triage sync-estimates` to clear the parent's Estimate.
 
 ## Priority
 
@@ -61,8 +73,8 @@ Estimates the whole job: implementing, testing, and getting through the review s
 | **S** | One focused PR in one layer, such as a model method, a view fix, or a script option, with straightforward tests. |
 | **M** | One PR across layers (model, controller, view, and system tests), or a migration, or a few design choices to make along the way. |
 | **L** | More than one PR or a stacked pair. A new table or model plus its UI, or a change to import, reconcile, or merge logic where regressions are costly. Some design should be settled before starting. |
-| **XL** | An epic. Split it into sub-issues before anyone starts, then size the children. Rating an issue XL is itself a signal to propose that split to the user. |
+| **XL** | An epic. Split it into sub-issues before anyone starts, then size the children (see "Splitting an epic into sub-issues"). Rating an issue XL is itself a signal to propose that split to the user. |
 
 - Size a `decision` issue as the work to settle it plus the work to implement the option it currently leans toward.
-- For a checklist issue, size the whole list. If the items are independent and the list would be L or bigger, suggest splitting it into sub-issues.
+- For a checklist issue, size the whole list. If the items are independent and the list would be L or bigger, suggest splitting it into sub-issues the same way.
 - Anchors from the board: a single model validation was XS; handling negative opening balances was M; the AutoMerge transfer-clone fix (issue 177) is L; migrating to a React frontend was XL.

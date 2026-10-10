@@ -13,6 +13,9 @@ module ProjectBoard
   # Estimate is never chosen on its own: it is Size as a number, so board
   # columns (which can only sum number fields) can total the work in them.
   ESTIMATES = { "XS" => 1, "S" => 2, "M" => 3, "L" => 5, "XL" => 8 }.freeze
+  # A parent issue's sub-issues carry its points, so its own Estimate is
+  # cleared rather than derived; otherwise column totals count the work twice.
+  CLEAR = :clear
 
   class Error < StandardError; end
 
@@ -47,7 +50,8 @@ module ProjectBoard
   end
 
   # Board items that are issues, as
-  # { "item_id", "number", "title", "state", "labels", "repository", "Status", "Priority", "Size", "Estimate" }.
+  # { "item_id", "number", "title", "state", "labels", "repository", "sub_issues", "parent",
+  #   "Status", "Priority", "Size", "Estimate" }.
   # Pull requests and draft issues are dropped: only issues are triaged.
   def issues(item_nodes)
     item_nodes.filter_map do |item|
@@ -60,19 +64,28 @@ module ProjectBoard
 
         collected[name] = value.key?("number") ? whole(value["number"]) : value["name"]
       end
-      {
-        "item_id" => item["id"],
-        "number" => content["number"],
-        "title" => content["title"],
-        "state" => content["state"],
-        "labels" => content.dig("labels", "nodes").to_a.map { |label| label["name"] },
-        "repository" => content.dig("repository", "nameWithOwner"),
-        "Status" => values["Status"],
-        "Priority" => values["Priority"],
-        "Size" => values["Size"],
-        "Estimate" => values[ESTIMATE_FIELD]
-      }
+      issue(content, item_id: item["id"], values: values)
     end
+  end
+
+  # One issue from its GraphQL content. An issue the board has not picked up
+  # yet has no item and no field values, but its sub-issues still decide
+  # whether it gets an Estimate, so `set` builds it the same way.
+  def issue(content, item_id: nil, values: {})
+    {
+      "item_id" => item_id,
+      "number" => content["number"],
+      "title" => content["title"],
+      "state" => content["state"],
+      "labels" => content.dig("labels", "nodes").to_a.map { |label| label["name"] },
+      "repository" => content.dig("repository", "nameWithOwner"),
+      "sub_issues" => content.dig("subIssuesSummary", "total").to_i,
+      "parent" => content.dig("parent", "number"),
+      "Status" => values["Status"],
+      "Priority" => values["Priority"],
+      "Size" => values["Size"],
+      "Estimate" => values[ESTIMATE_FIELD]
+    }
   end
 
   # GraphQL returns every number as a float; 3.0 reads better as 3.
@@ -80,9 +93,15 @@ module ProjectBoard
     number == number.to_i ? number.to_i : number
   end
 
-  # The Estimate an issue of this size should carry, or nil when it already
-  # does or has no size to derive one from.
+  def parent?(issue)
+    issue.to_h["sub_issues"].to_i.positive?
+  end
+
+  # The Estimate an issue of this size should carry, CLEAR when a parent still
+  # has one, or nil when it is already right or there is no size to derive from.
   def estimate_change(issue, size)
+    return issue[ESTIMATE_FIELD].nil? ? nil : CLEAR if parent?(issue)
+
     expected = ESTIMATES[size] or return nil
     issue&.fetch(ESTIMATE_FIELD, nil) == expected ? nil : expected
   end
@@ -92,16 +111,18 @@ module ProjectBoard
   end
 
   # An open issue needs triage when Priority or Size is empty, or when its
-  # Estimate is missing or does not match its Size.
+  # Estimate is missing or does not match its Size. A parent needs only a
+  # Priority (its Size is an optional overall rating) and no Estimate.
   def untriaged?(issue)
-    issue["state"] == "OPEN" && (TRIAGE_FIELDS.any? { |field| issue[field].nil? } || estimate_mismatch?(issue))
+    required = parent?(issue) ? %w[Priority] : TRIAGE_FIELDS
+    issue["state"] == "OPEN" && (required.any? { |field| issue[field].nil? } || estimate_mismatch?(issue))
   end
 
   # The field changes `set` should make. A field that already holds a different
   # value is a maintainer's call and is refused unless `force` is given; setting
   # a field to the value it already has is a no-op. Estimate follows the Size
-  # the issue will have, and is corrected without --force because it is never
-  # a choice of its own.
+  # the issue will have (or is cleared on a parent), and is corrected without
+  # --force because it is never a choice of its own.
   def changes(issue, requested, force: false)
     changes = requested.each_with_object({}) do |(field, value), collected|
       next if value.nil? || issue&.fetch(field, nil) == value
@@ -129,8 +150,9 @@ module ProjectBoard
         (issue["Status"] || "-").ljust(11),
         issue["title"]
       ]
+      sub_issues = parent?(issue) ? "  (#{issue["sub_issues"]} sub-issues)" : ""
       labels = issue["labels"].empty? ? "" : "  [#{issue["labels"].join(", ")}]"
-      columns.join("  ") + labels
+      columns.join("  ") + sub_issues + labels
     end.join("\n")
   end
 end
