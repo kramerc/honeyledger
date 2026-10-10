@@ -1,18 +1,22 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Reads and sets the Priority and Size fields of this repository's issues on
-# the "Honeyledger" Projects v2 board. The rubric for choosing values is the
+# Reads and sets the Priority, Size, and Estimate fields of this repository's
+# issues on the "Honeyledger" Projects v2 board. The rubric for choosing values is the
 # triage-issues skill (.agents/skills/triage-issues/SKILL.md); this script only
 # talks to GitHub. Project, field, and option IDs are looked up by name on
 # every run, so nothing breaks when the board is edited.
 #
-#   bin/triage list [--all] [--json]                          # open issues missing Priority or Size (--all: every open issue)
+#   bin/triage list [--all] [--json]                          # open issues needing triage (--all: every open issue)
 #   bin/triage set N [--priority P0|P1|P2] [--size XS|S|M|L|XL] [--force]
+#   bin/triage sync-estimates [--dry-run]                     # set Estimate from Size on every issue where it differs
 #
 # `set` adds the issue to the board if it is not there yet, and refuses to
-# replace a value that is already set (the maintainer's call) unless --force
-# is given. Needs a gh token with the `project` scope.
+# replace a Priority or Size that is already set (the maintainer's call)
+# unless --force is given. Estimate is never set by hand: it is derived from Size
+# (ProjectBoard::ESTIMATES) whenever an issue's Size is written or checked,
+# and `list` flags an issue whose Estimate is missing or does not match (`!`).
+# Needs a gh token with the `project` scope.
 #
 # The parsing lives in lib/project_board.rb, which has tests.
 
@@ -35,7 +39,8 @@ end
 
 def graphql(query, **variables)
   args = [ "api", "graphql", "-f", "query=#{query}" ]
-  variables.each { |name, value| args.push("-f", "#{name}=#{value}") }
+  # -F sends numbers as numbers; -f keeps IDs and option names as strings.
+  variables.each { |name, value| args.push(value.is_a?(Numeric) ? "-F" : "-f", "#{name}=#{value}") }
   JSON.parse(gh(*args)).fetch("data")
 end
 
@@ -45,7 +50,7 @@ def option_value(options, flag)
 end
 
 command, *options = ARGV
-abort USAGE unless %w[list set].include?(command)
+abort USAGE unless %w[list set sync-estimates].include?(command)
 
 repository = JSON.parse(gh("repo", "view", "--json", "nameWithOwner,owner"))
 owner = repository.dig("owner", "login")
@@ -65,12 +70,18 @@ field_nodes = graphql(<<~GRAPHQL, id: project_id).dig("node", "fields", "nodes")
   query($id: ID!) {
     node(id: $id) {
       ... on ProjectV2 {
-        fields(first: 50) { nodes { ... on ProjectV2SingleSelectField { id name options { id name } } } }
+        fields(first: 50) {
+          nodes {
+            ... on ProjectV2SingleSelectField { id name options { id name } }
+            ... on ProjectV2Field { id name }
+          }
+        }
       }
     }
   }
 GRAPHQL
-fields = ProjectBoard.single_select_fields(field_nodes.reject(&:empty?))
+field_nodes = field_nodes.reject(&:empty?)
+fields = ProjectBoard.single_select_fields(field_nodes)
 
 items_query = <<~GRAPHQL
   query($id: ID!, $endCursor: String) {
@@ -85,7 +96,10 @@ items_query = <<~GRAPHQL
               ... on Issue { number title state repository { nameWithOwner } labels(first: 20) { nodes { name } } }
             }
             fieldValues(first: 20) {
-              nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } }
+              nodes {
+                ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }
+                ... on ProjectV2ItemFieldNumberValue { number field { ... on ProjectV2FieldCommon { name } } }
+              }
             }
           }
         }
@@ -96,6 +110,32 @@ GRAPHQL
 pages = JSON.parse(gh("api", "graphql", "--paginate", "--slurp", "-f", "id=#{project_id}", "-f", "query=#{items_query}"))
 item_nodes = pages.flat_map { |page| page.dig("data", "node", "items", "nodes") }
 issues = ProjectBoard.issues(item_nodes).select { |issue| issue["repository"] == repository["nameWithOwner"] }
+
+def set_single_select(project_id, item_id, field_id, option_id)
+  graphql(<<~GRAPHQL, project: project_id, item: item_id, field: field_id, option: option_id)
+    mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option }
+      }) { projectV2Item { id } }
+    }
+  GRAPHQL
+end
+
+def set_number(project_id, item_id, field_id, number)
+  graphql(<<~GRAPHQL, project: project_id, item: item_id, field: field_id, number: number)
+    mutation($project: ID!, $item: ID!, $field: ID!, $number: Float!) {
+      updateProjectV2ItemFieldValue(input: {
+        projectId: $project, itemId: $item, fieldId: $field, value: { number: $number }
+      }) { projectV2Item { id } }
+    }
+  GRAPHQL
+end
+
+def estimate_field_id(field_nodes)
+  ProjectBoard.field_id(field_nodes, ProjectBoard::ESTIMATE_FIELD)
+rescue ProjectBoard::Error => error
+  abort error.message
+end
 
 case command
 when "list"
@@ -145,15 +185,31 @@ when "set"
     puts "Issue #{number}: added to the #{ProjectBoard::PROJECT_TITLE} board"
   end
 
-  resolved.slice(*changes.keys).each do |field, (field_id, option_id)|
-    graphql(<<~GRAPHQL, project: project_id, item: item_id, field: field_id, option: option_id)
-      mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
-        updateProjectV2ItemFieldValue(input: {
-          projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option }
-        }) { projectV2Item { id } }
-      }
-    GRAPHQL
+  changes.each do |field, value|
+    if field == ProjectBoard::ESTIMATE_FIELD
+      set_number(project_id, item_id, estimate_field_id(field_nodes), value)
+    else
+      set_single_select(project_id, item_id, *resolved.fetch(field))
+    end
     previous = issue&.fetch(field, nil)
-    puts "Issue #{number}: #{field} #{previous ? "#{previous} -> " : ""}#{changes[field]}"
+    puts "Issue #{number}: #{field} #{previous ? "#{previous} -> " : ""}#{value}"
+  end
+
+when "sync-estimates"
+  # Every issue on the board, closed ones included, so the Done column totals too.
+  stale = issues.filter_map do |issue|
+    estimate = ProjectBoard.estimate_change(issue, issue["Size"])
+    [ issue, estimate ] if estimate
+  end
+  if stale.empty?
+    puts "Every sized issue already has the matching Estimate."
+    exit
+  end
+
+  field_id = estimate_field_id(field_nodes) unless options.include?("--dry-run")
+  stale.sort_by { |issue, _| issue["number"] }.each do |issue, estimate|
+    set_number(project_id, issue["item_id"], field_id, estimate) if field_id
+    previous = issue[ProjectBoard::ESTIMATE_FIELD]
+    puts "Issue #{issue["number"]}: Estimate #{previous ? "#{previous} -> " : ""}#{estimate} (Size #{issue["Size"]})#{" (dry run)" unless field_id}"
   end
 end

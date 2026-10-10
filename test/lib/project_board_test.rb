@@ -7,6 +7,7 @@ class ProjectBoardTest < ActiveSupport::TestCase
       { "id" => "p0", "name" => "P0" }, { "id" => "p1", "name" => "P1" }, { "id" => "p2", "name" => "P2" }
     ] },
     { "id" => "size-field", "name" => "Size", "options" => [ { "id" => "xs", "name" => "XS" }, { "id" => "m", "name" => "M" } ] },
+    { "id" => "estimate-field", "name" => "Estimate" },
     { "id" => "title-field", "name" => "Title" }
   ].freeze
 
@@ -21,7 +22,9 @@ class ProjectBoardTest < ActiveSupport::TestCase
         "repository" => { "nameWithOwner" => "owner/repo" },
         "labels" => { "nodes" => labels.map { |name| { "name" => name } } }
       },
-      "fieldValues" => { "nodes" => [ {} ] + values.map { |field, value| { "name" => value, "field" => { "name" => field } } } }
+      "fieldValues" => { "nodes" => [ {} ] + values.map do |field, value|
+        { (value.is_a?(Numeric) ? "number" : "name") => value, "field" => { "name" => field } }
+      end }
     }
   end
 
@@ -37,6 +40,11 @@ class ProjectBoardTest < ActiveSupport::TestCase
     fields = ProjectBoard.single_select_fields(FIELD_NODES)
 
     assert_equal [ "size-field", "m" ], ProjectBoard.option_id(fields, "Size", "M")
+  end
+
+  test "looks up any field id by name" do
+    assert_equal "estimate-field", ProjectBoard.field_id(FIELD_NODES, "Estimate")
+    assert_raises(ProjectBoard::Error) { ProjectBoard.field_id(FIELD_NODES, "Effort") }
   end
 
   test "rejects an unknown option or field with the valid choices" do
@@ -65,19 +73,48 @@ class ProjectBoardTest < ActiveSupport::TestCase
     assert_equal "Backlog", issue["Status"]
     assert_equal "P1", issue["Priority"]
     assert_nil issue["Size"]
+    assert_nil issue["Estimate"]
+  end
+
+  test "reads a whole-number estimate as an integer and keeps a fractional one" do
+    issues = ProjectBoard.issues([
+      item("item-1", typename: "Issue", number: 1, values: { "Size" => "M", "Estimate" => 3.0 }),
+      item("item-2", typename: "Issue", number: 2, values: { "Estimate" => 2.5 })
+    ])
+
+    assert_equal 3, issues.first["Estimate"]
+    assert_kind_of Integer, issues.first["Estimate"]
+    assert_equal 2.5, issues.last["Estimate"]
+  end
+
+  test "derives the estimate from the size and skips one already in place" do
+    assert_equal({ "XS" => 1, "S" => 2, "M" => 3, "L" => 5, "XL" => 8 }, ProjectBoard::ESTIMATES)
+    assert_equal 5, ProjectBoard.estimate_change({ "Estimate" => nil }, "L")
+    assert_equal 5, ProjectBoard.estimate_change({ "Estimate" => 13 }, "L")
+    assert_nil ProjectBoard.estimate_change({ "Estimate" => 5 }, "L")
+    assert_nil ProjectBoard.estimate_change({ "Estimate" => 5 }, nil)
+    assert_equal 1, ProjectBoard.estimate_change(nil, "XS")
+  end
+
+  test "an estimate that is missing or disagrees with the size is a mismatch" do
+    assert ProjectBoard.estimate_mismatch?({ "Size" => "M", "Estimate" => nil })
+    assert ProjectBoard.estimate_mismatch?({ "Size" => "M", "Estimate" => 5 })
+    assert_not ProjectBoard.estimate_mismatch?({ "Size" => "M", "Estimate" => 3 })
+    assert_not ProjectBoard.estimate_mismatch?({ "Size" => nil, "Estimate" => 5 })
   end
 
   test "an open issue missing priority or size is untriaged; a closed one never is" do
     assert ProjectBoard.untriaged?({ "state" => "OPEN", "Priority" => "P1", "Size" => nil })
     assert ProjectBoard.untriaged?({ "state" => "OPEN", "Priority" => nil, "Size" => "S" })
-    assert_not ProjectBoard.untriaged?({ "state" => "OPEN", "Priority" => "P1", "Size" => "S" })
+    assert ProjectBoard.untriaged?({ "state" => "OPEN", "Priority" => "P1", "Size" => "S", "Estimate" => nil })
+    assert_not ProjectBoard.untriaged?({ "state" => "OPEN", "Priority" => "P1", "Size" => "S", "Estimate" => 2 })
     assert_not ProjectBoard.untriaged?({ "state" => "CLOSED", "Priority" => nil, "Size" => nil })
   end
 
   test "changes fills empty fields and skips values already in place" do
     issue = { "number" => 7, "Priority" => "P1", "Size" => nil }
 
-    assert_equal({ "Size" => "M" }, ProjectBoard.changes(issue, { "Priority" => "P1", "Size" => "M" }))
+    assert_equal({ "Size" => "M", "Estimate" => 3 }, ProjectBoard.changes(issue, { "Priority" => "P1", "Size" => "M" }))
     assert_equal({}, ProjectBoard.changes(issue, { "Priority" => "P1", "Size" => nil }))
   end
 
@@ -90,19 +127,29 @@ class ProjectBoardTest < ActiveSupport::TestCase
   end
 
   test "changes sets every requested field for an issue not on the board yet" do
-    assert_equal({ "Priority" => "P2", "Size" => "XS" }, ProjectBoard.changes(nil, { "Priority" => "P2", "Size" => "XS" }))
+    assert_equal({ "Priority" => "P2", "Size" => "XS", "Estimate" => 1 }, ProjectBoard.changes(nil, { "Priority" => "P2", "Size" => "XS" }))
   end
 
-  test "formats a table sorted by number with blanks shown as dashes" do
+  test "changes corrects a stale estimate without --force, following the size the issue will have" do
+    sized = { "number" => 7, "Priority" => "P1", "Size" => "S", "Estimate" => 8 }
+
+    assert_equal({ "Estimate" => 2 }, ProjectBoard.changes(sized, { "Priority" => "P1", "Size" => nil }))
+    assert_equal({ "Size" => "L", "Estimate" => 5 }, ProjectBoard.changes(sized, { "Size" => "L" }, force: true))
+    assert_equal({}, ProjectBoard.changes(sized.merge("Estimate" => 2), { "Size" => "S" }))
+  end
+
+  test "formats a table sorted by number with blanks shown as dashes and a stale estimate flagged" do
     issues = [
-      { "number" => 12, "title" => "Later", "labels" => [], "Status" => "Ready", "Priority" => "P2", "Size" => "M" },
+      { "number" => 12, "title" => "Later", "labels" => [], "Status" => "Ready", "Priority" => "P2", "Size" => "M", "Estimate" => 3 },
+      { "number" => 5, "title" => "Stale", "labels" => [], "Status" => "Ready", "Priority" => "P2", "Size" => "M", "Estimate" => nil },
       { "number" => 3, "title" => "Earlier", "labels" => %w[bug], "Status" => nil, "Priority" => nil, "Size" => nil }
     ]
 
     lines = ProjectBoard.format_table(issues).lines.map(&:rstrip)
 
-    assert_equal "   3  -   -   -            Earlier  [bug]", lines.first
-    assert_equal "  12  P2  M   Ready        Later", lines.last
+    assert_equal "   3  -   -   -    -            Earlier  [bug]", lines.first
+    assert_equal "   5  P2  M   -!   Ready        Stale", lines.second
+    assert_equal "  12  P2  M   3    Ready        Later", lines.last
     assert_equal "Nothing to triage.", ProjectBoard.format_table([])
   end
 end
