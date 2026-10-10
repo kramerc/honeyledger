@@ -18,13 +18,13 @@
 # its review bodies, which appear nowhere else), Codex, and CodeQL, keyed by
 # stable ids so a rerun sees the same finding under the same id. The ledger is
 # one issue comment starting with `<!-- sweep-ledger -->`, edited in place. The
-# parsing lives in lib/review_sweep.rb, which has tests; this file only talks
+# parsing lives in lib/dev/review_sweep.rb, which has tests; this file only talks
 # to `gh`.
 
 require "json"
 
 APP_ROOT = File.expand_path("..", __dir__)
-require File.join(APP_ROOT, "lib", "review_sweep")
+require File.join(APP_ROOT, "lib", "dev", "review_sweep")
 
 USAGE = File.read(__FILE__).lines.grep(/\A#   bin\/sweep-pr/).map { |line| line.delete_prefix("# ") }.join.freeze
 

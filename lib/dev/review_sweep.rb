@@ -39,13 +39,13 @@ module ReviewSweep
     declared = body[/^### Suppressed comments \((\d+)\)/, 1]
     if declared.nil? && body.match?(/^### Suppressed comments/)
       raise FormatError, "Copilot review has a suppressed-comments heading without a count that parses; " \
-                         "the review format may have changed (see lib/review_sweep.rb)"
+                         "the review format may have changed (see lib/dev/review_sweep.rb)"
     end
     generated = body[/^- \*\*Comments generated:\*\* (\d+)/, 1]
     suppressed = declared ? parse_suppressed(body) : []
     if declared && suppressed.size != declared.to_i
       raise FormatError, "Copilot review declares #{declared} suppressed comments but #{suppressed.size} parsed; " \
-                         "the review format may have changed (see lib/review_sweep.rb)"
+                         "the review format may have changed (see lib/dev/review_sweep.rb)"
     end
     { "headline" => headline, "suppressed" => suppressed, "generated" => generated&.to_i }
   end

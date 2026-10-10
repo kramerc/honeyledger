@@ -1,4 +1,5 @@
 require "test_helper"
+require Rails.root.join("lib/dev/review_sweep")
 
 class ReviewSweepTest < ActiveSupport::TestCase
   OLD_HEAD = "a" * 40

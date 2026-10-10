@@ -5,7 +5,7 @@ require "json"
 # Codex supplies hook input on stdin. Keep the shared worktree setup independent
 # of its lifecycle protocol so Claude and manual invocations still use it as-is.
 class CodexWorktreeSetupHook
-  APP_ROOT = File.expand_path("..", __dir__)
+  APP_ROOT = File.expand_path("../..", __dir__)
 
   def self.run(input: $stdin, output: $stdout)
     payload = JSON.parse(input.read)
