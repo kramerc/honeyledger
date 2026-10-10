@@ -64,21 +64,28 @@ module ProjectBoard
 
         collected[name] = value.key?("number") ? whole(value["number"]) : value["name"]
       end
-      {
-        "item_id" => item["id"],
-        "number" => content["number"],
-        "title" => content["title"],
-        "state" => content["state"],
-        "labels" => content.dig("labels", "nodes").to_a.map { |label| label["name"] },
-        "repository" => content.dig("repository", "nameWithOwner"),
-        "sub_issues" => content.dig("subIssuesSummary", "total").to_i,
-        "parent" => content.dig("parent", "number"),
-        "Status" => values["Status"],
-        "Priority" => values["Priority"],
-        "Size" => values["Size"],
-        "Estimate" => values[ESTIMATE_FIELD]
-      }
+      issue(content, item_id: item["id"], values: values)
     end
+  end
+
+  # One issue from its GraphQL content. An issue the board has not picked up
+  # yet has no item and no field values, but its sub-issues still decide
+  # whether it gets an Estimate, so `set` builds it the same way.
+  def issue(content, item_id: nil, values: {})
+    {
+      "item_id" => item_id,
+      "number" => content["number"],
+      "title" => content["title"],
+      "state" => content["state"],
+      "labels" => content.dig("labels", "nodes").to_a.map { |label| label["name"] },
+      "repository" => content.dig("repository", "nameWithOwner"),
+      "sub_issues" => content.dig("subIssuesSummary", "total").to_i,
+      "parent" => content.dig("parent", "number"),
+      "Status" => values["Status"],
+      "Priority" => values["Priority"],
+      "Size" => values["Size"],
+      "Estimate" => values[ESTIMATE_FIELD]
+    }
   end
 
   # GraphQL returns every number as a float; 3.0 reads better as 3.

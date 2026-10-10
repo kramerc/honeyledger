@@ -181,6 +181,19 @@ class ProjectBoardTest < ActiveSupport::TestCase
     assert_equal({}, ProjectBoard.changes(parent.merge("Estimate" => nil), { "Size" => "XL" }))
   end
 
+  test "an issue not on the board yet is still recognised as a parent and gets no estimate" do
+    content = item("unused", typename: "Issue", number: 20, sub_issues: 3)["content"]
+
+    off_board = ProjectBoard.issue(content)
+
+    assert_nil off_board["item_id"]
+    assert_nil off_board["Priority"]
+    assert ProjectBoard.parent?(off_board)
+    assert_equal({ "Priority" => "P2", "Size" => "XL" }, ProjectBoard.changes(off_board, { "Priority" => "P2", "Size" => "XL" }))
+    plain = ProjectBoard.issue(content.merge("subIssuesSummary" => { "total" => 0 }))
+    assert_equal({ "Priority" => "P2", "Size" => "XL", "Estimate" => 8 }, ProjectBoard.changes(plain, { "Priority" => "P2", "Size" => "XL" }))
+  end
+
   test "the table notes how many sub-issues a parent has" do
     parent = { "number" => 10, "title" => "Epic", "labels" => %w[enhancement], "Status" => "Backlog",
                "Priority" => "P2", "Size" => "XL", "Estimate" => 8, "sub_issues" => 4 }

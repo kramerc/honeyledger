@@ -189,6 +189,24 @@ when "set"
   abort "set needs --priority, --size, or both\n#{USAGE}" if requested.values.all?(&:nil?)
 
   issue = issues.find { |candidate| candidate["number"] == number.to_i }
+  unless issue
+    # Not on the board yet: read it from the repository so a parent issue is
+    # still recognised and gets no Estimate.
+    owner_name, repository_name = repository["nameWithOwner"].split("/", 2)
+    content = graphql(<<~GRAPHQL, owner: owner_name, name: repository_name, number: number.to_i).dig("repository", "issue")
+      query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+          issue(number: $number) {
+            id number title state repository { nameWithOwner } labels(first: 20) { nodes { name } }
+            subIssuesSummary { total } parent { number }
+          }
+        }
+      }
+    GRAPHQL
+    abort "Issue #{number} not found in #{repository["nameWithOwner"]}" unless content
+    content_id = content["id"]
+    issue = ProjectBoard.issue(content)
+  end
   begin
     resolved = requested.compact.to_h { |field, value| [ field, ProjectBoard.option_id(fields, field, value) ] }
     changes = ProjectBoard.changes(issue, requested, force: options.include?("--force"))
@@ -201,9 +219,8 @@ when "set"
     exit
   end
 
-  item_id = issue&.fetch("item_id")
+  item_id = issue["item_id"]
   unless item_id
-    content_id = JSON.parse(gh("issue", "view", number, "--json", "id"))["id"]
     added = graphql(<<~GRAPHQL, project: project_id, content: content_id)
       mutation($project: ID!, $content: ID!) {
         addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } }
@@ -214,7 +231,7 @@ when "set"
   end
 
   changes.each do |field, value|
-    previous = issue&.fetch(field, nil)
+    previous = issue[field]
     if field == ProjectBoard::ESTIMATE_FIELD
       write_estimate(project_id, item_id, estimate_field_id(field_nodes), value)
       puts "Issue #{number}: #{describe_estimate(previous, value)}"
