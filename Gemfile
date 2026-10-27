@@ -21,7 +21,7 @@ gem "jbuilder"
 gem "bcrypt", "~> 3.1.7"
 
 # Verify WebAuthn ceremonies so users can log in with passkeys
-gem "webauthn", "~> 3.4"
+gem "webauthn", "~> 3.5"
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
