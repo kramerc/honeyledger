@@ -59,7 +59,7 @@ class IntegrationsTest < ApplicationSystemTestCase
 
     within find("table", text: "Institution") do
       assert_selector "th", text: "Balance"
-      assert_selector "th", text: "Last Updated"
+      assert_selector "th", text: "Balance Changed"
       within("tr", text: "Test Bank Savings") do
         assert_text "$10,000.00"
         # When the balance last changed, not when the account was last seen.
