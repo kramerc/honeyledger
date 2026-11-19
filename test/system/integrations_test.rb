@@ -41,6 +41,32 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_link "Import"
   end
 
+  test "shows the balance SimpleFIN reported for each account" do
+    visit integrations_path
+
+    within find("table", text: "Organization") do
+      assert_selector "th", text: "Balance"
+      assert_selector "th", text: "Last Updated"
+      within("tr", text: "Test Savings") do
+        assert_text "$5,000.00"
+        assert_text "January 13, 2026 05:53 AM"
+      end
+    end
+  end
+
+  test "shows the balance Lunch Flow reported for each account" do
+    visit integrations_path
+
+    within find("table", text: "Institution") do
+      assert_selector "th", text: "Balance"
+      assert_selector "th", text: "Last Updated"
+      within("tr", text: "Test Bank Savings") do
+        assert_text "$10,000.00"
+        assert_text "April 25, 2026 12:00 AM"
+      end
+    end
+  end
+
   test "sorts SimpleFIN accounts by institution then account name" do
     # Insertion order (linked, unlinked, reconciled) deliberately differs from the
     # expected sorted order, and account names alone sort differently than the

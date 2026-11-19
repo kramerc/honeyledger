@@ -59,6 +59,8 @@
       <tr>
         <th>Organization</th>
         <th>Account Name</th>
+        <th style="text-align: right">Balance</th>
+        <th>Last Updated</th>
         <th>Linked Account</th>
       </tr>
       <% @simplefin_accounts.each do |sf_account| %>
@@ -70,6 +72,8 @@
               <span style="color: orange" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
             <% end %>
           </td>
+          <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(sf_account) %></td>
+          <td style="white-space: nowrap"><%= sf_account.balance_date ? sf_account.balance_date.strftime("%B %d, %Y %I:%M %p") : "—" %></td>
           <td><%= render partial: "integrations/simplefin_link_form", locals: { sf_account: sf_account, linkable_accounts: @linkable_accounts } %></td>
         </tr>
       <% end %>
@@ -92,6 +96,8 @@
       <tr>
         <th>Institution</th>
         <th>Account Name</th>
+        <th style="text-align: right">Balance</th>
+        <th>Last Updated</th>
         <th>Status</th>
         <th>Linked Account</th>
       </tr>
@@ -104,6 +110,8 @@
               <span style="color: orange" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
             <% end %>
           </td>
+          <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(lf_account) %></td>
+          <td style="white-space: nowrap"><%= lf_account.last_seen_at ? lf_account.last_seen_at.strftime("%B %d, %Y %I:%M %p") : "—" %></td>
           <td>
             <% case lf_account.status %>
             <% when "ACTIVE" %>
