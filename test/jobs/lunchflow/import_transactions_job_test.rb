@@ -810,6 +810,36 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_not lunchflow_transaction.transaction_sources.sole.direction_overridden?
   end
 
+  test "a change a refresh saves during the import is picked up by the next import" do
+    lf_account, _ = create_linked_lunchflow_account(remote_id: 931, name: "Mid Import Bank")
+    lf_transaction = Lunchflow::Transaction.create!(
+      account: lf_account, remote_id: "lf_mid_import", amount: "-30.00", currency: "USD",
+      description: "Coffee", pending: false, date: 2.days.ago.to_date, synced_at: Time.current
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    ledger = lf_transaction.ledger_transactions.first!
+    assert_equal lf_transaction.reload.synced_at, ledger.synced_at,
+      "the ledger records the source version it reflects, not the clock"
+
+    travel 1.minute
+    lf_transaction.update!(amount: "-35.00", synced_at: Time.current)
+
+    # A refresh saves another change after this import has loaded the -35.00 row.
+    original_find_by = TransactionSource.method(:find_by)
+    concurrent_refresh = lambda do |*args, **kwargs|
+      travel 1.second
+      lf_transaction.update!(amount: "-40.00", synced_at: Time.current)
+      original_find_by.call(*args, **kwargs)
+    end
+    TransactionSource.stub :find_by, concurrent_refresh do
+      Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    end
+    assert_equal 3500, ledger.reload.amount_minor
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
+    assert_equal 4000, ledger.reload.amount_minor
+  end
+
   private
 
     def create_linked_lunchflow_account(remote_id: 901, name: "LF Test Checking")

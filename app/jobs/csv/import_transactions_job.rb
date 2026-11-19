@@ -29,7 +29,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
           canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
 
           unless canonical_source.id == existing_source.id
-            ledger_transaction.mark_synced_by_secondary_source!(canonical_source)
+            ledger_transaction.mark_synced_by_secondary_source!(canonical_source, csv_transaction)
             next
           end
 
@@ -142,11 +142,13 @@ class Csv::ImportTransactionsJob < ApplicationJob
   private
 
     # Attach a re-imported row to the ledger transaction that already
-    # represents it and bump that transaction's synced_at.
+    # represents it and stamp that transaction's synced_at, unless its
+    # canonical source has a change still waiting for import.
     def attach_to_existing(target, csv_transaction)
       Transaction.transaction do
+        canonical_source = target.transaction_sources.order(:created_at, :id).first
         TransactionSource::Attach.call(transaction: target, sourceable: csv_transaction)
-        target.update!(synced_at: Time.current)
+        target.mark_synced_by_secondary_source!(canonical_source, csv_transaction)
       end
     rescue TransactionSource::Attach::MismatchedTransaction
       # Another import handled this source; skip this row.

@@ -1019,6 +1019,61 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal 3500, ledger.reload.amount_minor
   end
 
+  test "a first-time Reconcile attach does not stamp past a canonical change still awaiting import" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_reconcile_pending", name: "Reconcile Pending Bank")
+    lunchflow_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 9992, name: "Reconcile Pending Bank",
+      institution_name: "Test Bank", provider: "finicity",
+      currency: "USD", status: "ACTIVE", balance: "1000.00"
+    )
+    bank_account.account_sources.create!(sourceable: lunchflow_account)
+    lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: lunchflow_account, remote_id: "lf_reconcile_pending", amount: "-30.00",
+      currency: "USD", description: "Coffee", pending: false, date: 2.days.ago.to_date
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lunchflow_account.id)
+    ledger = lunchflow_transaction.ledger_transactions.first!
+    synced_before = ledger.reload.synced_at
+
+    # The canonical Lunch Flow row changes, then SimpleFIN first reports the same
+    # transaction at the old amount, and its import runs before Lunch Flow's.
+    travel 2.seconds
+    lunchflow_transaction.update!(amount: "-35.00", synced_at: Time.current)
+    travel 2.seconds
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_reconcile_pending", amount: "-30.00",
+      description: "Coffee", posted: 2.days.ago, transacted_at: 2.days.ago, pending: false,
+      synced_at: Time.current
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    assert_includes ledger.reload.transaction_sources.map(&:sourceable), simplefin_transaction
+    assert_equal synced_before, ledger.synced_at,
+      "the first-time attach must not hide the canonical change from its own import"
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lunchflow_account.id)
+    assert_equal 3500, ledger.reload.amount_minor
+  end
+
+  test "a Reconcile attach to a sourceless manual transaction stamps it with the source version" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_manual_stamp", name: "Manual Stamp Bank")
+    expense = Account.create!(user: @user, name: "Coffee", kind: :expense, currency: @currency)
+    manual = Transaction.create!(
+      user: @user, src_account: bank_account, dest_account: expense,
+      amount_minor: 1000, currency: @currency, description: "Coffee", transacted_at: 1.day.ago
+    )
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_manual_stamp", amount: "-10.00",
+      description: "Coffee", posted: 1.day.ago, transacted_at: 1.day.ago, pending: false,
+      synced_at: Time.current
+    )
+
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    assert_equal simplefin_transaction.reload.synced_at, manual.reload.synced_at
+  end
+
   test "rolls back the iteration when TransactionSource::Attach hits a concurrent-job race" do
     sf_account, _ = create_linked_simplefin_account(remote_id: "acc_race", name: "Race Bank")
     Simplefin::Transaction.create!(
