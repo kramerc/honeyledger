@@ -26,6 +26,23 @@ class IntegrationsHelperTest < ActionView::TestCase
     assert_equal "123.45 XYZ", aggregator_balance(lunchflow_account)
   end
 
+  test "aggregator_balance uses the reported currency, not the linked ledger account's" do
+    simplefin_account = simplefin_accounts(:linked_one)
+    assert_equal "USD", simplefin_account.ledger_account.currency.code
+    simplefin_account.currency = "EUR"
+    simplefin_account.balance = "100.00"
+
+    assert_equal "€100.00", aggregator_balance(simplefin_account)
+  end
+
+  test "aggregator_balance falls back to the raw value for an unknown currency on a linked account" do
+    lunchflow_account = lunchflow_accounts(:linked_one)
+    assert lunchflow_account.linked?
+    lunchflow_account.currency = "XYZ"
+
+    assert_equal "2500.00 XYZ", aggregator_balance(lunchflow_account)
+  end
+
   test "aggregator_balance returns a dash when no balance was reported" do
     lunchflow_account = lunchflow_accounts(:unlinked_one)
     lunchflow_account.balance = nil
