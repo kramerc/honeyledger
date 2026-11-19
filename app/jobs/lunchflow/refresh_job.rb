@@ -51,6 +51,9 @@ class Lunchflow::RefreshJob < ApplicationJob
       balance_data = client.balance(api_account["id"])
       lf_account.balance = balance_data["amount"].to_s
       lf_account.currency ||= balance_data["currency"]
+      # Lunch Flow reports no balance date, so record when the balance last moved.
+      # An unchanged balance leaves the row untouched (save! skips a clean record).
+      lf_account.balance_changed_at = refreshed_at if lf_account.balance_changed? || lf_account.balance_changed_at.nil?
 
       lf_account.save!
 
@@ -69,7 +72,11 @@ class Lunchflow::RefreshJob < ApplicationJob
         lf_transaction.merchant = api_txn["merchant"]
         lf_transaction.pending = api_txn["isPending"]
         lf_transaction.date = api_txn["date"]
-        lf_transaction.synced_at = Time.current
+        # Advance synced_at only when the row is new or its data changed. The import
+        # job re-syncs rows whose synced_at is ahead of their ledger transaction's, so
+        # stamping unchanged rows would rewrite every imported transaction on every
+        # refresh. save! issues no UPDATE for an unchanged row.
+        lf_transaction.synced_at = Time.current if lf_transaction.changed?
         lf_transaction.save!
       end
 

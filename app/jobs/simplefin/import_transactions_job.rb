@@ -34,12 +34,10 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
 
           # Re-sync only when this source is the first writer of the ledger transaction.
-          # Secondary sources never overwrite canonical fields, but we still bump the
-          # ledger transaction's synced_at so the outer query's
-          # `simplefin_transaction.synced_at > ledger.synced_at` filter stops re-matching this row
-          # until the canonical source's data actually advances again.
+          # A secondary source never overwrites canonical fields; it only stamps
+          # synced_at so the outer query stops re-matching this row.
           unless canonical_source.id == existing_source.id
-            ledger_transaction.update!(synced_at: Time.current)
+            ledger_transaction.mark_synced_by_secondary_source!(canonical_source, simplefin_transaction)
             next
           end
 
@@ -51,7 +49,10 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
             amount_minor: simplefin_transaction.amount_minor.abs,
             transacted_at: simplefin_transaction.transacted_at || simplefin_transaction.posted || Time.current,
             cleared_at: simplefin_transaction.posted,
-            synced_at: Time.current
+            # The version of the source this transaction now reflects. Using the row's
+            # own synced_at instead of the clock keeps a change a refresh saves during
+            # this import ahead of the stamp, so the next import still picks it up.
+            synced_at: simplefin_transaction.synced_at || Time.current
           )
           next
         elsif (match = Transaction::Reconcile.call(
@@ -68,11 +69,12 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
           # insert, the AR transaction rolls back and we move on.
           begin
             Transaction.transaction do
+              canonical_source = match.transaction_sources.order(:created_at, :id).first
               TransactionSource::Attach.call(
                 transaction: match, sourceable: simplefin_transaction,
                 direction_overridden: direction.direction_overridden?
               )
-              match.update!(synced_at: Time.current)
+              match.mark_synced_by_secondary_source!(canonical_source, simplefin_transaction)
             end
           rescue TransactionSource::Attach::MismatchedTransaction
             # Another import handled this source; skip this iteration.
@@ -109,7 +111,7 @@ class Simplefin::ImportTransactionsJob < ApplicationJob
         transaction.currency = ledger_account.currency
         transaction.transacted_at = simplefin_transaction.transacted_at || simplefin_transaction.posted || Time.current
         transaction.cleared_at = simplefin_transaction.posted
-        transaction.synced_at = Time.current
+        transaction.synced_at = simplefin_transaction.synced_at || Time.current
         # Wrap save+attach so a concurrent import that creates the source row
         # first rolls back this iteration cleanly instead of leaving an
         # orphaned ledger transaction with no source.

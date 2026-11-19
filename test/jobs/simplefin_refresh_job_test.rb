@@ -459,4 +459,67 @@ class Simplefin::RefreshJobTest < ActiveJob::TestCase
     @simplefin_connection.reload
     assert_not_nil @simplefin_connection.refreshed_at
   end
+
+  test "a refresh with no upstream changes writes no transactions" do
+    client = stub_simplefin_client(amount: "-50.00")
+
+    SimplefinClient.stub :new, client do
+      perform_enqueued_jobs { Simplefin::RefreshJob.perform_now(@simplefin_connection.id) }
+    end
+    simplefin_transaction = simplefin_transactions(:transaction_one).reload
+    ledger_transaction = simplefin_transaction.ledger_transactions.first!
+    mirror_state = [ simplefin_transaction.synced_at, simplefin_transaction.updated_at ]
+    ledger_state = [ ledger_transaction.synced_at, ledger_transaction.updated_at ]
+
+    travel 1.hour
+    SimplefinClient.stub :new, client do
+      perform_enqueued_jobs { Simplefin::RefreshJob.perform_now(@simplefin_connection.id) }
+    end
+
+    simplefin_transaction.reload
+    ledger_transaction.reload
+    assert_equal mirror_state, [ simplefin_transaction.synced_at, simplefin_transaction.updated_at ]
+    assert_equal ledger_state, [ ledger_transaction.synced_at, ledger_transaction.updated_at ]
+  end
+
+  test "a refresh that changes a transaction advances synced_at and re-syncs the ledger" do
+    SimplefinClient.stub :new, stub_simplefin_client(amount: "-50.00") do
+      perform_enqueued_jobs { Simplefin::RefreshJob.perform_now(@simplefin_connection.id) }
+    end
+    simplefin_transaction = simplefin_transactions(:transaction_one).reload
+
+    travel 1.hour
+    SimplefinClient.stub :new, stub_simplefin_client(amount: "-55.00") do
+      perform_enqueued_jobs { Simplefin::RefreshJob.perform_now(@simplefin_connection.id) }
+    end
+
+    simplefin_transaction.reload
+    assert_in_delta Time.current.to_f, simplefin_transaction.synced_at.to_f, 1.0
+    assert_equal 5500, simplefin_transaction.ledger_transactions.first!.amount_minor
+  end
+
+  private
+
+    # A client serving the linked_one fixture account with its fixture transaction.
+    def stub_simplefin_client(amount:)
+      posted = Time.utc(2026, 1, 13, 6, 20, 38).to_i
+      payload = {
+        "errlist" => [],
+        "connections" => [ { "conn_id" => "conn_1", "name" => "Test Bank" } ],
+        "accounts" => [
+          {
+            "id" => "remote_id_1", "conn_id" => "conn_1", "name" => "Test Checking",
+            "currency" => "USD", "balance" => "1000.00", "available-balance" => "1000.00",
+            "balance-date" => posted, "extra" => {},
+            "transactions" => [
+              { "id" => "fixture_txn_1", "posted" => posted, "amount" => amount, "description" => "Test Transaction",
+                "transacted-at" => posted, "pending" => false }
+            ]
+          }
+        ]
+      }
+      client = Object.new
+      client.define_singleton_method(:accounts) { |start_date:| payload }
+      client
+    end
 end

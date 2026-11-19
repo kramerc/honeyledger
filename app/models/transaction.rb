@@ -117,6 +117,23 @@ class Transaction < ApplicationRecord
     own_badge_sources + merged_origins_for_badges.flat_map(&:own_badge_sources)
   end
 
+  # Called when an importer attaches or re-encounters a source that does not write
+  # canonical fields: a secondary source, or one Reconcile attached to an existing
+  # transaction. Stamping synced_at with the source's own synced_at stops the importer's
+  # `source.synced_at > ledger.synced_at` filter from re-matching the row.
+  #
+  # canonical_source is the transaction's first source before this one attached, or nil
+  # when it had none. The stamp is skipped while that source holds a change its own
+  # import has not applied yet: a refresh only advances a source's synced_at when its
+  # data changes, so pushing synced_at past that change would hide it until the
+  # canonical source next moves.
+  def mark_synced_by_secondary_source!(canonical_source, sourceable)
+    canonical_synced_at = canonical_source&.sourceable&.synced_at
+    return if canonical_synced_at && canonical_synced_at > (synced_at || Time.at(0))
+
+    update!(synced_at: [ synced_at, sourceable.synced_at || Time.current ].compact.max)
+  end
+
   private
 
     # Merged origins with each origin's sources + sourceables loaded. Mirrors
