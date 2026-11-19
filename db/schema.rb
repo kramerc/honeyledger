@@ -16,9 +16,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
 
   create_table "account_sources", force: :cascade do |t|
     t.bigint "account_id", null: false
-    t.datetime "created_at", null: false
-    t.bigint "sourceable_id", null: false
     t.string "sourceable_type", null: false
+    t.bigint "sourceable_id", null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id", "sourceable_type", "sourceable_id"], name: "index_account_sources_on_account_and_sourceable", unique: true
     t.index ["account_id"], name: "index_account_sources_on_account_id"
@@ -26,7 +26,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "accounts", force: :cascade do |t|
-    t.bigint "balance_minor"
     t.datetime "created_at", null: false
     t.bigint "currency_id"
     t.integer "kind", null: false
@@ -34,6 +33,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.boolean "virtual", default: false, null: false
+    t.bigint "balance_minor"
     t.index "user_id, kind, lower((name)::text)", name: "index_accounts_on_user_id_kind_lower_name", unique: true
     t.index ["currency_id"], name: "index_accounts_on_currency_id"
     t.index ["user_id", "kind"], name: "index_accounts_on_user_id_and_kind"
@@ -41,24 +41,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "active_storage_attachments", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "record_type", null: false
+    t.bigint "record_id", null: false
     t.bigint "blob_id", null: false
     t.datetime "created_at", null: false
-    t.string "name", null: false
-    t.bigint "record_id", null: false
-    t.string "record_type", null: false
     t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
     t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
   end
 
   create_table "active_storage_blobs", force: :cascade do |t|
-    t.bigint "byte_size", null: false
-    t.string "checksum"
-    t.string "content_type"
-    t.datetime "created_at", null: false
-    t.string "filename", null: false
     t.string "key", null: false
+    t.string "filename", null: false
+    t.string "content_type"
     t.text "metadata"
     t.string "service_name", null: false
+    t.bigint "byte_size", null: false
+    t.string "checksum"
+    t.datetime "created_at", null: false
     t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true
   end
 
@@ -78,32 +78,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "csv_imports", force: :cascade do |t|
-    t.bigint "account_id", null: false
-    t.jsonb "column_mappings", default: {}, null: false
-    t.datetime "created_at", null: false
-    t.text "error"
-    t.datetime "imported_at"
-    t.datetime "parsed_at"
-    t.string "state", default: "pending", null: false
-    t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.bigint "account_id", null: false
+    t.string "state", default: "pending", null: false
+    t.jsonb "column_mappings", default: {}, null: false
+    t.datetime "parsed_at"
+    t.datetime "imported_at"
+    t.text "error"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["account_id", "created_at"], name: "index_csv_imports_on_account_id_and_created_at"
     t.index ["account_id"], name: "index_csv_imports_on_account_id"
     t.index ["user_id"], name: "index_csv_imports_on_user_id"
   end
 
   create_table "csv_transactions", force: :cascade do |t|
-    t.integer "amount_minor", null: false
-    t.datetime "created_at", null: false
-    t.string "description", default: "", null: false
     t.bigint "import_id", null: false
-    t.datetime "posted_at"
-    t.jsonb "raw", default: {}, null: false
-    t.string "remote_id"
     t.integer "row_index", null: false
-    t.datetime "synced_at"
     t.datetime "transacted_at", null: false
+    t.datetime "posted_at"
+    t.string "description", default: "", null: false
+    t.integer "amount_minor", null: false
+    t.datetime "synced_at"
+    t.jsonb "raw", default: {}, null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "remote_id"
     t.index ["import_id", "row_index"], name: "index_csv_transactions_on_import_id_and_row_index", unique: true
     t.index ["import_id"], name: "index_csv_transactions_on_import_id"
     t.index ["remote_id", "import_id"], name: "index_csv_transactions_on_remote_id_and_import_id", where: "(remote_id IS NOT NULL)"
@@ -124,59 +124,59 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "import_rules", force: :cascade do |t|
+    t.bigint "user_id", null: false
     t.bigint "account_id"
-    t.datetime "created_at", null: false
-    t.boolean "exclude", default: false, null: false
     t.string "match_pattern", null: false
     t.integer "match_type", default: 0, null: false
     t.integer "priority", default: 0, null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
+    t.boolean "exclude", default: false, null: false
     t.index "user_id, match_type, lower((match_pattern)::text)", name: "index_import_rules_on_user_match_type_lower_pattern", unique: true
     t.index ["account_id"], name: "index_import_rules_on_account_id"
     t.index ["user_id"], name: "index_import_rules_on_user_id"
   end
 
   create_table "lunchflow_accounts", force: :cascade do |t|
-    t.string "balance"
-    t.datetime "balance_changed_at"
     t.bigint "connection_id", null: false
-    t.datetime "created_at", null: false
-    t.string "currency"
-    t.string "institution_logo"
-    t.string "institution_name"
-    t.datetime "last_seen_at"
-    t.string "name"
-    t.string "provider"
     t.integer "remote_id", null: false
+    t.string "name"
+    t.string "institution_name"
+    t.string "institution_logo"
+    t.string "provider"
+    t.string "currency"
     t.string "status"
+    t.string "balance"
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "last_seen_at"
+    t.datetime "balance_changed_at"
     t.index ["connection_id", "remote_id"], name: "index_lunchflow_accounts_on_connection_id_and_remote_id", unique: true
     t.index ["connection_id"], name: "index_lunchflow_accounts_on_connection_id"
   end
 
   create_table "lunchflow_connections", force: :cascade do |t|
+    t.bigint "user_id", null: false
     t.string "api_key", null: false
-    t.datetime "created_at", null: false
     t.string "error"
     t.datetime "refreshed_at", precision: nil
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
     t.index ["refreshed_at"], name: "index_lunchflow_connections_on_refreshed_at"
     t.index ["user_id"], name: "index_lunchflow_connections_on_user_id", unique: true
   end
 
   create_table "lunchflow_transactions", force: :cascade do |t|
     t.bigint "account_id", null: false
+    t.string "remote_id"
     t.string "amount"
-    t.datetime "created_at", null: false
     t.string "currency"
-    t.date "date"
     t.string "description"
     t.string "merchant"
     t.boolean "pending"
-    t.string "remote_id"
+    t.date "date"
     t.datetime "synced_at", precision: nil
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["account_id", "remote_id"], name: "index_lunchflow_transactions_on_account_id_and_remote_id", unique: true
     t.index ["account_id"], name: "index_lunchflow_transactions_on_account_id"
@@ -184,24 +184,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "passkeys", force: :cascade do |t|
-    t.datetime "created_at", null: false
+    t.bigint "user_id", null: false
     t.string "external_id", null: false
-    t.datetime "last_used_at"
-    t.string "nickname", default: "", null: false
     t.text "public_key", default: "", null: false
     t.bigint "sign_count", default: 0, null: false
+    t.string "nickname", default: "", null: false
+    t.datetime "last_used_at"
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
     t.index ["external_id"], name: "index_passkeys_on_external_id", unique: true
     t.index ["user_id"], name: "index_passkeys_on_user_id"
   end
 
   create_table "sessions", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.string "ip_address", default: "", null: false
-    t.datetime "updated_at", null: false
-    t.string "user_agent", default: "", null: false
     t.bigint "user_id", null: false
+    t.string "ip_address", default: "", null: false
+    t.string "user_agent", default: "", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_sessions_on_user_id"
   end
 
@@ -209,32 +209,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.string "available_balance"
     t.string "balance"
     t.datetime "balance_date", precision: nil
-    t.string "conn_id"
-    t.bigint "connection_id", null: false
     t.datetime "created_at", null: false
     t.string "currency"
     t.jsonb "extra"
-    t.datetime "last_seen_at"
     t.string "name"
     t.jsonb "org"
     t.string "remote_id"
+    t.bigint "connection_id", null: false
     t.datetime "updated_at", null: false
+    t.string "conn_id"
+    t.datetime "last_seen_at"
     t.index ["connection_id"], name: "index_simplefin_accounts_on_connection_id"
   end
 
   create_table "simplefin_connections", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.jsonb "errlist", default: [], null: false
     t.datetime "refreshed_at", precision: nil
     t.datetime "updated_at", null: false
     t.string "url"
     t.bigint "user_id", null: false
+    t.jsonb "errlist", default: [], null: false
     t.index ["refreshed_at"], name: "index_simplefin_connections_on_refreshed_at"
     t.index ["user_id"], name: "index_simplefin_connections_on_user_id", unique: true
   end
 
   create_table "simplefin_transactions", force: :cascade do |t|
-    t.bigint "account_id", null: false
     t.string "amount"
     t.datetime "created_at", null: false
     t.string "description"
@@ -242,6 +241,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.boolean "pending"
     t.datetime "posted", precision: nil
     t.string "remote_id"
+    t.bigint "account_id", null: false
     t.datetime "synced_at", precision: nil
     t.datetime "transacted_at", precision: nil
     t.datetime "updated_at", null: false
@@ -250,12 +250,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "transaction_sources", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.boolean "direction_overridden", default: false, null: false
-    t.bigint "sourceable_id", null: false
-    t.string "sourceable_type", null: false
     t.bigint "transaction_id", null: false
+    t.string "sourceable_type", null: false
+    t.bigint "sourceable_id", null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "direction_overridden", default: false, null: false
     t.index ["direction_overridden"], name: "index_transaction_sources_on_direction_overridden", where: "direction_overridden"
     t.index ["sourceable_type", "sourceable_id"], name: "index_transaction_sources_on_sourceable", unique: true
     t.index ["transaction_id", "sourceable_type", "sourceable_id"], name: "index_transaction_sources_on_transaction_and_sourceable", unique: true
@@ -270,12 +270,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.bigint "currency_id", null: false
     t.string "description", default: "", null: false
     t.bigint "dest_account_id", null: false
-    t.datetime "excluded_at"
     t.integer "fx_amount_minor"
     t.bigint "fx_currency_id"
-    t.bigint "merged_into_id"
     t.text "notes", default: "", null: false
-    t.boolean "opening_balance", default: false, null: false
     t.bigint "parent_transaction_id"
     t.datetime "reconciled_at", precision: nil
     t.boolean "split", default: false, null: false
@@ -284,6 +281,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.datetime "transacted_at", precision: nil, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.boolean "opening_balance", default: false, null: false
+    t.bigint "merged_into_id"
+    t.datetime "excluded_at"
     t.index ["category_id"], name: "index_transactions_on_category_id"
     t.index ["currency_id"], name: "index_transactions_on_currency_id"
     t.index ["dest_account_id"], name: "index_transactions_on_dest_account_id"
@@ -308,12 +308,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "webauthn_challenges", force: :cascade do |t|
-    t.string "challenge", default: "", null: false
-    t.datetime "created_at", null: false
-    t.datetime "expires_at", null: false
-    t.string "purpose", default: "", null: false
-    t.datetime "updated_at", null: false
     t.bigint "user_id"
+    t.string "purpose", default: "", null: false
+    t.string "challenge", default: "", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["expires_at"], name: "index_webauthn_challenges_on_expires_at"
     t.index ["user_id"], name: "index_webauthn_challenges_on_user_id"
   end
