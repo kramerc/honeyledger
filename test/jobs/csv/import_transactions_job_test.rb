@@ -86,6 +86,8 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
     Csv::ImportTransactionsJob.perform_now(csv_import.id)
     ledger_transaction = csv_transaction.ledger_transactions.first
     assert_equal 475, ledger_transaction.amount_minor
+    assert_equal csv_transaction.reload.synced_at, ledger_transaction.synced_at,
+      "a new transaction records the parsed version it reflects, not the clock"
 
     # The user re-uploads / re-parses with a corrected amount; the synced_at on
     # the csv_transaction advances past the ledger transaction's synced_at.
@@ -94,6 +96,8 @@ class Csv::ImportTransactionsJobTest < ActiveJob::TestCase
 
     ledger_transaction.reload
     assert_equal 500, ledger_transaction.amount_minor
+    assert_equal csv_transaction.reload.synced_at, ledger_transaction.synced_at,
+      "a re-sync records the parsed version it applied, so a re-parse started mid-import stays ahead"
   end
 
   test "secondary csv source skips canonical re-sync but still bumps ledger synced_at" do

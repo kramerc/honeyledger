@@ -51,7 +51,10 @@ class Csv::ImportTransactionsJob < ApplicationJob
             amount_minor: csv_transaction.amount_minor.abs,
             transacted_at: csv_transaction.transacted_at,
             cleared_at: csv_transaction.posted_at,
-            synced_at: Time.current
+            # The parsed version this transaction now reflects, not the clock: a
+            # re-parse during this import stamps rows with its start time, which
+            # must stay ahead of this stamp for the next import to apply it.
+            synced_at: csv_transaction.synced_at || Time.current
           )
           next
         elsif (identity_target = find_identity_target(csv_transaction, ledger_account))
@@ -118,7 +121,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
         transaction.currency = ledger_account.currency
         transaction.transacted_at = csv_transaction.transacted_at
         transaction.cleared_at = csv_transaction.posted_at
-        transaction.synced_at = Time.current
+        transaction.synced_at = csv_transaction.synced_at || Time.current
         begin
           Transaction.transaction do
             transaction.save!
