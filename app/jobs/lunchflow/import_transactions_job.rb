@@ -37,12 +37,10 @@ class Lunchflow::ImportTransactionsJob < ApplicationJob
           canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
 
           # Re-sync only when this source is the first writer of the ledger transaction.
-          # Secondary sources never overwrite canonical fields, but we still bump the
-          # ledger transaction's synced_at so the outer query's
-          # `lunchflow_transaction.synced_at > ledger.synced_at` filter stops re-matching this row
-          # until the canonical source's data actually advances again.
+          # A secondary source never overwrites canonical fields; it only stamps
+          # synced_at so the outer query stops re-matching this row.
           unless canonical_source.id == existing_source.id
-            ledger_transaction.update!(synced_at: Time.current)
+            ledger_transaction.mark_synced_by_secondary_source!(canonical_source)
             next
           end
 

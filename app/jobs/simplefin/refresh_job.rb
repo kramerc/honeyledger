@@ -55,7 +55,11 @@ class Simplefin::RefreshJob < ApplicationJob
         sf_transaction.transacted_at = sf_transaction_data["transacted-at"] ? Time.at(sf_transaction_data["transacted-at"]) : nil
         sf_transaction.pending = sf_transaction_data["pending"]
         sf_transaction.extra = sf_transaction_data["extra"]
-        sf_transaction.synced_at = Time.current
+        # Advance synced_at only when the row is new or its data changed. The import
+        # job re-syncs rows whose synced_at is ahead of their ledger transaction's, so
+        # stamping unchanged rows would rewrite every imported transaction on every
+        # refresh. save! issues no UPDATE for an unchanged row.
+        sf_transaction.synced_at = Time.current if sf_transaction.changed?
         sf_transaction.save!
       end
 

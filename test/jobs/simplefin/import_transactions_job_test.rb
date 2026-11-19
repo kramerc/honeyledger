@@ -982,6 +982,43 @@ class Simplefin::ImportTransactionsJobTest < ActiveJob::TestCase
       "ledger.synced_at must advance so the outer query stops re-matching this secondary source"
   end
 
+  test "a secondary SimpleFIN source does not stamp past a canonical change still awaiting import" do
+    sf_account, bank_account = create_linked_simplefin_account(remote_id: "acc_secondary_pending", name: "Secondary Pending Bank")
+    lunchflow_account = Lunchflow::Account.create!(
+      connection: lunchflow_connections(:one),
+      remote_id: 9991, name: "Secondary Pending Bank",
+      institution_name: "Test Bank", provider: "finicity",
+      currency: "USD", status: "ACTIVE", balance: "1000.00"
+    )
+    bank_account.account_sources.create!(sourceable: lunchflow_account)
+    lunchflow_transaction = Lunchflow::Transaction.create!(
+      account: lunchflow_account, remote_id: "lf_pending", amount: "-30.00",
+      currency: "USD", description: "Coffee", pending: false, date: 2.days.ago.to_date
+    )
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lunchflow_account.id)
+    ledger = lunchflow_transaction.ledger_transactions.first!
+    simplefin_transaction = Simplefin::Transaction.create!(
+      account: sf_account, remote_id: "sf_secondary_pending", amount: "-30.00",
+      description: "Coffee", posted: 2.days.ago, transacted_at: 2.days.ago, pending: false
+    )
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+    synced_before = ledger.reload.synced_at
+
+    # The canonical Lunch Flow row changes, then the secondary SimpleFIN row changes
+    # too, and SimpleFIN's import happens to run before Lunch Flow's.
+    travel 2.seconds
+    lunchflow_transaction.update!(amount: "-35.00", synced_at: Time.current)
+    travel 2.seconds
+    simplefin_transaction.update!(synced_at: Time.current)
+    Simplefin::ImportTransactionsJob.perform_now(simplefin_account_id: sf_account.id)
+
+    assert_equal synced_before, ledger.reload.synced_at,
+      "the secondary stamp must not hide the canonical change from its own import"
+
+    Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lunchflow_account.id)
+    assert_equal 3500, ledger.reload.amount_minor
+  end
+
   test "rolls back the iteration when TransactionSource::Attach hits a concurrent-job race" do
     sf_account, _ = create_linked_simplefin_account(remote_id: "acc_race", name: "Race Bank")
     Simplefin::Transaction.create!(

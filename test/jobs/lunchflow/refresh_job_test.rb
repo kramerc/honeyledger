@@ -363,4 +363,86 @@ class Lunchflow::RefreshJobTest < ActiveJob::TestCase
     # not opt into them via include_pending.
     assert_equal [ false ], mock_client.include_pending_calls
   end
+
+  test "a refresh with no upstream changes writes no transactions" do
+    client = stub_lunchflow_client(balance: 2500.0, transactions: [ api_transaction(amount: -75.0) ])
+
+    LunchflowClient.stub :new, client do
+      perform_enqueued_jobs { Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id) }
+    end
+    lunchflow_transaction = lunchflow_transactions(:transaction_one).reload
+    ledger_transaction = lunchflow_transaction.ledger_transactions.first!
+    mirror_state = [ lunchflow_transaction.synced_at, lunchflow_transaction.updated_at ]
+    ledger_state = [ ledger_transaction.synced_at, ledger_transaction.updated_at ]
+
+    travel 1.hour
+    LunchflowClient.stub :new, client do
+      perform_enqueued_jobs { Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id) }
+    end
+
+    lunchflow_transaction.reload
+    ledger_transaction.reload
+    assert_equal mirror_state, [ lunchflow_transaction.synced_at, lunchflow_transaction.updated_at ]
+    assert_equal ledger_state, [ ledger_transaction.synced_at, ledger_transaction.updated_at ]
+  end
+
+  test "a refresh that changes a transaction advances synced_at and re-syncs the ledger" do
+    LunchflowClient.stub :new, stub_lunchflow_client(balance: 2500.0, transactions: [ api_transaction(amount: -75.0) ]) do
+      perform_enqueued_jobs { Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id) }
+    end
+    lunchflow_transaction = lunchflow_transactions(:transaction_one).reload
+    first_synced_at = lunchflow_transaction.synced_at
+
+    travel 1.hour
+    LunchflowClient.stub :new, stub_lunchflow_client(balance: 2500.0, transactions: [ api_transaction(amount: -80.0) ]) do
+      perform_enqueued_jobs { Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id) }
+    end
+
+    lunchflow_transaction.reload
+    assert_operator lunchflow_transaction.synced_at, :>, first_synced_at
+    assert_equal 8000, lunchflow_transaction.ledger_transactions.first!.amount_minor
+  end
+
+  test "stamps balance_changed_at only when the balance moves" do
+    account = lunchflow_accounts(:linked_one)
+    assert_nil account.balance_changed_at
+
+    LunchflowClient.stub :new, stub_lunchflow_client(balance: 2500.0) do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+    first_changed_at = account.reload.balance_changed_at
+    assert_equal @lunchflow_connection.reload.refreshed_at, first_changed_at
+
+    travel 1.hour
+    LunchflowClient.stub :new, stub_lunchflow_client(balance: 2500.0) do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+    assert_equal first_changed_at, account.reload.balance_changed_at
+
+    travel 1.hour
+    LunchflowClient.stub :new, stub_lunchflow_client(balance: 2600.0) do
+      Lunchflow::RefreshJob.perform_now(@lunchflow_connection.id)
+    end
+    account.reload
+    assert_equal "2600.0", account.balance
+    assert_operator account.balance_changed_at, :>, first_changed_at
+    assert_equal @lunchflow_connection.reload.refreshed_at, account.balance_changed_at
+  end
+
+  private
+
+    # A client serving the linked_one fixture account (remote_id 101).
+    def stub_lunchflow_client(balance:, transactions: [])
+      client = Object.new
+      client.define_singleton_method(:accounts) do
+        [ { "id" => 101, "name" => "Test Bank Checking", "institution_name" => "Test Bank", "provider" => "finicity", "currency" => "USD", "status" => "ACTIVE" } ]
+      end
+      client.define_singleton_method(:balance) { |_account_id| { "amount" => balance, "currency" => "USD" } }
+      client.define_singleton_method(:transactions) { |_account_id, include_pending: false| transactions }
+      client
+    end
+
+    def api_transaction(amount:)
+      { "id" => "lf_txn_1", "amount" => amount, "currency" => "USD", "date" => "2026-01-15", "description" => "Coffee Shop Purchase", "merchant" => "Sample Vendor", "isPending" => false }
+    end
 end

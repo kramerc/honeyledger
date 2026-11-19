@@ -18,4 +18,5 @@ unlinked_one:
   currency: USD
   status: ACTIVE
   balance: "10000.00"
+  balance_changed_at: 2026-04-20 09:30:00
   last_seen_at: 2026-04-25 00:00:00

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -139,6 +139,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_200000) do
 
   create_table "lunchflow_accounts", force: :cascade do |t|
     t.string "balance"
+    t.datetime "balance_changed_at"
     t.bigint "connection_id", null: false
     t.datetime "created_at", null: false
     t.string "currency"

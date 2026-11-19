@@ -62,7 +62,9 @@ class IntegrationsTest < ApplicationSystemTestCase
       assert_selector "th", text: "Last Updated"
       within("tr", text: "Test Bank Savings") do
         assert_text "$10,000.00"
-        assert_text "April 25, 2026 12:00 AM"
+        # When the balance last changed, not when the account was last seen.
+        assert_text "April 20, 2026 09:30 AM"
+        assert_no_text "April 25, 2026"
       end
     end
   end

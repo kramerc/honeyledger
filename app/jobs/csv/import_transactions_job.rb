@@ -29,7 +29,7 @@ class Csv::ImportTransactionsJob < ApplicationJob
           canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
 
           unless canonical_source.id == existing_source.id
-            ledger_transaction.update!(synced_at: Time.current)
+            ledger_transaction.mark_synced_by_secondary_source!(canonical_source)
             next
           end
 
