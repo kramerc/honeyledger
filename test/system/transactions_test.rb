@@ -480,6 +480,9 @@ class TransactionsTest < ApplicationSystemTestCase
     visit transactions_path
 
     within_row(transaction) do
+      # The phone-only plain-text twins stay hidden on desktop.
+      assert_no_selector ".cell-static"
+
       click_cell "transaction[src_account_id]"
 
       assert_selector ".edit select[name='transaction[src_account_id]']:focus"
@@ -643,6 +646,8 @@ class TransactionsTest < ApplicationSystemTestCase
 
   test "on a phone rows are read-only until Edit is chosen" do
     transaction = manual_transaction("Phone read-only probe", 1500)
+    cleared = manual_transaction("Phone cleared probe", 1600)
+    cleared.update!(cleared: true)
     page.driver.browser.manage.window.resize_to(390, 900)
     visit transactions_path
 
@@ -656,6 +661,14 @@ class TransactionsTest < ApplicationSystemTestCase
 
       click_link "Edit"
       assert_field "transaction[description]", with: "Phone read-only probe"
+    end
+
+    # A cleared row shows its tick as plain text, with the toggle hidden.
+    within_row(cleared) do
+      within(".cleared-cell") do
+        assert_selector ".cell-static", text: "✓"
+        assert_no_selector "button"
+      end
     end
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1400)
