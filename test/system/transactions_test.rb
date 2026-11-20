@@ -573,6 +573,21 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "opening balances keep their cells as plain text" do
+    opening_balance = transactions(:opening_balance_revenue)
+    accept_confirm { click_link "Logout" }
+    assert_link "Login"
+    sign_in_as(opening_balance.user)
+
+    visit transactions_path
+
+    within_row(opening_balance) do
+      assert_text "Opening Balance"
+      assert_no_selector "button.cell-edit"
+      assert_link "Edit Account"
+    end
+  end
+
   test "on a phone rows are read-only until Edit is chosen" do
     transaction = manual_transaction("Phone read-only probe", 1500)
     page.driver.browser.manage.window.resize_to(390, 900)
