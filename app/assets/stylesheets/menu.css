@@ -1,0 +1,125 @@
+/* Action menu: a kebab trigger and a popover list of actions
+   (menu_controller.js). The popover lives in the top layer, so it is
+   positioned against the viewport and never clipped by a scrolling parent. */
+
+/* Trigger: an icon-only button that reads as quiet text until hovered. */
+.menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Inside the transactions table, the size of the form's icon buttons
+     beside it (--cell-edit-height resolves against this font size), so the
+     kebab, Create, and Save line up in the Actions column. */
+  width: var(--cell-edit-height, 28px);
+  height: var(--cell-edit-height, 28px);
+  padding: 0;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--bark-light);
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.menu-trigger:hover,
+.menu-trigger[aria-expanded="true"] {
+  border-color: var(--field-border, var(--honey));
+  background-color: var(--cream);
+  color: var(--honey-dark);
+}
+
+.menu-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.menu-trigger svg {
+  display: block;
+  pointer-events: none;
+}
+
+/* The list, anchored to its trigger (the view pairs them with anchor-name
+   and position-anchor): right edges aligned, just below, flipping above
+   when the window has no room underneath. The browser places it before
+   the first paint, so it opens where it belongs. */
+.menu[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  top: calc(anchor(bottom) + 4px);
+  right: anchor(right);
+  position-try-fallbacks: flip-block;
+  min-width: 160px;
+  padding: 4px 0;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background-color: var(--cream);
+  color: var(--bark-medium);
+  /* The one floating surface besides the form error panel; the shadow
+     separates it from the rows it overlaps. */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Without anchor positioning, menu_controller.js places the menu by script
+   and keeps it hidden until it has. */
+@supports not (anchor-name: --menu) {
+  .menu[popover] {
+    top: 0;
+    left: 0;
+  }
+
+  .menu[popover].menu--placing {
+    visibility: hidden;
+  }
+}
+
+.menu[popover] [role="menuitem"] {
+  display: block;
+  padding: 6px 12px;
+  color: var(--bark-medium);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.menu[popover] [role="menuitem"]:hover,
+.menu[popover] [role="menuitem"]:focus-visible {
+  outline: none;
+  background-color: var(--honey-light);
+  color: var(--bark);
+}
+
+.menu[popover] .menu__item--danger,
+.menu[popover] .menu__item--danger:hover,
+.menu[popover] .menu__item--danger:focus-visible {
+  color: var(--color-negative);
+}
+
+.menu__separator {
+  height: 0;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--divider);
+}
+
+/* Phones: a finger-sized trigger and rows. */
+@media (max-width: 1023px) {
+  .menu-trigger {
+    width: 36px;
+    height: 36px;
+  }
+
+  .menu[popover] [role="menuitem"] {
+    padding: 10px 16px;
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-trigger {
+    transition: none;
+  }
+}

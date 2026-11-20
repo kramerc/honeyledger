@@ -183,6 +183,8 @@ GEM
     loofah (2.25.3)
       crass (~> 1.0.2)
       nokogiri (>= 1.19.5)
+    lucide-rails (0.7.4)
+      railties (>= 4.1.0)
     mail (2.9.1)
       logger
       mini_mime (>= 0.1.1)
@@ -457,6 +459,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   kamal
+  lucide-rails (~> 0.7.4)
   minitest-mock
   minitest-stub_any_instance
   pg (~> 1.7)
@@ -547,6 +550,7 @@ CHECKSUMS
   listen (3.10.1) sha256=4c3f32855657f348747da4dd2372ff3790d90a6b1d3e4f21a3706adb2d04783c
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   loofah (2.25.3) sha256=545f14eef0cc2a7de80df560530d593232b7c07e515c5c4e37532d9cb5b0185c
+  lucide-rails (0.7.4) sha256=74d99cc79a9c5f2e8b0fa772756bc9190acad16dc58b21f25d4c3009c57e4393
   mail (2.9.1) sha256=06574eca475253d6c18145dd70af80d0eb970182d55053497c5f4d797ea160e8
   marcel (1.2.1) sha256=1678e9360e32f9eafa917c80029e2f6d10b2715c66a4b87b6d0da9b9cd1f859f
   matrix (0.4.3) sha256=a0d5ab7ddcc1973ff690ab361b67f359acbb16958d1dc072b8b956a286564c5b
