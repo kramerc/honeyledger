@@ -80,7 +80,7 @@ One commit, or a few cohesive ones, with a regression test for each fix where on
 
 ## 7. Tests
 
-Targeted test files first, then all six gates from step 2. If the fix commits change only Markdown, skip this step, as in step 2.
+Targeted test files first, then all six gates from step 2. If the fix commits change only Markdown, skip this step: run the step 2 check over the fix range, `git diff --name-only --no-renames <reviewed-head>..HEAD`, keeping `--no-renames`.
 
 ## 8. Verify the fix delta locally
 
