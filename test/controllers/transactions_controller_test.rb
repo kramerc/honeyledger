@@ -275,6 +275,22 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Updated description", @transaction.description
   end
 
+  # The Cleared cell toggles with a PATCH carrying only `cleared`.
+  test "cleared toggle unclears and clears a transaction" do
+    original_description = @transaction.description
+
+    patch transaction_url(@transaction), params: { transaction: { cleared: "0" } }, as: :turbo_stream
+
+    assert_response :success
+    assert_nil @transaction.reload.cleared_at
+
+    patch transaction_url(@transaction), params: { transaction: { cleared: "1" } }, as: :turbo_stream
+
+    assert_response :success
+    assert_not_nil @transaction.reload.cleared_at
+    assert_equal original_description, @transaction.description
+  end
+
   test "should destroy transaction with turbo_stream" do
     assert_difference("Transaction.count", -1) do
       delete transaction_url(@transaction), as: :turbo_stream

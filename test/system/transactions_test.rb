@@ -475,7 +475,145 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_no_selector "##{ActionView::RecordIdentifier.dom_id(deposit)}"
   end
 
+  test "clicking a From cell enters edit mode on that field and Save confirms" do
+    transaction = manual_transaction("Field edit probe", 1500)
+    visit transactions_path
+
+    within_row(transaction) do
+      click_cell "transaction[src_account_id]"
+
+      assert_selector ".edit select[name='transaction[src_account_id]']:focus"
+      select accounts(:liability_account).name, from: "transaction[src_account_id]"
+      click_button "Save"
+
+      assert_no_selector ".transaction.editing"
+      within(".row.show .account-cell", match: :first) { assert_text accounts(:liability_account).name }
+    end
+
+    assert_equal accounts(:liability_account), transaction.reload.src_account
+  end
+
+  test "Cancel discards changes made after clicking a field" do
+    transaction = manual_transaction("Field cancel probe", 1500)
+    visit transactions_path
+
+    within_row(transaction) do
+      click_cell "transaction[description]"
+
+      assert_selector ".edit input[name='transaction[description]']:focus"
+      fill_in "transaction[description]", with: "Never saved"
+      click_link "Cancel"
+
+      within(".row.show") { assert_text "Field cancel probe" }
+    end
+
+    assert_equal "Field cancel probe", transaction.reload.description
+  end
+
+  test "Escape discards changes made after clicking a field" do
+    transaction = manual_transaction("Field escape probe", 1500)
+    visit transactions_path
+
+    within_row(transaction) do
+      click_cell "transaction[amount]"
+
+      field = find(".edit input[name='transaction[amount]']:focus")
+      field.set("99.99")
+      field.send_keys(:escape)
+
+      within(".row.show") { assert_text "$15.00" }
+      assert_equal "15.00", find("input[name='transaction[amount]']", visible: :all).value
+    end
+
+    assert_equal 1500, transaction.reload.amount_minor
+  end
+
+  test "edit mode keeps the row's source and Merged pills" do
+    merged = merged_transfer(2500)
+    visit transactions_path
+
+    within_row(merged) do
+      click_cell "transaction[description]"
+
+      within(".edit") do
+        assert_selector ".source-badge", text: "SimpleFIN"
+        assert_selector ".merged-badge", text: "Merged"
+      end
+    end
+  end
+
+  test "clicking Cleared saves it at once without entering edit mode" do
+    transaction = manual_transaction("Cleared toggle probe", 1500)
+    visit transactions_path
+
+    within_row(transaction) do
+      find(".cleared-cell button[aria-pressed='false']").click
+
+      assert_selector ".cleared-cell button[aria-pressed='true']", text: "✓"
+      assert_no_selector ".transaction.editing"
+    end
+    assert_not_nil transaction.reload.cleared_at
+
+    within_row(transaction) do
+      find(".cleared-cell button[aria-pressed='true']").click
+
+      assert_selector ".cleared-cell button[aria-pressed='false']"
+    end
+    assert_nil transaction.reload.cleared_at
+  end
+
+  test "an empty category cell opens edit mode on the category" do
+    transaction = manual_transaction("Field category probe", 1500)
+    visit transactions_path
+
+    within_row(transaction) do
+      click_cell "transaction[category_id]"
+
+      assert_selector ".edit select[name='transaction[category_id]']:focus"
+    end
+  end
+
+  test "on a phone rows are read-only until Edit is chosen" do
+    transaction = manual_transaction("Phone read-only probe", 1500)
+    page.driver.browser.manage.window.resize_to(390, 900)
+    visit transactions_path
+
+    within_row(transaction) do
+      cell = find("button[data-field='transaction[description]']")
+      assert_equal "none", evaluate_script("getComputedStyle(arguments[0]).pointerEvents", cell)
+
+      click_link "Edit"
+      assert_field "transaction[description]", with: "Phone read-only probe"
+    end
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+  end
+
+  test "on a phone the new-transaction form opens from its button" do
+    page.driver.browser.manage.window.resize_to(390, 900)
+    visit transactions_path
+
+    assert_no_field "transaction[description]", visible: true
+    click_button "New transaction"
+    assert_field "transaction[description]"
+    assert_selector ".new-transaction-toggle[aria-expanded='true']"
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+  end
+
   private
+
+  def within_row(transaction, &block)
+    within("##{ActionView::RecordIdentifier.dom_id(transaction)}", &block)
+  end
+
+  # Hover the cell, as a person would (which starts loading the edit form),
+  # then click it.
+  def click_cell(field)
+    cell = find("button[data-field='#{field}']")
+    cell.hover
+    cell.click
+  end
 
   def manual_transaction(description, amount_minor)
     Transaction.create!(

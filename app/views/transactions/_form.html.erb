@@ -11,13 +11,26 @@
 
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
     <div class="select"></div>
-    <div>
+    <%# The row's read-only pills (sources, Excluded, Merged) stay in place while
+        editing, so the row keeps the height it had when shown. %>
+    <% sources = transaction.persisted? ? transaction.badge_transaction_sources : [] %>
+    <div class="field-date">
       <%= form.label :transacted_at, "Date" %>
       <%= form.datetime_field :transacted_at, include_seconds: false %>
+      <% if sources.any? %>
+        <div class="source-badges">
+          <%= transaction_source_badges(sources) %>
+        </div>
+      <% end %>
     </div>
 
     <div class="field-type">
       <%= transaction_type_indicator(transaction, data: { transactions__form_target: "type" }) %>
+      <% if transaction.excluded? %>
+        <span class="excluded-badge" title="Excluded from calculations">Excluded</span>
+      <% elsif transaction.persisted? && transaction.merged_sources.any? %>
+        <span class="merged-badge">Merged</span>
+      <% end %>
     </div>
 
     <div>
@@ -49,7 +62,7 @@
 
     <div class="numeric">
       <%= form.label :amount %>
-      <%= form.text_field :amount, data: { transactions__form_target: "amount" } %>
+      <%= form.text_field :amount, value: transaction_amount_field_value(transaction), data: { transactions__form_target: "amount" } %>
     </div>
 
     <div class="field-currency">

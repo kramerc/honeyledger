@@ -35,8 +35,8 @@
                  data-transaction-id="<%= transaction.id %>">
         <% end %>
       </div>
-      <div data-label="Date">
-        <%= transaction.transacted_at&.strftime("%Y-%m-%d %I:%M %p") %>
+      <div data-label="Date" class="date-cell">
+        <%= transaction_date_field(transaction) %>
         <% if sources.any? %>
           <div class="source-badges">
             <%= transaction_source_badges(sources) %>
@@ -51,15 +51,13 @@
           <a href="#" class="merged-badge" data-action="transactions--row#toggleMergedDetails">Merged</a>
         <% end %>
       </div>
-      <div data-label="Description">
-        <%= transaction.description %>
-      </div>
-      <div data-label="From"><%= transaction.src_account&.name %></div>
-      <div data-label="To"><%= transaction.dest_account&.name %></div>
-      <div data-label="Amount" class="numeric"><%= transaction_amount_with_currency(transaction) %></div>
+      <div data-label="Description" class="description-cell"><%= transaction_description_field(transaction) %></div>
+      <div data-label="From" class="account-cell"><%= transaction_account_field(transaction, :src) %></div>
+      <div data-label="To" class="account-cell account-cell--to"><%= transaction_account_field(transaction, :dest) %></div>
+      <div data-label="Amount" class="numeric amount-cell"><%= transaction_amount_field(transaction) %></div>
       <div data-label="Currency"><%= transaction.currency.code %></div>
-      <div data-label="Category"><%= transaction.category&.name %></div>
-      <div data-label="Cleared" class="boolean"><%= transaction.cleared_at ? "✓" : "" %></div>
+      <div data-label="Category" class="category-cell"><%= transaction_category_field(transaction) %></div>
+      <div data-label="Cleared" class="boolean cleared-cell"><%= transaction_cleared_field(transaction) %></div>
       <div class="actions">
         <% if transaction.opening_balance? && transaction.opening_balance_target_account.present? %>
           <%= link_to "Edit Account", edit_account_path(transaction.opening_balance_target_account), data: { turbo_frame: "_top" } %>
