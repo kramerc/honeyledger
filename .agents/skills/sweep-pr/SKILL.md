@@ -37,7 +37,7 @@ bin/bundler-audit
 bin/importmap audit
 ```
 
-**Markdown-only changes skip the gates.** When every file the PR changes is Markdown (`git diff --name-only origin/main...HEAD` lists nothing but `*.md`), the tests and scans cannot be affected, so go straight to `gh pr ready N`. Any other file in the diff (views, stylesheets, Ruby, JavaScript, config, a skill's script) means running all six. GitHub CI still runs on the PR either way.
+**Markdown-only changes skip the gates.** When every file the PR changes is Markdown (`git diff --name-only --no-renames origin/main...HEAD` lists nothing but `*.md`; `--no-renames` keeps a file renamed to `.md` from hiding its old, non-Markdown path), the tests and scans cannot be affected, so go straight to `gh pr ready N`. Any other file in the diff (views, stylesheets, Ruby, JavaScript, config, a skill's script) means running all six. GitHub CI still runs on the PR either way.
 
 When green and the PR is still a draft: `gh pr ready N`. That alone triggers Copilot and Codex, so it *is* round one — do not also request.
 
