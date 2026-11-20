@@ -1066,6 +1066,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The plain-text twin of each interactive cell, shown only on phones. */
+.cell-static {
+  display: none;
+}
+
 /* An empty cell offers what it would hold. */
 .cell-edit--empty .cell-edit__value::before {
   content: attr(data-placeholder);
@@ -1169,26 +1174,24 @@
 
 @media (max-width: 1023px) {
   /* On a phone the cells are plain text and edit mode is reached through
-     the Edit link, so a stray tap never opens the form. */
+     the Edit link. display: none takes the cell buttons and the Cleared
+     toggle out of reach entirely (taps, Tab, and assistive technology),
+     and their plain-text twins show the values instead. */
   .transactions .row.show .cell-edit,
-  .transactions .row.show .cell-edit:hover,
-  .transactions .row.show .cell-edit:focus-visible {
-    pointer-events: none;
-    width: auto;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: inherit;
+  .transactions .row.show form.cleared-toggle {
+    display: none;
   }
 
-  .transactions .row.show .cell-edit--empty .cell-edit__value::before {
-    content: none;
+  .transactions .row.show .cell-static {
+    display: inline;
+    min-width: 0;
   }
 
-  .transactions .row.show > .description-cell .cell-edit {
-    width: 100%;
+  .transactions .row.show > .description-cell .cell-static,
+  .transactions .row.show > .account-cell .cell-static {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* The accounts line: From → To in body text, under the description. */

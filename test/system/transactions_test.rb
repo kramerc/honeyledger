@@ -647,8 +647,12 @@ class TransactionsTest < ApplicationSystemTestCase
     visit transactions_path
 
     within_row(transaction) do
-      cell = find("button[data-field='transaction[description]']")
-      assert_equal "none", evaluate_script("getComputedStyle(arguments[0]).pointerEvents", cell)
+      # Hidden outright, so neither a tap, Tab, nor assistive technology can
+      # reach a cell button or the Cleared toggle; plain text shows instead.
+      assert_no_selector "button.cell-edit"
+      assert_selector "button.cell-edit", visible: :hidden, minimum: 7
+      within(".description-cell") { assert_selector ".cell-static", text: "Phone read-only probe" }
+      within(".account-cell", match: :first) { assert_selector ".cell-static", text: accounts(:asset_account).name }
 
       click_link "Edit"
       assert_field "transaction[description]", with: "Phone read-only probe"

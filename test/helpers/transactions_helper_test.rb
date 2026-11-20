@@ -131,6 +131,14 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_equal "From account: Asset Account. Edit transaction", button["aria-label"]
   end
 
+  test "interactive cells carry a plain-text twin for phone widths" do
+    transaction = transactions(:one)
+
+    assert_equal "Asset Account", parse(transaction_account_field(transaction, :src)).at_css("span.cell-static").text
+    assert_equal "Grocery Store", parse(transaction_description_field(transaction)).at_css("span.cell-static").text
+    assert_equal "✓", parse(transaction_cleared_field(transaction, filter_account: nil)).at_css("span.cell-static").text
+  end
+
   test "transaction_account_field targets the destination field for the To side" do
     button = parse(transaction_account_field(transactions(:one), :dest)).at_css("button")
 

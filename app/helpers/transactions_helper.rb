@@ -73,7 +73,7 @@ module TransactionsHelper
     tick = cleared ? "✓" : ""
     return tick if transaction.opening_balance?
 
-    button_to transaction_path(transaction, account_id: filter_account&.id),
+    toggle = button_to transaction_path(transaction, account_id: filter_account&.id),
       method: :patch,
       params: { "transaction[cleared]" => cleared ? "0" : "1" },
       form_class: "cleared-toggle",
@@ -83,6 +83,7 @@ module TransactionsHelper
       aria: { label: "Cleared", pressed: cleared } do
       tag.span(tick, class: "cell-edit__value", data: { placeholder: "✓" })
     end
+    safe_join([ toggle, static_cell_text(tick) ])
   end
 
   # The edit form's Amount value: a saved amount at its currency's full
@@ -120,7 +121,7 @@ module TransactionsHelper
     # keyboard doesn't pass through every cell of every row; the row's Edit
     # link and the form's own fields remain reachable.
     def edit_field_button(attribute, label, value_text, modifier: nil, placeholder: nil)
-      tag.button(type: "button", tabindex: -1,
+      button = tag.button(type: "button", tabindex: -1,
         class: class_names("cell-edit", "cell-edit--#{modifier}" => modifier, "cell-edit--empty" => value_text.blank?),
         title: value_text.presence,
         aria: { label: "#{label}: #{value_text.presence || "none"}. Edit transaction" },
@@ -131,5 +132,14 @@ module TransactionsHelper
         }) do
         tag.span(value_text, class: "cell-edit__value", data: { placeholder: placeholder })
       end
+      safe_join([ button, static_cell_text(value_text) ])
+    end
+
+    # Phone rows are read-only until Edit. Each interactive cell carries this
+    # plain-text twin, and the stylesheet swaps the two with display: none
+    # below 1024px, which (unlike pointer-events) also takes the control out
+    # of the Tab order and the accessibility tree.
+    def static_cell_text(text)
+      tag.span(text, class: "cell-static")
     end
 end
