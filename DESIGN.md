@@ -34,7 +34,7 @@ All colours are CSS custom properties on `:root` in `app/assets/stylesheets/appl
 | `--color-positive` | `#15803D` | `#4ade80` | Money in, positive balances |
 | `--color-negative` | `#DC2626` | `#f87171` | Money out, negative balances, Delete |
 
-Feedback colours (`--color-success`, `--bg-success`, `--text-success`, and the `-error` set with `--border-error`) are for flash messages, error panels, and the danger button's `--color-error` fill.
+Feedback colours (`--color-success`, `--bg-success`, `--text-success`, and the `-error` set with `--border-error`) are for feedback only: flash messages, error panels, the CSV drop zone's status message, and the danger button's `--color-error` fill.
 
 The transactions table adds three local tokens on `.transactions`:
 
@@ -75,7 +75,7 @@ Transitions only answer the user (hover, open, close) and stay short: 0.1–0.2s
 
 ### Tables
 
-The main data tables (transactions, accounts, passkeys) are CSS grids of `.row` elements: one grid template per table, cells as `div`s, header row first, collapsing to cards or phone rows below their breakpoint. The rules below describe those. Integrations, Import Rules previews, and the CSV import screens use native `<table>` markup; that is fine as it is and doesn't need converting, though a new data table that collapses on phones should use the grid pattern.
+The main data tables (transactions, accounts, passkeys) are CSS grids of `.row` elements: one grid template per table, cells as `div`s, header row first, collapsing to cards or phone rows below their breakpoint. The rules below describe those. Integrations, Import Rules (the list and its previews), and the CSV import screens use native `<table>` markup; that is fine as it is and doesn't need converting, though a new data table that collapses on phones should use the grid pattern.
 
 - Header row (`.row.header`): `--honey-pale` background, `0.75rem`, weight 600, `--accent-text`, title case. Sticky on the transactions table.
 - Cells: 1px right and bottom `--divider` borders, `--bark-medium` text at `0.875rem`.
