@@ -115,8 +115,12 @@ module TransactionsHelper
     # resting the pointer on it starts loading the row's lazy edit form so
     # it's ready by the click (transactions--row#schedulePreload). modifier
     # "select" adds a caret on hover for list-backed fields.
+    #
+    # The buttons are a mouse shortcut and stay out of the Tab order, so a
+    # keyboard doesn't pass through every cell of every row; the row's Edit
+    # link and the form's own fields remain reachable.
     def edit_field_button(attribute, label, value_text, modifier: nil, placeholder: nil)
-      tag.button(type: "button",
+      tag.button(type: "button", tabindex: -1,
         class: class_names("cell-edit", "cell-edit--#{modifier}" => modifier, "cell-edit--empty" => value_text.blank?),
         title: value_text.presence,
         aria: { label: "#{label}: #{value_text.presence || "none"}. Edit transaction" },

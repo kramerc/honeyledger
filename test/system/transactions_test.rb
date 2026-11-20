@@ -562,6 +562,26 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_nil transaction.reload.cleared_at
   end
 
+  # Chrome holds back the Escape that closes a list, so this guards the
+  # behaviour rather than transactions--row#isOpenSelect specifically.
+  test "Escape on an open account list closes the list before discarding the edit" do
+    transaction = manual_transaction("List escape probe", 1500)
+    visit transactions_path
+
+    within_row(transaction) do
+      click_cell "transaction[src_account_id]"
+      select = find(".edit select[name='transaction[src_account_id]']:focus")
+      assert evaluate_script("arguments[0].matches(':open')", select), "clicking From should open its list"
+
+      select.send_keys(:escape)
+      assert_selector ".transaction.editing"
+      assert_not evaluate_script("arguments[0].matches(':open')", select)
+
+      select.send_keys(:escape)
+      assert_no_selector ".transaction.editing"
+    end
+  end
+
   test "an empty category cell opens edit mode on the category" do
     transaction = manual_transaction("Field category probe", 1500)
     visit transactions_path

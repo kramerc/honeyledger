@@ -77,9 +77,23 @@ export default class extends Controller {
   }
 
   cancelEdit(event) {
+    // Escape on a select whose list is open only closes the list; the next
+    // Escape discards the edit. Clicking From, To, or Category opens its list
+    // straight away, so this is the common way out of a list. Chrome already
+    // keeps that Escape from reaching the page; this guard covers browsers
+    // that let it through.
+    if (event.type === "keydown" && this.isOpenSelect(event.target)) return
+
     event.preventDefault()
     this.closeEdit()
     this.formTarget.reset()
+  }
+
+  // :open matches a select with its list showing. Browsers without :open
+  // support throw on the selector, and Escape keeps discarding there.
+  isOpenSelect(element) {
+    if (element?.tagName !== "SELECT") return false
+    try { return element.matches(":open") } catch { return false }
   }
 
   closeEdit() {

@@ -120,6 +120,8 @@ class TransactionsHelperTest < ActionView::TestCase
     button = parse(transaction_account_field(transactions(:one), :src)).at_css("button.cell-edit.cell-edit--select")
 
     assert_equal "button", button["type"]
+    # A mouse shortcut, kept out of the Tab order.
+    assert_equal "-1", button["tabindex"]
     assert_equal "Asset Account", button.at_css(".cell-edit__value").text
     assert_equal "Asset Account", button["title"]
     assert_equal "transaction[src_account_id]", button["data-field"]
