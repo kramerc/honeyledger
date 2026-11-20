@@ -27,10 +27,36 @@ export default class extends Controller {
     }
   }
 
-  // Hovering a cell starts loading the edit form so it's there by the click.
+  // Resting on a cell starts loading the edit form so it's there by the
+  // click. The delay keeps a pointer sweeping across the table from loading
+  // a form for every row it crosses.
+  static PRELOAD_DELAY_MS = 250
+
+  disconnect() {
+    this.cancelPreload()
+  }
+
+  schedulePreload() {
+    this.cancelPreload()
+    this.preloadTimer = setTimeout(() => this.preloadEdit(), this.constructor.PRELOAD_DELAY_MS)
+  }
+
+  cancelPreload() {
+    clearTimeout(this.preloadTimer)
+    this.preloadTimer = null
+  }
+
   preloadEdit() {
+    this.preloadTimer = null
     const frame = this.editFrame
     if (frame && frame.getAttribute("loading") === "lazy") frame.setAttribute("loading", "eager")
+  }
+
+  // The Cleared toggle saves without edit mode. If the server rejects it,
+  // the errors are rendered into the edit form (edit.turbo_stream), so open
+  // edit mode to show them rather than failing silently.
+  toggleSubmitEnd(event) {
+    if (!event.detail.success) this.element.classList.add("editing")
   }
 
   get editFrame() {

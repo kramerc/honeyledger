@@ -77,6 +77,7 @@ module TransactionsHelper
       method: :patch,
       params: { "transaction[cleared]" => cleared ? "0" : "1" },
       form_class: "cleared-toggle",
+      form: { data: { action: "turbo:submit-end->transactions--row#toggleSubmitEnd" } },
       class: class_names("cell-edit", "cell-edit--empty" => !cleared),
       title: cleared ? "Mark as not cleared" : "Mark as cleared",
       aria: { label: "Cleared", pressed: cleared } do
@@ -111,8 +112,9 @@ module TransactionsHelper
     end
 
     # The value as a button. data-field names the edit form's field to focus;
-    # hovering starts loading the row's lazy edit form so it's ready by the
-    # click. modifier "select" adds a caret on hover for list-backed fields.
+    # resting the pointer on it starts loading the row's lazy edit form so
+    # it's ready by the click (transactions--row#schedulePreload). modifier
+    # "select" adds a caret on hover for list-backed fields.
     def edit_field_button(attribute, label, value_text, modifier: nil, placeholder: nil)
       tag.button(type: "button",
         class: class_names("cell-edit", "cell-edit--#{modifier}" => modifier, "cell-edit--empty" => value_text.blank?),
@@ -120,7 +122,8 @@ module TransactionsHelper
         aria: { label: "#{label}: #{value_text.presence || "none"}. Edit transaction" },
         data: {
           field: "transaction[#{attribute}]",
-          action: "transactions--row#editField mouseenter->transactions--row#preloadEdit"
+          action: "transactions--row#editField mouseenter->transactions--row#schedulePreload " \
+                  "mouseleave->transactions--row#cancelPreload"
         }) do
         tag.span(value_text, class: "cell-edit__value", data: { placeholder: placeholder })
       end

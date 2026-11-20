@@ -573,6 +573,39 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "sweeping the pointer across rows loads only the edit form it rests on" do
+    rows = 4.times.map { |index| manual_transaction("Sweep probe #{index}", 100 + index) }
+    visit transactions_path
+
+    cells = rows.map { |transaction| within_row(transaction) { find(".description-cell .cell-edit").native } }
+    # One uninterrupted pointer movement, as a real sweep is; separate
+    # Capybara hovers each take longer than the preload delay.
+    sweep = page.driver.browser.action
+    cells.each { |cell| sweep.move_to(cell, duration: 0) }
+    sweep.perform
+
+    # Only the last row, where the pointer stays, loads its form.
+    within_row(rows.last) { assert_selector ".edit form", visible: :all }
+    rows[0..-2].each do |transaction|
+      within_row(transaction) { assert_no_selector ".edit form", visible: :all }
+    end
+  end
+
+  test "a rejected Cleared toggle opens edit mode with the errors" do
+    transaction = manual_transaction("Rejected toggle probe", 1500)
+    # Already invalid for another reason, so any save is rejected.
+    transaction.update_columns(dest_account_id: transaction.src_account_id)
+    visit transactions_path
+
+    within_row(transaction) do
+      find(".cleared-cell button").click
+
+      assert_selector ".transaction.editing"
+      within(".edit") { assert_text "Transaction could not be saved" }
+    end
+    assert_nil transaction.reload.cleared_at
+  end
+
   test "opening balances keep their cells as plain text" do
     opening_balance = transactions(:opening_balance_revenue)
     accept_confirm { click_link "Logout" }

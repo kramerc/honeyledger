@@ -124,7 +124,8 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_equal "Asset Account", button["title"]
     assert_equal "transaction[src_account_id]", button["data-field"]
     assert_includes button["data-action"], "transactions--row#editField"
-    assert_includes button["data-action"], "mouseenter->transactions--row#preloadEdit"
+    assert_includes button["data-action"], "mouseenter->transactions--row#schedulePreload"
+    assert_includes button["data-action"], "mouseleave->transactions--row#cancelPreload"
     assert_equal "From account: Asset Account. Edit transaction", button["aria-label"]
   end
 
@@ -212,6 +213,8 @@ class TransactionsHelperTest < ActionView::TestCase
     assert_equal "Mark as not cleared", button["title"]
     # Saves on click rather than opening edit mode.
     assert_nil button["data-field"]
+    # A rejected save opens edit mode to show the errors.
+    assert_equal "turbo:submit-end->transactions--row#toggleSubmitEnd", form["data-action"]
   end
 
   test "transaction_cleared_field clears an uncleared transaction" do
