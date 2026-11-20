@@ -37,6 +37,8 @@ bin/bundler-audit
 bin/importmap audit
 ```
 
+**Markdown-only changes skip the gates.** When every file the PR changes is Markdown (`git diff --name-only --no-renames origin/main...HEAD` lists nothing but `*.md`; `--no-renames` keeps a file renamed to `.md` from hiding its old, non-Markdown path), the tests and scans cannot be affected, so go straight to `gh pr ready N`. Any other file in the diff (views, stylesheets, Ruby, JavaScript, config, a skill's script) means running all six. GitHub CI still runs on the PR either way.
+
 When green and the PR is still a draft: `gh pr ready N`. That alone triggers Copilot and Codex, so it *is* round one — do not also request.
 
 ## 3. One concurrent request
@@ -78,7 +80,7 @@ One commit, or a few cohesive ones, with a regression test for each fix where on
 
 ## 7. Tests
 
-Targeted test files first, then all six gates from step 2.
+Targeted test files first, then all six gates from step 2. If the fix commits change only Markdown, skip this step: run the step 2 check over the fix range, `git diff --name-only --no-renames <reviewed-head>..HEAD`, keeping `--no-renames`.
 
 ## 8. Verify the fix delta locally
 
