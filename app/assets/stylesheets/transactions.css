@@ -26,7 +26,7 @@
   display: grid;
   grid-template-columns:
     32px                      /* Select */
-    minmax(140px, 2fr)        /* Date */
+    minmax(160px, 2fr)        /* Date */
     minmax(90px,  1.2fr)      /* Type */
     minmax(80px,  2fr)        /* Description */
     minmax(90px,  1.5fr)      /* From */
@@ -35,7 +35,7 @@
     minmax(60px,  0.8fr)      /* Currency */
     minmax(80px,  1.3fr)      /* Category */
     minmax(60px,  0.7fr)      /* Cleared */
-    minmax(120px, 1.6fr);     /* Actions */
+    minmax(150px, 1.6fr);     /* Actions */
   gap: 0;
   align-items: stretch;
 }
@@ -46,7 +46,7 @@
   .transactions .row {
     grid-template-columns:
       32px                      /* Select */
-      minmax(140px, 2fr)        /* Date */
+      minmax(160px, 2fr)        /* Date */
       minmax(90px,  1.2fr)      /* Type */
                                 /* Description — hidden */
       minmax(90px,  1.5fr)      /* From */
@@ -55,7 +55,7 @@
                                 /* Currency — hidden */
                                 /* Category — hidden */
                                 /* Cleared — hidden */
-      minmax(120px, 1.6fr);     /* Actions */
+      minmax(150px, 1.6fr);     /* Actions */
   }
 
   .transactions .row > div:nth-child(4),
@@ -183,13 +183,14 @@
 
 .transactions form input[type="submit"],
 .transactions form button[type="submit"] {
-  padding: 4px 12px;
+  padding: 4px 10px;
   background-color: var(--honey-dark);
   color: #fff;
-  border: none;
+  border: 1px solid transparent; /* same height as the bordered Cancel */
   border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 600;
+  line-height: normal;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -197,6 +198,30 @@
 .transactions form input[type="submit"]:hover,
 .transactions form button[type="submit"]:hover {
   background-color: var(--honey);
+}
+
+/* Cancel beside Save: the secondary button, after the selection bar's
+   (.selection-bar__btn--secondary), at Save's size. It carries its own
+   cream fill, and a honey border on hover, because the row behind it is
+   usually honey-tinted from being hovered. */
+.transactions form .row > div.actions > a {
+  padding: 4px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  background-color: var(--cream);
+  color: var(--bark-medium);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: normal;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.transactions form .row > div.actions > a:hover {
+  border-color: var(--field-border);
+  background-color: var(--honey-pale);
+  color: var(--bark);
+  text-decoration: none;
 }
 
 .transactions form .numeric input {
@@ -278,88 +303,173 @@
     display: none;
   }
 
-  /* Stack cells as cards */
   .transactions .row {
     display: flex;
     flex-direction: column;
     gap: 0;
   }
 
-  .transactions .row.show {
-    border: 1px solid var(--divider);
-    border-radius: 8px;
-    margin-bottom: 10px;
-    padding: 10px 14px;
-    background-color: var(--cream);
-  }
-
   .transactions .row > div {
     border: none;
-    padding: 3px 0;
+    padding: 0;
     font-size: 0.875rem;
   }
 
-  /* Show data-label as an inline label */
-  .transactions .row.show > div[data-label]::before {
-    content: attr(data-label) ": ";
-    font-weight: 600;
-    font-size: 0.75rem;
-    color: var(--accent-text);
-    min-width: 80px;
-    display: inline;
-  }
-
-  /* Amount should still be left-aligned in card view */
-  .transactions .row.show .numeric {
-    justify-content: flex-start;
-    text-align: left;
-  }
-
-  /* Cleared sits inline */
-  .transactions .row.show .boolean {
-    justify-content: flex-start;
-  }
-
-  /* Actions row: horizontal at bottom */
-  .transactions .row.show .actions {
-    padding-top: 6px;
-    margin-top: 4px;
-    border-top: 1px solid var(--divider);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  /* Allow cells to wrap normally */
-  .transactions .row > div:nth-child(2),
-  .transactions .row > div:nth-child(3),
-  .transactions .row > div:nth-child(7),
-  .transactions .row > div:nth-child(8),
-  .transactions .row > div:nth-child(10),
-  .transactions .row > div:nth-child(11) {
-    white-space: normal;
-  }
-
-  /* Select column: inline at top of card */
-  .transactions .row.show > .select {
-    position: absolute;
-    top: 10px;
-    right: 14px;
-  }
-
+  /*
+    Ledger rows: three lines, checkbox in the gutter.
+      [ ] Description ............................ Amount
+          From account ▾  →  To account ▾
+          Date  Sources  Type  Category  ✓      Edit Delete
+    The two empty pseudo-elements are full-width flex items that force the
+    line breaks between those groups.
+  */
   .transactions .row.show {
     position: relative;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 12px 12px 12px 40px;
+    border-bottom: 1px solid var(--divider);
+    background-color: var(--cream);
+  }
+
+  .transactions .row.show::before,
+  .transactions .row.show::after {
+    content: "";
+    flex-basis: 100%;
+    height: 0;
+  }
+
+  .transactions .row.show::before { order: 25; }
+  .transactions .row.show::after  { order: 45; }
+
+  .transactions .row.show > .select {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 2px 0 0;
+  }
+
+  /* Line one: what and how much */
+  .transactions .row.show > div:nth-child(4) {
+    order: 10;
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bark);
+  }
+
+  .transactions .row.show > .numeric {
+    order: 20;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--bark);
+    white-space: nowrap;
+  }
+
+  /* Line two: the accounts, each one a tap target */
+  /* Zero basis keeps From and To on one line, sharing it and wrapping their
+     names inside, instead of the flex line breaking between them. */
+  .transactions .row.show > .account-cell {
+    order: 30;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: fit-content;
+  }
+
+  .transactions .row.show > .account-cell--to {
+    order: 40;
+  }
+
+  .transactions .row.show > .account-cell--to::before {
+    content: "→";
+    margin-right: 8px;
+    color: var(--bark-light);
+  }
+
+  /* Line three: details, with actions pushed to the right */
+  .transactions .row.show > div:nth-child(2) {
+    order: 50;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--bark-light);
+  }
+
+  .transactions .row.show > div:nth-child(2) .source-badges {
+    margin-top: 0;
+  }
+
+  .transactions .row.show > div:nth-child(3) {
+    order: 60;
+    flex-wrap: wrap;
+  }
+
+  .transactions .row.show > .category-cell {
+    order: 70;
+    font-size: 0.8rem;
+  }
+
+  /* A bare tick needs its word once the column header is gone. */
+  .transactions .row.show > .boolean {
+    order: 55;
+    font-size: 0.8rem;
+  }
+
+  .transactions .row.show > .boolean::after {
+    content: "Cleared";
+    margin-left: 3px;
+  }
+
+  /* An unset category or uncleared transaction says nothing on a phone. */
+  .transactions .row.show > .category-cell:empty,
+  .transactions .row.show > .category-cell:has(.cell-edit--empty),
+  .transactions .row.show > .boolean:empty,
+  .transactions .row.show > .boolean:has(.cell-edit--empty) {
+    display: none;
+  }
+
+  /* The amount already carries its currency symbol. */
+  .transactions .row.show > div:nth-child(8) {
+    display: none;
+  }
+
+  .transactions .row.show > .actions {
+    order: 90;
+    margin-left: auto;
+    gap: 12px;
+  }
+
+  .transactions .row.show > .merged-details {
+    order: 99;
+    flex-basis: 100%;
+  }
+
+  .transactions .row.show > .merged-details.merged-details--visible {
+    margin: 4px 0 0;
+    border-radius: 6px;
   }
 
   /* Form: single column with labels above inputs */
+  /* Sits in the list like a row: no box, just the dividing line below. */
   .transactions form .row {
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: 14px;
-    margin-bottom: 10px;
-    border: 1px solid var(--divider);
-    border-radius: 8px;
+    padding: 14px 12px;
+    margin-bottom: 0;
+    border: 0;
+    border-bottom: 1px solid var(--divider);
+    border-radius: 0;
+  }
+
+  /* The form's empty checkbox column would only add a gap above Date. */
+  .transactions form .row > .select {
+    display: none;
   }
 
   .transactions form .row > div {
@@ -422,13 +532,14 @@
     margin-bottom: 0;
   }
 
-  /* Inputs full width */
+  /* Inputs full width, outlined like the desktop fields (--field-border) */
   .transactions form .row input[type="text"],
   .transactions form .row input[type="datetime-local"],
   .transactions form .row select {
     width: 100%;
     font-size: 1rem;
     padding: 8px 10px;
+    border-color: var(--field-border);
   }
 
   /* Actions span full width */
@@ -443,6 +554,21 @@
     padding-top: 10px;
     border-top: 1px solid var(--divider);
   }
+
+  /* Save/Create and Cancel take the selection bar's button styles
+     (.selection-bar__btn--primary / --secondary), the buttons already
+     used on phones. */
+  .transactions form .row > div.actions input[type="submit"],
+  .transactions form .row > div.actions button[type="submit"],
+  .transactions form .row > div.actions > a {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: normal;
+    white-space: nowrap;
+  }
+
 }
 
 /* Editing action */
@@ -828,4 +954,286 @@
 
 .file-drop__status:empty {
   display: none;
+}
+
+/* ========== Editable cells ========== */
+/*
+  Each editable value is a button dressed as cell text. Hovering or focusing
+  draws the field outline (plus a caret on list-backed fields), and a click
+  puts the row into edit mode with that field focused. The negative margin
+  keeps the text aligned with neighbouring cells.
+*/
+.transactions .row > .account-cell,
+.transactions .row > .category-cell,
+.transactions .row > .description-cell {
+  min-width: 0;
+}
+
+/* Description, From, and To hold to one line and truncate; the full text
+   is in each one's title. */
+.transactions .row .cell-text,
+.transactions .row > .account-cell .cell-edit__value,
+.transactions .row > .description-cell .cell-edit__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transactions {
+  /* One line of text plus padding and border, shared by the editable cells
+     and the edit form's fields so rows keep their height in edit mode. */
+  --cell-edit-height: calc(1.4em + 8px);
+  /* Field outlines: full honey on the light theme; on the dark theme, honey
+     mixed into the background, so a row of fields doesn't glare. */
+  --field-border: light-dark(var(--honey), color-mix(in srgb, var(--honey) 35%, var(--cream)));
+  --cell-edit-caret: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23D97706' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.cell-edit {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: calc(100% + 14px);
+  min-width: 0;
+  min-height: var(--cell-edit-height);
+  margin: -4px -7px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent no-repeat right 7px center / 10px 6px;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.cell-edit--select {
+  padding-right: 22px;
+}
+
+.numeric .cell-edit {
+  justify-content: flex-end;
+}
+
+/* The Cleared outline is a square around the tick, the size of the edit
+   form's checkbox field, rather than the full column. */
+.boolean .cell-edit {
+  justify-content: center;
+  width: var(--cell-edit-height);
+  margin: -4px auto;
+  padding: 3px 0;
+}
+
+/* Cleared saves on click through its own one-button form. Undo the table's
+   submit-button styling so it looks like the other cells. */
+.transactions form.cleared-toggle {
+  display: contents;
+}
+
+.transactions form.cleared-toggle button.cell-edit,
+.transactions form.cleared-toggle button.cell-edit:hover {
+  padding: 3px 0;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: normal;
+  line-height: 1.4;
+  color: var(--honey-dark);
+  white-space: nowrap;
+}
+
+.transactions form.cleared-toggle button.cell-edit {
+  border: 1px solid transparent;
+  background-color: transparent;
+}
+
+.transactions form.cleared-toggle button.cell-edit:hover,
+.transactions form.cleared-toggle button.cell-edit:focus-visible {
+  border-color: var(--field-border);
+  background-color: var(--cream);
+}
+
+/* While the toggle saves, the tick holds still until the row is replaced. */
+.transactions form.cleared-toggle[aria-busy="true"] button.cell-edit {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.cell-edit__value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The plain-text twin of each interactive cell, shown only on phones. */
+.cell-static {
+  display: none;
+}
+
+/* An empty cell offers what it would hold. */
+.cell-edit--empty .cell-edit__value::before {
+  content: attr(data-placeholder);
+  color: var(--bark-light);
+  font-style: italic;
+  visibility: hidden;
+}
+
+.boolean .cell-edit--empty .cell-edit__value::before {
+  font-style: normal;
+}
+
+.cell-edit:hover,
+.cell-edit:focus-visible {
+  border-color: var(--field-border);
+  background-color: var(--cream);
+  color: var(--bark);
+}
+
+.cell-edit--select:hover,
+.cell-edit--select:focus-visible {
+  background-image: var(--cell-edit-caret);
+}
+
+.cell-edit:hover .cell-edit__value::before,
+.cell-edit:focus-visible .cell-edit__value::before {
+  visibility: visible;
+}
+
+.cell-edit:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell-edit {
+    transition: none;
+  }
+}
+
+/*
+  The row edit form (and the new-transaction row) on desktop: each field
+  takes the hovered-cell look, at the same size and offset, so a row going
+  into edit mode keeps its values in place and only gains the outlines.
+*/
+@media (min-width: 1024px) {
+  .transactions form .row input[type="text"],
+  .transactions form .row input[type="datetime-local"],
+  .transactions form .row select {
+    box-sizing: border-box;
+    width: calc(100% + 14px);
+    height: var(--cell-edit-height);
+    margin: -4px -7px;
+    padding: 3px 6px;
+    border: 1px solid var(--field-border);
+    border-radius: 4px;
+    background-color: var(--cream);
+    color: var(--bark);
+    font: inherit;
+    line-height: 1.4;
+  }
+
+  .transactions form .row select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 22px;
+    background: var(--cream) var(--cell-edit-caret) no-repeat right 7px center / 10px 6px;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  .transactions form .row input[type="text"]:focus-visible,
+  .transactions form .row input[type="datetime-local"]:focus-visible,
+  .transactions form .row select:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+    outline-offset: 1px;
+  }
+
+  .transactions form .row input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--honey-dark);
+    cursor: pointer;
+  }
+}
+
+/* Touch screens have no hover to reveal the affordance, so the account and
+   category cells show theirs at rest. */
+@media (pointer: coarse) {
+  .cell-edit--select {
+    border-color: var(--divider);
+    background-image: var(--cell-edit-caret);
+  }
+}
+
+/* New-transaction toggle: phones only */
+.new-transaction-toggle {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  /* On a phone the cells are plain text and edit mode is reached through
+     the Edit link. display: none takes the cell buttons and the Cleared
+     toggle out of reach entirely (taps, Tab, and assistive technology),
+     and their plain-text twins show the values instead. */
+  .transactions .row.show .cell-edit,
+  .transactions .row.show form.cleared-toggle {
+    display: none;
+  }
+
+  .transactions .row.show .cell-static {
+    display: inline;
+    min-width: 0;
+  }
+
+  .transactions .row.show > .description-cell .cell-static,
+  .transactions .row.show > .account-cell .cell-static {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The accounts line: From → To in body text, under the description. */
+  .transactions .row.show > .account-cell {
+    color: var(--bark-medium);
+  }
+
+  .transactions .row.show > .category-cell {
+    color: var(--bark-medium);
+  }
+
+  .transactions .row.show > .actions a {
+    padding: 6px 0;
+    font-size: 0.875rem;
+  }
+
+  .new-transaction-toggle {
+    display: block;
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border: 1px dashed var(--honey);
+    border-radius: 8px;
+    background-color: var(--honey-pale);
+    color: var(--accent-text);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .new-transaction-toggle::before {
+    content: "+";
+    display: inline-block;
+    width: 1.2em;
+  }
+
+  .transactions--composing .new-transaction-toggle::before {
+    content: "−";
+  }
+
+  .transactions:not(.transactions--composing) #new_transaction {
+    display: none;
+  }
 }

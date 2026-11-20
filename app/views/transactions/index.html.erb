@@ -15,7 +15,12 @@
 </div>
 
 <div data-controller="transactions--selection">
-  <div class="transactions">
+  <div class="transactions" data-controller="disclosure" data-disclosure-open-class="transactions--composing">
+    <%# Phones keep the new-transaction form folded away behind this button;
+        on wider screens it is hidden and the form is always shown. %>
+    <button type="button" class="new-transaction-toggle" aria-controls="new_transaction" aria-expanded="false"
+            data-disclosure-target="button" data-action="disclosure#toggle">New transaction</button>
+
     <div class="row header">
       <div></div>
       <div>Date</div>

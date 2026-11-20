@@ -229,6 +229,7 @@ header h1 {
 main {
   min-height: calc(100vh - var(--header-height));
   flex-grow: 1;
+  min-width: 0; /* let content truncate instead of widening the page */
   padding: 20px 24px;
   background-color: var(--cream);
 }
