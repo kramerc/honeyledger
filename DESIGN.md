@@ -34,7 +34,7 @@ All colours are CSS custom properties on `:root` in `app/assets/stylesheets/appl
 | `--color-positive` | `#15803D` | `#4ade80` | Money in, positive balances |
 | `--color-negative` | `#DC2626` | `#f87171` | Money out, negative balances, Delete |
 
-Feedback colours (`--color-success`, `--bg-success`, `--text-success`, and the `-error` set with `--border-error`) are for flash messages and error panels only.
+Feedback colours (`--color-success`, `--bg-success`, `--text-success`, and the `-error` set with `--border-error`) are for flash messages, error panels, and the danger button's `--color-error` fill.
 
 The transactions table adds three local tokens on `.transactions`:
 
@@ -46,14 +46,14 @@ The transactions table adds three local tokens on `.transactions`:
 
 - One family: the system UI stack on `body` (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, …`). Don't add web fonts.
 - Base size 14px, line height 1.5.
-- Scale in use: `1.25rem` header title; `1rem` phone row titles and amounts; `0.875rem` table cells and body copy; `0.8rem` actions, buttons, secondary details; `0.75rem` table headers, form labels, type pills; `0.7rem` badges.
+- Scale in use: `1.25rem` header title; `1rem` phone row titles and amounts; `0.875rem` table cells and body copy; `0.8rem` actions, buttons, the transaction type indicator, secondary details; `0.75rem` table headers and form labels; `0.7rem` badges.
 - Weights: 400 body, 600 headers, labels, and buttons, 700 the header title.
 - Numbers: `font-variant-numeric: tabular-nums` and right alignment in numeric columns (`.numeric`).
 - Case: sentence case for copy and buttons, title case for table headers, never `text-transform: uppercase` in tables. The sidebar's small group labels are the one existing uppercase treatment; don't extend it.
 
 ### Shape and spacing
 
-- Radius: 4px for fields, buttons, and hover outlines; 8px for containers (tables, flashes, empty states, error panels); 3px for badges; fully round only for transaction type pills.
+- Radius: 4px for fields, buttons, and hover outlines; 8px for containers (tables, flashes, empty states, error panels); 3px for badges.
 - Cell padding 7px 10px. Page padding 20px 24px on desktop, 12px on phones.
 - Borders are 1px `--divider`. Emphasis uses `--honey` borders, not thicker lines.
 
@@ -75,7 +75,7 @@ Transitions only answer the user (hover, open, close) and stay short: 0.1–0.2s
 
 ### Tables
 
-Tables are CSS grids of `.row` elements, not `<table>`: one grid template per table, cells as `div`s, header row first.
+The main data tables (transactions, accounts, passkeys) are CSS grids of `.row` elements: one grid template per table, cells as `div`s, header row first, collapsing to cards or phone rows below their breakpoint. The rules below describe those. Integrations, Import Rules previews, and the CSV import screens use native `<table>` markup; that is fine as it is and doesn't need converting, though a new data table that collapses on phones should use the grid pattern.
 
 - Header row (`.row.header`): `--honey-pale` background, `0.75rem`, weight 600, `--accent-text`, title case. Sticky on the transactions table.
 - Cells: 1px right and bottom `--divider` borders, `--bark-medium` text at `0.875rem`.
@@ -106,7 +106,7 @@ The pattern for changing a value in place on desktop:
 1. Each editable value renders as `<button class="cell-edit">` that looks like plain cell text (`TransactionsHelper#edit_field_button`).
 2. On hover or focus it gains a 1px `--field-border` outline, a `--cream` background, and, for list-backed fields (accounts, category), the honey caret. An empty value shows a muted italic placeholder such as "Add category".
 3. Clicking it opens the row's edit form with that field focused (`transactions--row#editField`). Resting the pointer on a cell for 250ms preloads the form; a pointer sweeping across rows loads nothing.
-4. The edit form replaces the row in place. Its fields take the hovered-cell look at the same height and offset (`--cell-edit-height`), and the row's read-only pills stay visible, so the row's height and the positions of its values don't change.
+4. The edit form replaces the row in place. Its fields take the hovered-cell look at the same height and offset (`--cell-edit-height`), and the row's read-only badges stay visible, so the row's height and the positions of its values don't change.
 5. Save confirms; Cancel or Escape discards. An Escape that closes an open list only closes the list.
 
 Rules that came with it:
@@ -115,9 +115,9 @@ Rules that came with it:
 - Toggling Cleared saves at once with a PATCH of just that field (`button_to`, `aria-pressed`). If the server rejects it, edit mode opens to show the errors.
 - Opening balances and virtual accounts are never editable inline; they render as plain text.
 
-### Pills and badges
+### Type indicator and badges
 
-- **Transaction type** (`.tx-type`): a fully round pill tinted from its own text colour (`color-mix(in srgb, currentColor 12%, transparent)`). Deposits and refunds use `--color-positive`, withdrawals and clawbacks `--color-negative`, transfers `--bark-light`.
+- **Transaction type** (`.tx-type`): coloured text, not a pill: an arrow and a word ("↓ Withdrawal", "↑ Deposit", "⇄ Transfer") at `0.8rem`, weight 600, with no background or border. Deposits and refunds use `--color-positive`, withdrawals and clawbacks `--color-negative`, transfers `--bark-light`.
 - **Source badges** (`.source-badge--simplefin`, `--lunchflow`, `--csv`): 3px radius, 1px `currentColor` border, under the date.
 - **Status badges** (`.excluded-badge`, `.merged-badge`): outlined, 3px radius, beside the type. Merged is a link in the row that toggles the merged details; it is plain text in the edit form.
 
@@ -144,7 +144,7 @@ Rules that came with it:
 - Every control is reachable by keyboard, except a mouse shortcut that duplicates a reachable path (and then it says so in a comment).
 - Visible focus: a 2px honey ring (`color-mix` at 45%) with a 1px offset on custom controls.
 - Give icon-only and value-only buttons an accessible name (`aria-label`), and toggles `aria-pressed`.
-- Colour is never the only signal: type pills carry words and arrows, and balances carry signs.
+- Colour is never the only signal: the type indicator carries words and arrows, and balances carry signs.
 - Check contrast in both themes; the dark theme mutes borders, not text.
 
 ## Copy
