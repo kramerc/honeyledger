@@ -806,6 +806,41 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_in_delta 45.9, actions_column_width(watching), 0.5
   end
 
+  test "the row keeps its height while the edit form loads" do
+    transaction = sourced_transaction("Loading height probe", 1380, :transaction_one)
+    visit transactions_path
+    row_selector = "##{ActionView::RecordIdentifier.dom_id(transaction)} .transaction"
+    frame_selector = "##{ActionView::RecordIdentifier.dom_id(transaction, :edit)}"
+
+    # Hold the form back: with no src, the frame can't load until it gets one.
+    source = page.evaluate_script(<<~JS)
+      (() => {
+        const frame = document.querySelector("#{frame_selector}")
+        const source = frame.getAttribute("src")
+        frame.removeAttribute("src")
+        return source
+      })()
+    JS
+    height = -> { page.evaluate_script("document.querySelector('#{row_selector}').getBoundingClientRect().height") }
+    resting_height = height.call
+
+    within_row(transaction) do
+      open_row_menu
+      click_link "Edit"
+      assert_selector ".transaction.editing"
+      # The shown row stays put, marked busy, at the same height.
+      assert_selector ".row.show", text: "Loading height probe"
+      assert_equal "progress", page.evaluate_script("getComputedStyle(document.querySelector('#{row_selector} .row.show')).cursor")
+    end
+    assert_in_delta resting_height, height.call, 0.5
+
+    page.execute_script("document.querySelector('#{frame_selector}').setAttribute('src', '#{source}')")
+    within_row(transaction) do
+      assert_field "transaction[description]", with: "Loading height probe"
+      assert_no_selector ".row.show"
+    end
+  end
+
   test "choosing Edit from the menu closes it and opens the edit form" do
     transaction = manual_transaction("Menu edit probe", 1300)
     visit transactions_path

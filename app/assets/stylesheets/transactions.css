@@ -12,10 +12,10 @@
   --actions-column: calc(var(--action-button-size) + 20px);
 }
 
-/* While a row is being edited, the column widens for Save and Cancel side
-   by side (with the cell's 4px gap). Every row's grid reads the same
-   variable, so the columns stay aligned across the table. */
-.transactions:has(.transaction.editing) {
+/* While a row's edit form is on screen, the column widens for Save and
+   Cancel side by side (with the cell's 4px gap). Every row's grid reads
+   the same variable, so the columns stay aligned across the table. */
+.transactions:has(.transaction.editing turbo-frame.edit form) {
   --actions-column: calc(2 * var(--action-button-size) + 4px + 20px);
 }
 
@@ -318,14 +318,6 @@
   margin-bottom: 2px;
 }
 
-/* Loading state */
-.transaction .row > .loading {
-  grid-column: 1 / -1;
-  padding: 9px 10px;
-  color: var(--bark-light);
-  font-style: italic;
-}
-
 /* ========== Mobile transactions (< 1024px) ========== */
 @media (max-width: 1023px) {
   .transactions {
@@ -618,12 +610,23 @@
   display: none; /* Hide edit portion by default */
 }
 
-.transaction.editing .show {
-  display: none; /* Hide show portion when editing */
+/* Edit mode swaps the shown row for the form only once the form is there
+   (the frame loads lazily on the first edit, and holds nothing until
+   then). Until it arrives the shown row stays put, marked busy, so the
+   row's height never passes through an interim placeholder. Keyed on the
+   form rather than the frame's [complete], since a rejected save replaces
+   the frame (edit.turbo_stream) without that attribute. */
+.transaction.editing:has(turbo-frame.edit form) .show {
+  display: none;
 }
 
-.transaction.editing .edit {
-  display: block; /* Show edit portion when editing */
+.transaction.editing:has(turbo-frame.edit form) .edit {
+  display: block;
+}
+
+.transaction.editing:not(:has(turbo-frame.edit form)) .row.show {
+  opacity: 0.55;
+  cursor: progress;
 }
 
 /* Excluded badge */

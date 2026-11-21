@@ -128,7 +128,7 @@ The pattern for changing a value in place on desktop:
 1. Each editable value renders as `<button class="cell-edit">` that looks like plain cell text (`TransactionsHelper#edit_field_button`).
 2. On hover or focus it gains a 1px `--field-border` outline, a `--cream` background, and, for list-backed fields (accounts, category), the honey caret. An empty value shows a muted italic placeholder such as "Add category".
 3. Clicking it opens the row's edit form with that field focused (`transactions--row#editField`). Resting the pointer on a cell for 250ms preloads the form; a pointer sweeping across rows loads nothing.
-4. The edit form replaces the row in place. Its fields take the hovered-cell look at the same height and offset (`--cell-edit-height`), and the row's read-only badges stay visible, so the row's height and the positions of its values don't change.
+4. The edit form replaces the row in place, once it has loaded: until then the shown row stays on screen, dimmed with a progress cursor, so the row never passes through a placeholder of a different height. Its fields take the hovered-cell look at the same height and offset (`--cell-edit-height`), and the row's read-only badges stay visible, so the row's height and the positions of its values don't change.
 5. Save confirms; Cancel or Escape discards. An Escape that closes an open list only closes the list.
 
 Rules that came with it:

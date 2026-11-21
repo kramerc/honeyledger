@@ -9,7 +9,7 @@ export default class extends Controller {
   // on-screen keyboard doesn't open over the form uninvited.
   edit(event) {
     event.preventDefault()
-    this.element.classList.add("editing")
+    this.startEditing()
 
     const keyboard = event.detail === 0 // a click synthesised from Enter or Space
     if (keyboard || window.matchMedia("(pointer: fine)").matches) this.focusFirstField()
@@ -30,7 +30,7 @@ export default class extends Controller {
   // confirms and Cancel (or Escape) discards, as with the Edit link.
   editField(event) {
     event.preventDefault()
-    this.element.classList.add("editing")
+    this.startEditing()
 
     const name = event.currentTarget.dataset.field
     const field = this.findEditField(name)
@@ -74,7 +74,16 @@ export default class extends Controller {
   // the errors are rendered into the edit form (edit.turbo_stream), so open
   // edit mode to show them rather than failing silently.
   toggleSubmitEnd(event) {
-    if (!event.detail.success) this.element.classList.add("editing")
+    if (!event.detail.success) this.startEditing()
+  }
+
+  // Enter edit mode. The shown row stays on screen until the form has loaded
+  // (transactions.css), and a hidden lazy frame would never start loading on
+  // its own, so start it here.
+  startEditing() {
+    this.cancelPreload()
+    this.element.classList.add("editing")
+    this.preloadEdit()
   }
 
   get editFrame() {
