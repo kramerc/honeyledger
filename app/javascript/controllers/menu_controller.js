@@ -108,6 +108,9 @@ export default class extends Controller {
     if (top + height > window.innerHeight - offset && trigger.top - offset - height >= offset) {
       top = trigger.top - offset - height
     }
+    // Neither side has room (a short viewport): keep the whole menu on
+    // screen, even over the trigger, matching menu.css's last resort.
+    top = Math.max(offset, Math.min(top, window.innerHeight - height - offset))
     const left = Math.max(offset, Math.min(trigger.right - width, window.innerWidth - width - offset))
 
     menu.style.top = `${top}px`

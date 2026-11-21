@@ -841,6 +841,35 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "on a short viewport the menu stays on screen when it fits on neither side of its trigger" do
+    transaction = sourced_transaction("Short viewport probe", 1390, :transaction_one)
+    visit transactions_path
+    with_short_viewport(transaction) do
+      within_row(transaction) { open_row_menu }
+      assert_row_menu_in_viewport(transaction)
+    end
+  end
+
+  test "script placement keeps the menu on screen on a short viewport" do
+    transaction = sourced_transaction("Short viewport script probe", 1395, :transaction_one)
+    visit transactions_path
+    # Take the fallback path the controller uses without anchor positioning,
+    # and cancel the CSS anchoring so only the script places the menu.
+    page.execute_script(<<~JS)
+      (() => {
+        const actions = document.querySelector("##{ActionView::RecordIdentifier.dom_id(transaction)} .row.show > .actions")
+        window.Stimulus.getControllerForElementAndIdentifier(actions, "menu").constructor.anchorPositioning = false
+        const style = document.createElement("style")
+        style.textContent = "html body .transactions .menu[popover] { position-try-fallbacks: none; top: 0; right: auto; left: 0; }"
+        document.head.append(style)
+      })()
+    JS
+    with_short_viewport(transaction) do
+      within_row(transaction) { open_row_menu }
+      assert_row_menu_in_viewport(transaction)
+    end
+  end
+
   test "choosing Edit from the menu closes it and opens the edit form" do
     transaction = manual_transaction("Menu edit probe", 1300)
     visit transactions_path
@@ -978,6 +1007,35 @@ class TransactionsTest < ApplicationSystemTestCase
         word: action.querySelector(".form-action__label").getBoundingClientRect().width > 1
       }))(arguments[0])
     JS
+  end
+
+  # A viewport too short for the row's menu to fit below or above its
+  # trigger, with the row scrolled to the middle of it.
+  def with_short_viewport(transaction)
+    page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 1400, height: 220, deviceScaleFactor: 1, mobile: false)
+    page.execute_script("document.getElementById('#{ActionView::RecordIdentifier.dom_id(transaction)}').scrollIntoView({ block: 'center' })")
+    yield
+  ensure
+    page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
+  end
+
+  def assert_row_menu_in_viewport(transaction)
+    box = page.evaluate_script(<<~JS)
+      (() => {
+        const trigger = document.querySelector("##{ActionView::RecordIdentifier.dom_id(transaction)} .menu-trigger")
+        const menu = document.getElementById("#{ActionView::RecordIdentifier.dom_id(transaction, :actions_menu)}")
+        const triggerBox = trigger.getBoundingClientRect()
+        const menuBox = menu.getBoundingClientRect()
+        return { top: menuBox.top, bottom: menuBox.bottom, height: menuBox.height, viewport: window.innerHeight,
+                 below: window.innerHeight - triggerBox.bottom, above: triggerBox.top }
+      })()
+    JS
+    # The setup really is the hard case: no room on either side...
+    assert_operator box["below"], :<, box["height"]
+    assert_operator box["above"], :<, box["height"]
+    # ...yet the whole menu is on screen.
+    assert_operator box["top"], :>=, 0
+    assert_operator box["bottom"], :<=, box["viewport"]
   end
 
   def row_menu_open?(transaction)

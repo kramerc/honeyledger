@@ -73,7 +73,16 @@
   .menu[popover] {
     top: calc(anchor(bottom) + 4px);
     right: anchor(right);
-    position-try-fallbacks: flip-block;
+    position-try-fallbacks: flip-block, --menu-in-view;
+  }
+
+  /* Last resort, for a short viewport where the menu fits on screen but
+     neither below nor above its trigger: pin it to the viewport's bottom
+     edge (it may cover the trigger), so every item stays reachable. */
+  @position-try --menu-in-view {
+    top: auto;
+    bottom: 4px;
+    right: anchor(right);
   }
 }
 
