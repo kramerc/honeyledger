@@ -640,7 +640,9 @@ class TransactionsTest < ApplicationSystemTestCase
     within_row(opening_balance) do
       assert_text "Opening Balance"
       assert_no_selector "button.cell-edit"
-      assert_link "Edit Account"
+      open_row_menu
+      assert_selector "[role=menuitem]", text: "Edit Account"
+      assert_no_selector "[role=menuitem]", text: /\AEdit\z/
     end
   end
 
@@ -659,6 +661,7 @@ class TransactionsTest < ApplicationSystemTestCase
       within(".description-cell") { assert_selector ".cell-static", text: "Phone read-only probe" }
       within(".account-cell", match: :first) { assert_selector ".cell-static", text: accounts(:asset_account).name }
 
+      open_row_menu
       click_link "Edit"
       assert_field "transaction[description]", with: "Phone read-only probe"
     end
@@ -686,7 +689,273 @@ class TransactionsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1400)
   end
 
+  test "a row's actions sit behind its kebab menu" do
+    transaction = sourced_transaction("Kebab menu probe", 1200, :transaction_one)
+    visit transactions_path
+
+    within_row(transaction) do
+      assert_no_link "Delete"
+      trigger = find(ROW_MENU_TRIGGER)
+      assert_equal "false", trigger["aria-expanded"]
+
+      open_row_menu
+      within("[role=menu]") do
+        assert_equal %w[Edit Exclude Delete], all("[role=menuitem]").map(&:text)
+      end
+      assert_selector "#{ROW_MENU_TRIGGER}[aria-expanded='true']"
+      # Focus moves into the menu (open_row_menu waits for it), and the arrow
+      # keys walk its items.
+      send_keys :arrow_down
+      assert_selector "[role=menuitem]:focus", text: "Exclude"
+      send_keys :arrow_up, :arrow_up
+      assert_selector "[role=menuitem]:focus", text: "Delete"
+
+      # Escape closes it and hands focus back to the trigger.
+      send_keys :escape
+      assert_no_selector "[role=menu]"
+      assert_equal "false", trigger["aria-expanded"]
+      assert_equal "Transaction actions", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
+    end
+  end
+
+  test "the menu opens already in place under its trigger" do
+    transaction = manual_transaction("Menu placement probe", 1250)
+    visit transactions_path
+
+    # Show the popover and measure it in the same task, before the toggle
+    # event (and any script placement) can run: CSS has to have placed it.
+    within_row(transaction) do
+      placement = page.evaluate_script(<<~JS)
+        (() => {
+          const trigger = document.querySelector("##{ActionView::RecordIdentifier.dom_id(transaction)} .menu-trigger")
+          const menu = document.getElementById(trigger.getAttribute("popovertarget"))
+          menu.showPopover()
+          const triggerBox = trigger.getBoundingClientRect()
+          const menuBox = menu.getBoundingClientRect()
+          return { rightGap: triggerBox.right - menuBox.right, topGap: menuBox.top - triggerBox.bottom }
+        })()
+      JS
+
+      assert_in_delta 0, placement["rightGap"], 1
+      assert_in_delta 4, placement["topGap"], 1
+    end
+  end
+
+  test "form actions are icon buttons on desktop and worded buttons on phones" do
+    transaction = manual_transaction("Form actions probe", 1350)
+    visit transactions_path
+
+    within("#new_transaction") do
+      assert_button "Create"
+      assert_equal({ "icon" => true, "word" => false }, form_action_display("button[title='Create']"))
+    end
+
+    # The kebab and Create share a box, so their icons line up in the column.
+    create_box, kebab_box = page.evaluate_script(<<~JS)
+      ["#new_transaction .form-action", "##{ActionView::RecordIdentifier.dom_id(transaction)} .menu-trigger"].map((selector) => {
+        const box = document.querySelector(selector).getBoundingClientRect()
+        return [box.left, box.width, box.height]
+      })
+    JS
+    create_box.zip(kebab_box).each { |create, kebab| assert_in_delta create, kebab, 0.5 }
+
+    within_row(transaction) do
+      open_row_menu
+      click_link "Edit"
+      assert_button "Save"
+      assert_link "Cancel"
+      assert_equal({ "icon" => true, "word" => false }, form_action_display("button[title='Save']"))
+      assert_equal({ "icon" => true, "word" => false }, form_action_display("a[title='Cancel']"))
+    end
+
+    page.driver.browser.manage.window.resize_to(390, 900)
+    within_row(transaction) do
+      assert_equal({ "icon" => false, "word" => true }, form_action_display("button[title='Save']"))
+      assert_equal({ "icon" => false, "word" => true }, form_action_display("a[title='Cancel']"))
+    end
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+  end
+
+  test "the Actions column widens only while a row is being edited" do
+    editing = manual_transaction("Column edit probe", 1360)
+    watching = manual_transaction("Column watch probe", 1370)
+    visit transactions_path
+
+    assert_in_delta 45.9, actions_column_width(watching), 0.5
+
+    within_row(editing) do
+      open_row_menu
+      click_link "Edit"
+      assert_link "Cancel"
+    end
+    assert_in_delta 75.8, actions_column_width(watching), 0.5
+
+    # Save and Cancel fill the cell exactly: Cancel ends at the padding.
+    gap = page.evaluate_script(<<~JS)
+      (() => {
+        const row = document.querySelector("##{ActionView::RecordIdentifier.dom_id(editing)} form .row")
+        const cell = row.querySelector(".actions").getBoundingClientRect()
+        const cancel = row.querySelector("a[title='Cancel']").getBoundingClientRect()
+        return cell.right - cancel.right
+      })()
+    JS
+    assert_in_delta 10, gap, 0.5
+
+    within_row(editing) { click_link "Cancel" }
+    assert_in_delta 45.9, actions_column_width(watching), 0.5
+  end
+
+  test "choosing Edit from the menu closes it and opens the edit form" do
+    transaction = manual_transaction("Menu edit probe", 1300)
+    visit transactions_path
+
+    within_row(transaction) do
+      open_row_menu
+      click_link "Edit"
+      assert_field "transaction[description]", with: "Menu edit probe"
+    end
+    # Edit hides the shown row, menu and all, so check the popover itself.
+    assert_not row_menu_open?(transaction)
+  end
+
+  test "choosing Edit by keyboard puts focus in the edit form" do
+    transaction = manual_transaction("Keyboard edit probe", 1310)
+    visit transactions_path
+
+    within_row(transaction) do
+      open_row_menu(by: :keyboard)
+      send_keys :enter # on Edit, focused when the menu opened
+      assert_field "transaction[description]", with: "Keyboard edit probe"
+    end
+    assert_not row_menu_open?(transaction)
+    assert_equal "transaction[transacted_at]", page.evaluate_script("document.activeElement.name")
+  end
+
+  test "Space chooses the focused menu item" do
+    transaction = manual_transaction("Space edit probe", 1320)
+    visit transactions_path
+
+    within_row(transaction) do
+      open_row_menu(by: :keyboard)
+      send_keys :space
+      assert_field "transaction[description]", with: "Space edit probe"
+    end
+  end
+
+  test "a keyboard-focused menu item shows the focus ring in the dark theme" do
+    transaction = sourced_transaction("Focus ring probe", 1330, :transaction_one)
+    visit transactions_path
+    page.execute_script("document.documentElement.dataset.theme = 'dark'")
+
+    within_row(transaction) do
+      open_row_menu(by: :keyboard)
+      send_keys :arrow_down
+    end
+    outline = page.evaluate_script(<<~JS)
+      (() => {
+        const style = getComputedStyle(document.activeElement)
+        return [document.activeElement.textContent.trim(), style.outlineStyle, style.outlineWidth]
+      })()
+    JS
+    assert_equal [ "Exclude", "solid", "2px" ], outline
+  end
+
+  test "a trigger restored with a stale aria-expanded is reset when it reconnects" do
+    transaction = manual_transaction("Stale expanded probe", 1340)
+    visit transactions_path
+
+    # What Turbo's cache hands back after a page is cached with a menu open:
+    # the trigger still says expanded, but the popover is closed.
+    page.execute_script(<<~JS)
+      (() => {
+        const actions = document.querySelector("##{ActionView::RecordIdentifier.dom_id(transaction)} .row.show > .actions")
+        const copy = actions.cloneNode(true)
+        copy.querySelector(".menu-trigger").setAttribute("aria-expanded", "true")
+        actions.replaceWith(copy)
+      })()
+    JS
+
+    within_row(transaction) do
+      assert_selector "#{ROW_MENU_TRIGGER}[aria-expanded='false']"
+    end
+  end
+
+  test "deleting from the menu removes the row" do
+    transaction = manual_transaction("Menu delete probe", 1400)
+    visit transactions_path
+
+    within_row(transaction) do
+      open_row_menu
+      accept_confirm("Delete this transaction?") { click_link "Delete" }
+    end
+
+    assert_no_text "Menu delete probe"
+  end
+
+  test "an excluded row's menu offers Restore instead of Exclude" do
+    transaction = sourced_transaction("Menu restore probe", 1600, :transaction_one)
+    transaction.update!(excluded_at: Time.current)
+    visit transactions_path(show_excluded: 1)
+
+    within_row(transaction) do
+      open_row_menu
+      within("[role=menu]") do
+        assert_link "Restore"
+        assert_no_link "Exclude"
+        assert_no_link "Unmerge"
+      end
+    end
+  end
+
+  test "an outside click closes the menu" do
+    transaction = manual_transaction("Menu dismiss probe", 1700)
+    visit transactions_path
+
+    within_row(transaction) { open_row_menu }
+    assert_selector "[role=menu]"
+    find("h1, header", match: :first).click
+    assert_no_selector "[role=menu]"
+  end
+
   private
+
+  ROW_MENU_TRIGGER = "button[aria-label='Transaction actions']".freeze
+
+  # Open the row's kebab menu; call inside within_row.
+  # Open the row's kebab menu, by click or by Enter on the trigger; call
+  # inside within_row. The menu focuses its first item from its toggle event,
+  # a moment after it shows, so wait for that focus: a key sent before it
+  # lands on the trigger and closes the menu again.
+  def open_row_menu(by: :click)
+    trigger = find(ROW_MENU_TRIGGER)
+    by == :keyboard ? trigger.send_keys(:enter) : trigger.click
+    assert_selector "[role=menuitem]:focus", text: /\AEdit/
+  end
+
+  # Which of a form action's two faces is showing: the icon, or the word
+  # (which, when hidden, is clipped to a 1px box for screen readers).
+  def form_action_display(selector)
+    action = find(selector)
+    page.evaluate_script(<<~JS, action)
+      ((action) => ({
+        icon: getComputedStyle(action.querySelector("svg")).display !== "none",
+        word: action.querySelector(".form-action__label").getBoundingClientRect().width > 1
+      }))(arguments[0])
+    JS
+  end
+
+  def row_menu_open?(transaction)
+    page.evaluate_script(<<~JS)
+      document.getElementById("#{ActionView::RecordIdentifier.dom_id(transaction, :actions_menu)}").matches(":popover-open")
+    JS
+  end
+
+  def actions_column_width(transaction)
+    page.evaluate_script(<<~JS)
+      document.querySelector("##{ActionView::RecordIdentifier.dom_id(transaction)} .row.show > .actions").getBoundingClientRect().width
+    JS
+  end
 
   def within_row(transaction, &block)
     within("##{ActionView::RecordIdentifier.dom_id(transaction)}", &block)

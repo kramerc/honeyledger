@@ -80,12 +80,19 @@
       <%= form.check_box :cleared %>
     </div>
 
+    <%# Icon buttons on desktop, where the column is narrow; phones show the
+        words instead (transactions.css). The word is the accessible name either
+        way, and the title gives desktop a tooltip. %>
     <div class="actions">
       <% if transaction.new_record? %>
-        <%= form.submit "Create" %>
+        <%= form.button type: :submit, class: "form-action form-action--primary", title: "Create" do %>
+          <%= lucide_icon "plus", size: 16 %><span class="form-action__label">Create</span>
+        <% end %>
       <% else %>
-        <%= form.submit "Save" %>
-        <a href="#" data-action="transactions--row#cancelEdit transactions--form#clearError">Cancel</a>
+        <%= form.button type: :submit, class: "form-action form-action--primary", title: "Save" do %>
+          <%= lucide_icon "check", size: 16 %><span class="form-action__label">Save</span>
+        <% end %>
+        <a href="#" class="form-action form-action--secondary" title="Cancel" data-action="transactions--row#cancelEdit transactions--form#clearError"><%= lucide_icon "x", size: 16 %><span class="form-action__label">Cancel</span></a>
       <% end %>
 
       <% if transaction.errors.any? %>
