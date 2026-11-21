@@ -32,11 +32,35 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driven_by :selenium, using: :headless_chrome, screen_size: [ 1400, 1400 ]
   end
 
-  # Logs in through the real form. Shares its name with the cookie-based
-  # SessionTestHelper#sign_in_as used by integration tests, so a test reads the
-  # same way regardless of its base class. Every user fixture carries the
-  # "password123" digest.
+  # The remote-Selenium setup pins the app server port; give each parallel
+  # worker (see test_helper.rb) its own.
+  parallelize_setup do |worker|
+    Capybara.server_port = ENV["CAPYBARA_SERVER_PORT"].to_i + worker if ENV["CAPYBARA_SERVER_PORT"]
+  end
+
+  # Signs in by handing the browser the session cookie the login form would
+  # have set, skipping the form round trip that most tests don't exercise.
+  # Shares its name with the cookie-based SessionTestHelper#sign_in_as used by
+  # integration tests, so a test reads the same way regardless of its base
+  # class. Ends on the home page, so a test can click navigation straight away.
   def sign_in_as(user)
+    session = user.sessions.create!
+
+    # Selenium only sets cookies for the page's current origin, so load the
+    # cheapest page the app serves first.
+    visit rails_health_check_path
+    page.driver.browser.manage.add_cookie(
+      name: "session_id", value: SessionTestHelper.signed_session_cookie(session),
+      path: "/", http_only: true, same_site: "Lax"
+    )
+
+    visit root_path
+    assert_link "Logout"
+  end
+
+  # Logs in through the real form, for tests of the login flow itself. Every
+  # user fixture carries the "password123" digest.
+  def sign_in_through_form(user)
     visit new_session_path
     fill_in "Email", with: user.email
     fill_in "Password", with: "password123"

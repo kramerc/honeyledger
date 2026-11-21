@@ -19,9 +19,12 @@ Minitest.load_plugins
 
 module ActiveSupport
   class TestCase
-    # Run tests in parallel with specified workers
-    # Commented out to avoid issues with SimpleCov
-    # parallelize(workers: :number_of_processors)
+    # Each worker process gets its own test database (Rails appends _<n> to the
+    # name). System test workers also get their own Capybara server and Chrome,
+    # hence the cap. Runs under Rails' threshold of 50 tests stay serial, and
+    # PARALLEL_WORKERS=1 forces a serial run when debugging. SimpleCov needs no
+    # hook: it tracks the forked workers and merges their coverage itself.
+    parallelize(workers: ENV.fetch("PARALLEL_WORKERS", [ Etc.nprocessors, 8 ].min).to_i)
 
     # Setup all fixtures in test/fixtures/*.yml for all tests in alphabetical order.
     fixtures :all

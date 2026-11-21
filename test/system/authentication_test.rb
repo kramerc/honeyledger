@@ -10,7 +10,7 @@ class AuthenticationTest < ApplicationSystemTestCase
     assert_link "Login"
     assert_no_link "Logout"
 
-    sign_in_as(@user)
+    sign_in_through_form(@user)
 
     assert_link "Accounts"
     assert_no_link "Login"
@@ -38,7 +38,7 @@ class AuthenticationTest < ApplicationSystemTestCase
   end
 
   test "logging out returns to the login page" do
-    sign_in_as(@user)
+    sign_in_through_form(@user)
 
     accept_confirm { click_link "Logout" }
 

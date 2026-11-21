@@ -52,8 +52,11 @@ worktree_paths = listing.lines.filter_map { |line| line[/\Aworktree (.+)/, 1]&.s
 abort "git reported no worktrees at all; refusing to continue." if worktree_paths.empty?
 
 live_suffixes = worktree_paths.drop(1).map { |path| WorktreeDatabase.worktree_suffix(path) }
+# Parallel test workers append _<n> to the test database name, so a live
+# worktree also owns "<name>_0", "<name>_1", and so on.
+live = ->(name, prefix) { live_suffixes.any? { |suffix| name.match?(/\A#{Regexp.escape("#{prefix}#{suffix}")}(_\d+)?\z/) } }
 orphaned = PREFIXES.to_h do |prefix|
-  [ prefix, databases.select { |name| name.start_with?("#{prefix}#{WorktreeDatabase::MARKER}") && live_suffixes.none? { |suffix| name == "#{prefix}#{suffix}" } } ]
+  [ prefix, databases.select { |name| name.start_with?("#{prefix}#{WorktreeDatabase::MARKER}") && !live.call(name, prefix) } ]
 end
 
 if orphaned.values.all?(&:empty?)
