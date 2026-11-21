@@ -3,16 +3,34 @@ import { Controller } from "@hotwired/stimulus"
 export default class extends Controller {
   static targets = [ "form", "mergedDetails" ]
 
+  // Edit (from the row's action menu) hides the menu and its trigger with the
+  // rest of the shown row, so focus would fall to the page; land it on the
+  // form's first field instead. A tap on a touch screen skips this, so the
+  // on-screen keyboard doesn't open over the form uninvited.
   edit(event) {
     event.preventDefault()
-    this.element.classList.add("editing")
+    this.startEditing()
+
+    const keyboard = event.detail === 0 // a click synthesised from Enter or Space
+    if (keyboard || window.matchMedia("(pointer: fine)").matches) this.focusFirstField()
+  }
+
+  focusFirstField() {
+    const first = () => this.editFrame?.querySelector("input:not([type=hidden]), select")
+    const field = first()
+    if (field) {
+      field.focus()
+    } else {
+      // The edit form is a lazy frame; focus once it has loaded.
+      this.editFrame?.addEventListener("turbo:frame-load", () => first()?.focus(), { once: true })
+    }
   }
 
   // Clicking a cell enters edit mode with that cell's field focused; Save
   // confirms and Cancel (or Escape) discards, as with the Edit link.
   editField(event) {
     event.preventDefault()
-    this.element.classList.add("editing")
+    this.startEditing()
 
     const name = event.currentTarget.dataset.field
     const field = this.findEditField(name)
@@ -56,7 +74,16 @@ export default class extends Controller {
   // the errors are rendered into the edit form (edit.turbo_stream), so open
   // edit mode to show them rather than failing silently.
   toggleSubmitEnd(event) {
-    if (!event.detail.success) this.element.classList.add("editing")
+    if (!event.detail.success) this.startEditing()
+  }
+
+  // Enter edit mode. The shown row stays on screen until the form has loaded
+  // (transactions.css), and a hidden lazy frame would never start loading on
+  // its own, so start it here.
+  startEditing() {
+    this.cancelPreload()
+    this.element.classList.add("editing")
+    this.preloadEdit()
   }
 
   get editFrame() {

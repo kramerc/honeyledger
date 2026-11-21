@@ -1,0 +1,155 @@
+/* Action menu: a kebab trigger and a popover list of actions
+   (menu_controller.js). The popover lives in the top layer, so it is
+   positioned against the viewport and never clipped by a scrolling parent. */
+
+/* Trigger: an icon-only button that reads as quiet text until hovered. */
+.menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  /* Inside the transactions table, --action-button-size: the same square
+     as the form's icon buttons and the one the Actions column is sized
+     from, so the kebab, Create, and Save line up and fill the column. */
+  width: var(--action-button-size, 28px);
+  height: var(--action-button-size, 28px);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--bark-light);
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.menu-trigger[aria-expanded="true"] {
+  border-color: var(--field-border, var(--honey));
+  background-color: var(--cream);
+  color: var(--honey-dark);
+}
+
+/* Touch screens keep :hover on the last element tapped, which would leave
+   the trigger looking open after its menu closes. */
+@media (hover: hover) {
+  .menu-trigger:hover {
+    border-color: var(--field-border, var(--honey));
+    background-color: var(--cream);
+    color: var(--honey-dark);
+  }
+}
+
+.menu-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.menu-trigger svg {
+  display: block;
+  pointer-events: none;
+}
+
+.menu[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  min-width: 160px;
+  padding: 4px 0;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background-color: var(--cream);
+  color: var(--bark-medium);
+  /* The one floating surface besides the form error panel; the shadow
+     separates it from the rows it overlaps. */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Anchored to its trigger (the view pairs them with anchor-name and
+   position-anchor): right edges aligned, just below, flipping above when the
+   window has no room underneath. The browser places it before the first
+   paint, so it opens where it belongs. Both features are required: browsers
+   that predate position-try-fallbacks can't flip, and a bottom row's menu
+   would open off-screen. menu_controller.js runs the same test. */
+@supports (anchor-name: --menu) and (position-try-fallbacks: flip-block) {
+  .menu[popover] {
+    top: calc(anchor(bottom) + 4px);
+    right: anchor(right);
+    position-try-fallbacks: flip-block, --menu-in-view;
+  }
+
+  /* Last resort, for a short viewport where the menu fits on screen but
+     neither below nor above its trigger: pin it to the viewport's bottom
+     edge (it may cover the trigger), so every item stays reachable. */
+  @position-try --menu-in-view {
+    top: auto;
+    bottom: 4px;
+    right: anchor(right);
+  }
+}
+
+/* Otherwise menu_controller.js places the menu by script and keeps it
+   hidden until it has. */
+@supports not ((anchor-name: --menu) and (position-try-fallbacks: flip-block)) {
+  .menu[popover] {
+    top: 0;
+    left: 0;
+  }
+
+  .menu[popover].menu--placing {
+    visibility: hidden;
+  }
+}
+
+.menu[popover] [role="menuitem"] {
+  display: block;
+  padding: 6px 12px;
+  color: var(--bark-medium);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.menu[popover] [role="menuitem"]:hover,
+.menu[popover] [role="menuitem"]:focus-visible {
+  background-color: var(--honey-light);
+  color: var(--bark);
+}
+
+/* The keyboard gets the standard honey ring too, drawn inside the item:
+   on the dark theme the hover tint alone barely shows against the menu. */
+.menu[popover] [role="menuitem"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+  outline-offset: -2px;
+}
+
+.menu[popover] .menu__item--danger,
+.menu[popover] .menu__item--danger:hover,
+.menu[popover] .menu__item--danger:focus-visible {
+  color: var(--color-negative);
+}
+
+.menu__separator {
+  height: 0;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--divider);
+}
+
+/* Phones: a finger-sized trigger and rows. */
+@media (max-width: 1023px) {
+  .menu-trigger {
+    width: 36px;
+    height: 36px;
+  }
+
+  .menu[popover] [role="menuitem"] {
+    padding: 10px 16px;
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-trigger {
+    transition: none;
+  }
+}

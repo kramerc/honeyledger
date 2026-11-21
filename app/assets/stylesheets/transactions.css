@@ -3,6 +3,20 @@
   width: 100%;
   border: 1px solid var(--divider);
   border-radius: 8px;
+  /* The one size for the Actions column's icon buttons (the kebab, Create,
+     Save, Cancel), and the column is sized from it: one button plus the
+     cell's 10px padding each side. In rem, so it means the same wherever it
+     is used; the edit fields' --cell-edit-height is in em and would resolve
+     against each element's own font size. */
+  --action-button-size: calc(1.4 * 0.8rem + 8px);
+  --actions-column: calc(var(--action-button-size) + 20px);
+}
+
+/* While a row's edit form is on screen, the column widens for Save and
+   Cancel side by side (with the cell's 4px gap). Every row's grid reads
+   the same variable, so the columns stay aligned across the table. */
+.transactions:has(.transaction.editing turbo-frame.edit form) {
+  --actions-column: calc(2 * var(--action-button-size) + 4px + 20px);
 }
 
 /* Table header row */
@@ -35,7 +49,7 @@
     minmax(60px,  0.8fr)      /* Currency */
     minmax(80px,  1.3fr)      /* Category */
     minmax(60px,  0.7fr)      /* Cleared */
-    minmax(150px, 1.6fr);     /* Actions */
+    var(--actions-column);    /* Actions */
   gap: 0;
   align-items: stretch;
 }
@@ -55,7 +69,7 @@
                                 /* Currency — hidden */
                                 /* Category — hidden */
                                 /* Cleared — hidden */
-      minmax(150px, 1.6fr);     /* Actions */
+      var(--actions-column);    /* Actions */
   }
 
   .transactions .row > div:nth-child(4),
@@ -124,21 +138,12 @@
 }
 
 .transactions .actions {
-  gap: 8px;
+  gap: 4px;
   flex-wrap: nowrap;
 }
 
-.transactions .actions a {
-  color: var(--honey-dark);
-  text-decoration: none;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.transactions .actions a:hover {
-  color: var(--honey);
-  text-decoration: underline;
-}
+/* A shown row's actions are one kebab trigger (menu.css); the edit form's
+   actions cell holds Save and Cancel, styled with the form below. */
 
 /* Transaction type badges */
 .tx-type { font-size: 0.8rem; font-weight: 600; }
@@ -181,47 +186,77 @@
   font-size: 0.8rem;
 }
 
-.transactions form input[type="submit"],
-.transactions form button[type="submit"] {
-  padding: 4px 10px;
-  background-color: var(--honey-dark);
-  color: #fff;
-  border: 1px solid transparent; /* same height as the bordered Cancel */
+/* Form actions (Create, Save, Cancel): square icon buttons
+   (--action-button-size, the edit fields' height) on desktop, so the Actions column stays narrow. The word
+   rides along as the accessible name and shows on phones instead of the
+   icon (see the phone block). Primary and secondary follow the selection
+   bar's buttons; Cancel carries its own cream fill, and a honey border on
+   hover, because the row behind it is usually honey-tinted. */
+.transactions form .form-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--action-button-size);
+  height: var(--action-button-size);
+  padding: 0;
+  border: 1px solid transparent; /* same size as the bordered Cancel */
   border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 600;
   line-height: normal;
+  text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.transactions form .form-action svg {
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.transactions form .form-action__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
 
-.transactions form input[type="submit"]:hover,
-.transactions form button[type="submit"]:hover {
+.transactions form .form-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.transactions form .form-action--primary {
+  background-color: var(--honey-dark);
+  color: #fff;
+}
+
+.transactions form .form-action--primary:hover {
   background-color: var(--honey);
 }
 
-/* Cancel beside Save: the secondary button, after the selection bar's
-   (.selection-bar__btn--secondary), at Save's size. It carries its own
-   cream fill, and a honey border on hover, because the row behind it is
-   usually honey-tinted from being hovered. */
-.transactions form .row > div.actions > a {
-  padding: 4px 10px;
-  border: 1px solid var(--divider);
-  border-radius: 4px;
+.transactions form .form-action--secondary {
+  border-color: var(--divider);
   background-color: var(--cream);
   color: var(--bark-medium);
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: normal;
-  text-decoration: none;
-  white-space: nowrap;
 }
 
-.transactions form .row > div.actions > a:hover {
+.transactions form .form-action--secondary:hover {
   border-color: var(--field-border);
   background-color: var(--honey-pale);
   color: var(--bark);
-  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transactions form .form-action {
+    transition: none;
+  }
 }
 
 .transactions form .numeric input {
@@ -283,14 +318,6 @@
   margin-bottom: 2px;
 }
 
-/* Loading state */
-.transaction .row > .loading {
-  grid-column: 1 / -1;
-  padding: 9px 10px;
-  color: var(--bark-light);
-  font-style: italic;
-}
-
 /* ========== Mobile transactions (< 1024px) ========== */
 @media (max-width: 1023px) {
   .transactions {
@@ -319,7 +346,7 @@
     Ledger rows: three lines, checkbox in the gutter.
       [ ] Description ............................ Amount
           From account ▾  →  To account ▾
-          Date  Sources  Type  Category  ✓      Edit Delete
+          Date  Sources  Type  Category  ✓          ⋮
     The two empty pseudo-elements are full-width flex items that force the
     line breaks between those groups.
   */
@@ -555,18 +582,25 @@
     border-top: 1px solid var(--divider);
   }
 
-  /* Save/Create and Cancel take the selection bar's button styles
-     (.selection-bar__btn--primary / --secondary), the buttons already
-     used on phones. */
-  .transactions form .row > div.actions input[type="submit"],
-  .transactions form .row > div.actions button[type="submit"],
-  .transactions form .row > div.actions > a {
+  /* Phones have the room for words: Create, Save, and Cancel are worded
+     buttons in the selection bar's styles, and the icons step aside. */
+  .transactions form .form-action {
+    width: auto;
+    height: auto;
     padding: 6px 16px;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    line-height: normal;
-    white-space: nowrap;
+  }
+
+  .transactions form .form-action svg {
+    display: none;
+  }
+
+  .transactions form .form-action__label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
   }
 
 }
@@ -576,12 +610,23 @@
   display: none; /* Hide edit portion by default */
 }
 
-.transaction.editing .show {
-  display: none; /* Hide show portion when editing */
+/* Edit mode swaps the shown row for the form only once the form is there
+   (the frame loads lazily on the first edit, and holds nothing until
+   then). Until it arrives the shown row stays put, marked busy, so the
+   row's height never passes through an interim placeholder. Keyed on the
+   form rather than the frame's [complete], since a rejected save replaces
+   the frame (edit.turbo_stream) without that attribute. */
+.transaction.editing:has(turbo-frame.edit form) .show {
+  display: none;
 }
 
-.transaction.editing .edit {
-  display: block; /* Show edit portion when editing */
+.transaction.editing:has(turbo-frame.edit form) .edit {
+  display: block;
+}
+
+.transaction.editing:not(:has(turbo-frame.edit form)) .row.show {
+  opacity: 0.55;
+  cursor: progress;
 }
 
 /* Excluded badge */
@@ -1174,7 +1219,7 @@
 
 @media (max-width: 1023px) {
   /* On a phone the cells are plain text and edit mode is reached through
-     the Edit link. display: none takes the cell buttons and the Cleared
+     the actions menu's Edit item. display: none takes the cell buttons and the Cleared
      toggle out of reach entirely (taps, Tab, and assistive technology),
      and their plain-text twins show the values instead. */
   .transactions .row.show .cell-edit,
@@ -1201,11 +1246,6 @@
 
   .transactions .row.show > .category-cell {
     color: var(--bark-medium);
-  }
-
-  .transactions .row.show > .actions a {
-    padding: 6px 0;
-    font-size: 0.875rem;
   }
 
   .new-transaction-toggle {

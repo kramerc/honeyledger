@@ -58,24 +58,38 @@
       <div data-label="Currency"><%= transaction.currency.code %></div>
       <div data-label="Category" class="category-cell"><%= transaction_category_field(transaction) %></div>
       <div data-label="Cleared" class="boolean cleared-cell"><%= transaction_cleared_field(transaction) %></div>
-      <div class="actions">
-        <% if transaction.opening_balance? && transaction.opening_balance_target_account.present? %>
-          <%= link_to "Edit Account", edit_account_path(transaction.opening_balance_target_account), data: { turbo_frame: "_top" } %>
-        <% else %>
-          <a href="#" data-action="transactions--row#edit">Edit</a>
-        <% end %>
-        <%= link_to "Delete", transaction, data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
-        <%# account_id keeps the index's account filter attached to the row, so the
-            responses can scope their Turbo Stream targets to the list on screen.
-            Rails omits the param when the index is unfiltered. %>
-        <% if transaction.excluded? %>
-          <%= link_to "Restore", unexclude_transaction_path(transaction, account_id: @account&.id), data: { turbo_method: :post } %>
-        <% elsif transaction.excludable? %>
-          <%= link_to "Exclude", exclude_transaction_path(transaction, account_id: @account&.id), data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
-        <% end %>
-        <% if transaction.merged_sources.any? %>
-          <%= link_to "Unmerge", unmerge_transaction_path(transaction, account_id: @account&.id), data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
-        <% end %>
+      <div class="actions" data-controller="menu">
+        <% menu_id = dom_id(transaction, :actions_menu) %>
+        <%# The anchor name ties the menu to its trigger for CSS anchor positioning (menu.css). %>
+        <button type="button" class="menu-trigger" popovertarget="<%= menu_id %>"
+                aria-haspopup="menu" aria-expanded="false" aria-label="Transaction actions"
+                style="anchor-name: --<%= menu_id %>"
+                data-menu-target="trigger">
+          <%= lucide_icon "ellipsis-vertical", size: 16 %>
+        </button>
+        <div id="<%= menu_id %>" class="menu" popover role="menu" aria-label="Transaction actions"
+             style="position-anchor: --<%= menu_id %>"
+             data-menu-target="menu"
+             data-action="beforetoggle->menu#beforeToggled toggle->menu#toggled keydown->menu#navigate click->menu#close">
+          <% if transaction.opening_balance? && transaction.opening_balance_target_account.present? %>
+            <%= link_to "Edit Account", edit_account_path(transaction.opening_balance_target_account), role: "menuitem", data: { turbo_frame: "_top" } %>
+          <% else %>
+            <a href="#" role="menuitem" data-action="transactions--row#edit">Edit</a>
+          <% end %>
+          <%# account_id keeps the index's account filter attached to the row, so the
+              responses can scope their Turbo Stream targets to the list on screen.
+              Rails omits the param when the index is unfiltered. %>
+          <% if transaction.excluded? %>
+            <%= link_to "Restore", unexclude_transaction_path(transaction, account_id: @account&.id), role: "menuitem", data: { turbo_method: :post } %>
+          <% elsif transaction.excludable? %>
+            <%= link_to "Exclude", exclude_transaction_path(transaction, account_id: @account&.id), role: "menuitem", data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
+          <% end %>
+          <% if transaction.merged_sources.any? %>
+            <%= link_to "Unmerge", unmerge_transaction_path(transaction, account_id: @account&.id), role: "menuitem", data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
+          <% end %>
+          <hr class="menu__separator">
+          <%= link_to "Delete", transaction, role: "menuitem", class: "menu__item--danger", data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>
+        </div>
       </div>
 
       <% if transaction.merged_sources.any? %>
@@ -96,10 +110,8 @@
     <!-- Edit -->
     <%# account_id rides along so the edit form posts it back and the replaced row
         keeps its action links scoped to the list on screen. %>
-    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction, account_id: @account&.id), loading: "lazy", class: "edit" do %>
-      <div class="row">
-        <div class="loading">Loading...</div>
-      </div>
-    <% end %>
+    <%# Empty until loaded: the shown row stays on screen, marked busy, until the
+        form arrives (transactions.css), so the row's height doesn't change. %>
+    <%= turbo_frame_tag dom_id(transaction, :edit), src: edit_transaction_path(transaction, account_id: @account&.id), loading: "lazy", class: "edit" %>
   </div>
 <% end %>
