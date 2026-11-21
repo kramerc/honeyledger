@@ -713,8 +713,9 @@ class TransactionsTest < ApplicationSystemTestCase
       # Escape closes it and hands focus back to the trigger.
       send_keys :escape
       assert_no_selector "[role=menu]"
-      assert_equal "false", trigger["aria-expanded"]
-      assert_equal "Transaction actions", page.evaluate_script("document.activeElement.getAttribute('aria-label')")
+      # aria-expanded flips in the popover's toggle event, a moment after the
+      # menu has gone, so wait for it rather than reading it once.
+      assert_selector "#{ROW_MENU_TRIGGER}[aria-expanded='false']:focus"
     end
   end
 
@@ -893,7 +894,9 @@ class TransactionsTest < ApplicationSystemTestCase
       assert_field "transaction[description]", with: "Keyboard edit probe"
     end
     assert_not row_menu_open?(transaction)
-    assert_equal "transaction[transacted_at]", page.evaluate_script("document.activeElement.name")
+    # Focus lands from the frame's load handler, which can run just after the
+    # field shows, so wait for it.
+    within_row(transaction) { assert_selector "input[name='transaction[transacted_at]']:focus" }
   end
 
   test "Space chooses the focused menu item" do
@@ -915,6 +918,7 @@ class TransactionsTest < ApplicationSystemTestCase
     within_row(transaction) do
       open_row_menu(by: :keyboard)
       send_keys :arrow_down
+      assert_selector "[role=menuitem]:focus", text: "Exclude"
     end
     outline = page.evaluate_script(<<~JS)
       (() => {
