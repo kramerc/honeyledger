@@ -698,17 +698,17 @@ class TransactionsTest < ApplicationSystemTestCase
       trigger = find(ROW_MENU_TRIGGER)
       assert_equal "false", trigger["aria-expanded"]
 
-      trigger.click
+      open_row_menu
       within("[role=menu]") do
         assert_equal %w[Edit Exclude Delete], all("[role=menuitem]").map(&:text)
       end
-      assert_equal "true", trigger["aria-expanded"]
-      # Focus moves into the menu, and the arrow keys walk its items.
-      assert_equal "Edit", page.evaluate_script("document.activeElement.textContent").strip
+      assert_selector "#{ROW_MENU_TRIGGER}[aria-expanded='true']"
+      # Focus moves into the menu (open_row_menu waits for it), and the arrow
+      # keys walk its items.
       send_keys :arrow_down
-      assert_equal "Exclude", page.evaluate_script("document.activeElement.textContent").strip
+      assert_selector "[role=menuitem]:focus", text: "Exclude"
       send_keys :arrow_up, :arrow_up
-      assert_equal "Delete", page.evaluate_script("document.activeElement.textContent").strip
+      assert_selector "[role=menuitem]:focus", text: "Delete"
 
       # Escape closes it and hands focus back to the trigger.
       send_keys :escape
@@ -824,8 +824,7 @@ class TransactionsTest < ApplicationSystemTestCase
     visit transactions_path
 
     within_row(transaction) do
-      find(ROW_MENU_TRIGGER).send_keys(:enter)
-      assert_selector "[role=menu]"
+      open_row_menu(by: :keyboard)
       send_keys :enter # on Edit, focused when the menu opened
       assert_field "transaction[description]", with: "Keyboard edit probe"
     end
@@ -838,8 +837,7 @@ class TransactionsTest < ApplicationSystemTestCase
     visit transactions_path
 
     within_row(transaction) do
-      find(ROW_MENU_TRIGGER).send_keys(:enter)
-      assert_selector "[role=menu]"
+      open_row_menu(by: :keyboard)
       send_keys :space
       assert_field "transaction[description]", with: "Space edit probe"
     end
@@ -851,8 +849,7 @@ class TransactionsTest < ApplicationSystemTestCase
     page.execute_script("document.documentElement.dataset.theme = 'dark'")
 
     within_row(transaction) do
-      find(ROW_MENU_TRIGGER).send_keys(:enter)
-      assert_selector "[role=menu]"
+      open_row_menu(by: :keyboard)
       send_keys :arrow_down
     end
     outline = page.evaluate_script(<<~JS)
@@ -926,9 +923,14 @@ class TransactionsTest < ApplicationSystemTestCase
   ROW_MENU_TRIGGER = "button[aria-label='Transaction actions']".freeze
 
   # Open the row's kebab menu; call inside within_row.
-  def open_row_menu
-    find(ROW_MENU_TRIGGER).click
-    assert_selector "[role=menu]"
+  # Open the row's kebab menu, by click or by Enter on the trigger; call
+  # inside within_row. The menu focuses its first item from its toggle event,
+  # a moment after it shows, so wait for that focus: a key sent before it
+  # lands on the trigger and closes the menu again.
+  def open_row_menu(by: :click)
+    trigger = find(ROW_MENU_TRIGGER)
+    by == :keyboard ? trigger.send_keys(:enter) : trigger.click
+    assert_selector "[role=menuitem]:focus", text: /\AEdit/
   end
 
   # Which of a form action's two faces is showing: the icon, or the word
