@@ -14,21 +14,27 @@ import { Controller } from "@hotwired/stimulus"
 //
 // The browser does the rest: the popover sits in the top layer (so a
 // scrolling container can't clip it), closes on an outside click or Escape,
-// and hands focus back to the trigger, and CSS anchor positioning places it
-// beside the trigger before the first paint (menu.css). This controller moves
-// focus with the arrow keys, closes the menu once an item is chosen, and
-// places it by script only where anchor positioning is missing.
+// and hands focus back to the trigger on Escape (an outside click leaves
+// focus where the user clicked). CSS anchor positioning places it beside the
+// trigger before the first paint (menu.css). This controller moves focus with
+// the arrow keys, activates the focused item on Space, closes the menu once
+// an item is chosen, and places it by script where the browser lacks anchor
+// positioning or its flip fallback (the selector test matches menu.css).
 export default class extends Controller {
   static targets = [ "trigger", "menu" ]
 
   // Gap between trigger and menu, and the least room kept from the viewport edge.
   static OFFSET = 4
 
-  static anchorPositioning = CSS.supports("anchor-name: --menu")
+  static anchorPositioning =
+    CSS.supports("anchor-name: --menu") && CSS.supports("position-try-fallbacks: flip-block")
 
   connect() {
     this.reposition = this.reposition.bind(this)
     this.dismiss = this.dismiss.bind(this)
+    // A page restored from Turbo's cache comes back with its menus closed but
+    // keeps whatever aria-expanded the trigger had when it was cached.
+    this.triggerTarget.setAttribute("aria-expanded", String(this.menuTarget.matches(":popover-open")))
   }
 
   disconnect() {
@@ -50,7 +56,8 @@ export default class extends Controller {
       this.reposition()
       this.menuTarget.classList.remove("menu--placing")
       this.startTracking()
-      this.items[0]?.focus()
+      // Already placed in view; a scroll here would trip dismiss() and close it.
+      this.items[0]?.focus({ preventScroll: true })
     } else {
       this.triggerTarget.setAttribute("aria-expanded", "false")
       this.stopTracking()
@@ -74,11 +81,17 @@ export default class extends Controller {
       case "ArrowUp":   next = items[(index - 1 + items.length) % items.length]; break
       case "Home":      next = items[0]; break
       case "End":       next = items[items.length - 1]; break
+      case " ":
+        // Menu items are links, which only activate on Enter; Space would
+        // scroll the page instead (and the scroll would close the menu).
+        event.preventDefault()
+        if (items.includes(document.activeElement)) document.activeElement.click()
+        return
       case "Tab":       this.menuTarget.hidePopover(); return
       default: return
     }
     event.preventDefault()
-    next.focus()
+    next.focus({ preventScroll: true })
   }
 
   // Right-align the menu under the trigger; flip it above when there isn't

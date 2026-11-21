@@ -3,10 +3,11 @@
   width: 100%;
   border: 1px solid var(--divider);
   border-radius: 8px;
-  /* The Actions column fits one icon button (the kebab, or Create) plus the
-     cell's 10px padding each side. An icon button is --cell-edit-height at
-     its own 0.8rem, spelled out here because em would resolve against the
-     row's font size instead. */
+  /* The one size for the Actions column's icon buttons (the kebab, Create,
+     Save, Cancel), and the column is sized from it: one button plus the
+     cell's 10px padding each side. In rem, so it means the same wherever it
+     is used; the edit fields' --cell-edit-height is in em and would resolve
+     against each element's own font size. */
   --action-button-size: calc(1.4 * 0.8rem + 8px);
   --actions-column: calc(var(--action-button-size) + 20px);
 }
@@ -185,8 +186,8 @@
   font-size: 0.8rem;
 }
 
-/* Form actions (Create, Save, Cancel): square icon buttons at the edit
-   fields' height on desktop, so the Actions column stays narrow. The word
+/* Form actions (Create, Save, Cancel): square icon buttons
+   (--action-button-size, the edit fields' height) on desktop, so the Actions column stays narrow. The word
    rides along as the accessible name and shows on phones instead of the
    icon (see the phone block). Primary and secondary follow the selection
    bar's buttons; Cancel carries its own cream fill, and a honey border on
@@ -196,8 +197,8 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: var(--cell-edit-height);
-  height: var(--cell-edit-height);
+  width: var(--action-button-size);
+  height: var(--action-button-size);
   padding: 0;
   border: 1px solid transparent; /* same size as the bordered Cancel */
   border-radius: 4px;

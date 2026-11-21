@@ -8,13 +8,12 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  /* Inside the transactions table, the size of the form's icon buttons
-     beside it (--cell-edit-height resolves against this font size), so the
-     kebab, Create, and Save line up in the Actions column. */
-  width: var(--cell-edit-height, 28px);
-  height: var(--cell-edit-height, 28px);
+  /* Inside the transactions table, --action-button-size: the same square
+     as the form's icon buttons and the one the Actions column is sized
+     from, so the kebab, Create, and Save line up and fill the column. */
+  width: var(--action-button-size, 28px);
+  height: var(--action-button-size, 28px);
   padding: 0;
-  font-size: 0.8rem;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
@@ -23,11 +22,20 @@
   transition: background-color 0.1s, color 0.1s, border-color 0.1s;
 }
 
-.menu-trigger:hover,
 .menu-trigger[aria-expanded="true"] {
   border-color: var(--field-border, var(--honey));
   background-color: var(--cream);
   color: var(--honey-dark);
+}
+
+/* Touch screens keep :hover on the last element tapped, which would leave
+   the trigger looking open after its menu closes. */
+@media (hover: hover) {
+  .menu-trigger:hover {
+    border-color: var(--field-border, var(--honey));
+    background-color: var(--cream);
+    color: var(--honey-dark);
+  }
 }
 
 .menu-trigger:focus-visible {
@@ -40,17 +48,10 @@
   pointer-events: none;
 }
 
-/* The list, anchored to its trigger (the view pairs them with anchor-name
-   and position-anchor): right edges aligned, just below, flipping above
-   when the window has no room underneath. The browser places it before
-   the first paint, so it opens where it belongs. */
 .menu[popover] {
   position: fixed;
   inset: auto;
   margin: 0;
-  top: calc(anchor(bottom) + 4px);
-  right: anchor(right);
-  position-try-fallbacks: flip-block;
   min-width: 160px;
   padding: 4px 0;
   border: 1px solid var(--divider);
@@ -62,9 +63,23 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Without anchor positioning, menu_controller.js places the menu by script
-   and keeps it hidden until it has. */
-@supports not (anchor-name: --menu) {
+/* Anchored to its trigger (the view pairs them with anchor-name and
+   position-anchor): right edges aligned, just below, flipping above when the
+   window has no room underneath. The browser places it before the first
+   paint, so it opens where it belongs. Both features are required: browsers
+   that predate position-try-fallbacks can't flip, and a bottom row's menu
+   would open off-screen. menu_controller.js runs the same test. */
+@supports (anchor-name: --menu) and (position-try-fallbacks: flip-block) {
+  .menu[popover] {
+    top: calc(anchor(bottom) + 4px);
+    right: anchor(right);
+    position-try-fallbacks: flip-block;
+  }
+}
+
+/* Otherwise menu_controller.js places the menu by script and keeps it
+   hidden until it has. */
+@supports not ((anchor-name: --menu) and (position-try-fallbacks: flip-block)) {
   .menu[popover] {
     top: 0;
     left: 0;
@@ -87,9 +102,15 @@
 
 .menu[popover] [role="menuitem"]:hover,
 .menu[popover] [role="menuitem"]:focus-visible {
-  outline: none;
   background-color: var(--honey-light);
   color: var(--bark);
+}
+
+/* The keyboard gets the standard honey ring too, drawn inside the item:
+   on the dark theme the hover tint alone barely shows against the menu. */
+.menu[popover] [role="menuitem"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 45%, transparent);
+  outline-offset: -2px;
 }
 
 .menu[popover] .menu__item--danger,

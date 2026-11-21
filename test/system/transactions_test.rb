@@ -813,8 +813,74 @@ class TransactionsTest < ApplicationSystemTestCase
     within_row(transaction) do
       open_row_menu
       click_link "Edit"
-      assert_no_selector "[role=menu]"
       assert_field "transaction[description]", with: "Menu edit probe"
+    end
+    # Edit hides the shown row, menu and all, so check the popover itself.
+    assert_not row_menu_open?(transaction)
+  end
+
+  test "choosing Edit by keyboard puts focus in the edit form" do
+    transaction = manual_transaction("Keyboard edit probe", 1310)
+    visit transactions_path
+
+    within_row(transaction) do
+      find(ROW_MENU_TRIGGER).send_keys(:enter)
+      assert_selector "[role=menu]"
+      send_keys :enter # on Edit, focused when the menu opened
+      assert_field "transaction[description]", with: "Keyboard edit probe"
+    end
+    assert_not row_menu_open?(transaction)
+    assert_equal "transaction[transacted_at]", page.evaluate_script("document.activeElement.name")
+  end
+
+  test "Space chooses the focused menu item" do
+    transaction = manual_transaction("Space edit probe", 1320)
+    visit transactions_path
+
+    within_row(transaction) do
+      find(ROW_MENU_TRIGGER).send_keys(:enter)
+      assert_selector "[role=menu]"
+      send_keys :space
+      assert_field "transaction[description]", with: "Space edit probe"
+    end
+  end
+
+  test "a keyboard-focused menu item shows the focus ring in the dark theme" do
+    transaction = sourced_transaction("Focus ring probe", 1330, :transaction_one)
+    visit transactions_path
+    page.execute_script("document.documentElement.dataset.theme = 'dark'")
+
+    within_row(transaction) do
+      find(ROW_MENU_TRIGGER).send_keys(:enter)
+      assert_selector "[role=menu]"
+      send_keys :arrow_down
+    end
+    outline = page.evaluate_script(<<~JS)
+      (() => {
+        const style = getComputedStyle(document.activeElement)
+        return [document.activeElement.textContent.trim(), style.outlineStyle, style.outlineWidth]
+      })()
+    JS
+    assert_equal [ "Exclude", "solid", "2px" ], outline
+  end
+
+  test "a trigger restored with a stale aria-expanded is reset when it reconnects" do
+    transaction = manual_transaction("Stale expanded probe", 1340)
+    visit transactions_path
+
+    # What Turbo's cache hands back after a page is cached with a menu open:
+    # the trigger still says expanded, but the popover is closed.
+    page.execute_script(<<~JS)
+      (() => {
+        const actions = document.querySelector("##{ActionView::RecordIdentifier.dom_id(transaction)} .row.show > .actions")
+        const copy = actions.cloneNode(true)
+        copy.querySelector(".menu-trigger").setAttribute("aria-expanded", "true")
+        actions.replaceWith(copy)
+      })()
+    JS
+
+    within_row(transaction) do
+      assert_selector "#{ROW_MENU_TRIGGER}[aria-expanded='false']"
     end
   end
 
@@ -874,6 +940,12 @@ class TransactionsTest < ApplicationSystemTestCase
         icon: getComputedStyle(action.querySelector("svg")).display !== "none",
         word: action.querySelector(".form-action__label").getBoundingClientRect().width > 1
       }))(arguments[0])
+    JS
+  end
+
+  def row_menu_open?(transaction)
+    page.evaluate_script(<<~JS)
+      document.getElementById("#{ActionView::RecordIdentifier.dom_id(transaction, :actions_menu)}").matches(":popover-open")
     JS
   end
 
