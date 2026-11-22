@@ -70,7 +70,7 @@
           <td>
             <%= sf_account.name %>
             <% unless sf_account.current?(@simplefin_connection.refreshed_at) %>
-              <span style="color: orange" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
+              <span class="marker" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
             <% end %>
           </td>
           <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(sf_account) %></td>
@@ -110,7 +110,7 @@
           <td>
             <%= lf_account.name %>
             <% unless lf_account.current?(@lunchflow_connection.refreshed_at) %>
-              <span style="color: orange" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
+              <span class="marker" title="This account did not appear in the most recent refresh. It may have been re-issued or disconnected on the aggregator side.">(stale)</span>
             <% end %>
           </td>
           <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(lf_account) %></td>
