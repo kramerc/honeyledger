@@ -475,7 +475,7 @@ class TransactionsTest < ApplicationSystemTestCase
   end
 
   test "the merge preview shows an 18-decimal amount exactly" do
-    eth = Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+    eth = currencies(:eth)
     wallet = Account.create!(user: @user, currency: eth, name: "ETH Wallet", kind: :asset)
     exchange = Account.create!(user: @user, currency: eth, name: "ETH Exchange", kind: :asset)
     expense = Account.create!(user: @user, currency: eth, name: "ETH Outflow", kind: :expense)

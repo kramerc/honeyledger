@@ -252,6 +252,34 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_nil change.merge_candidate, "the fee is not a transfer leg"
   end
 
+  test "an Ethereum wallet imports to the wei, with gas in an ETH fee account" do
+    user = users(:two)
+    eth_account = blockchain_accounts(:eth_wallet_eth)
+    ledger_account = user.accounts.create!(name: "Hot wallet", kind: :asset, currency: currencies(:eth))
+    AccountSource.create!(account: ledger_account, sourceable: eth_account)
+    btc_fees = user.accounts.create!(name: "Network fees", kind: :expense, currency: currencies(:btc))
+
+    assert_difference "Transaction.count", 4 do
+      Blockchain::ImportTransactionsJob.perform_now(blockchain_account_id: eth_account.id)
+    end
+
+    received = blockchain_transactions(:eth_received).ledger_transactions.sole
+    assert_equal "Ethereum received", received.src_account.name
+    assert_equal 1_500_000_000_000_000_000, received.amount_minor
+    assert_equal "Received from 0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359", received.description
+
+    assert_equal "Ethereum sent", blockchain_transactions(:eth_sent).ledger_transactions.sole.dest_account.name
+    assert_equal 1, blockchain_transactions(:eth_dust).ledger_transactions.sole.amount_minor
+
+    fee = blockchain_transactions(:eth_sent_fee).ledger_transactions.sole
+    assert_equal "Network fees (ETH)", fee.dest_account.name
+    assert_equal 441_000_000_000_000, fee.amount_minor
+    assert_equal 0, btc_fees.reload.balance_minor
+
+    assert_equal 1_249_559_000_000_000_001, ledger_account.reload.balance_minor
+    assert_equal eth_account.balance_minor, ledger_account.balance_minor
+  end
+
   private
 
     def perform

@@ -14,6 +14,47 @@ class Blockchain::ConnectionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "new builds a wallet for the requested chain when it is available" do
+    with_evm_explorer do
+      get new_blockchain_connection_url(chain: "ethereum")
+      assert_response :success
+      assert_equal "ethereum", controller.instance_variable_get(:@blockchain_connection).chain
+    end
+
+    with_evm_explorer(api_key: nil) do
+      get new_blockchain_connection_url(chain: "ethereum")
+      assert_equal "bitcoin", controller.instance_variable_get(:@blockchain_connection).chain
+    end
+
+    get new_blockchain_connection_url(chain: "dogecoin")
+    assert_equal "bitcoin", controller.instance_variable_get(:@blockchain_connection).chain
+  end
+
+  test "create saves an Ethereum wallet" do
+    with_evm_explorer do
+      assert_enqueued_with(job: Blockchain::RefreshJob) do
+        post blockchain_connections_url, params: { blockchain_connection: {
+          chain: "ethereum", name: "Hot wallet", identifier: "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359"
+        } }
+      end
+    end
+
+    assert_redirected_to integrations_url
+    assert_equal "0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359", @user.blockchain_connections.ethereum.sole.identifier
+  end
+
+  test "create refuses an Ethereum wallet when the server has no explorer key" do
+    with_evm_explorer(api_key: nil) do
+      assert_no_difference "Blockchain::Connection.count" do
+        post blockchain_connections_url, params: { blockchain_connection: {
+          chain: "ethereum", identifier: "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359"
+        } }
+      end
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "create saves the wallet and enqueues a refresh" do
     assert_difference "@user.blockchain_connections.count", 1 do
       assert_enqueued_with(job: Blockchain::RefreshJob) do

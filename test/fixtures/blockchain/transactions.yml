@@ -33,3 +33,51 @@ sent_fee:
   transacted_at: 2026-04-22 12:00:00
   confirmed: true
   synced_at: 2026-04-25 00:00:00
+
+# Ethereum: EIP-55 example addresses; hashes are placeholders.
+eth_received:
+  account: eth_wallet_eth
+  remote_id: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  txid: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  kind: transfer
+  amount: "1.5"
+  counterparty: "0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359"
+  block_height: 19000000
+  transacted_at: 2026-04-20 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00
+
+eth_sent:
+  account: eth_wallet_eth
+  remote_id: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  txid: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  kind: transfer
+  amount: "-0.25"
+  counterparty: "0xdbf03b407c01e7cd3cbea99509d93f8dddc8c6fb"
+  block_height: 19000100
+  transacted_at: 2026-04-22 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00
+
+eth_sent_fee:
+  account: eth_wallet_eth
+  remote_id: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:fee"
+  txid: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  kind: fee
+  amount: "-0.000441"
+  block_height: 19000100
+  transacted_at: 2026-04-22 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00
+
+eth_dust:
+  account: eth_wallet_eth
+  remote_id: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  txid: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  kind: transfer
+  amount: "0.000000000000000001"
+  counterparty: "0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb"
+  block_height: 19000200
+  transacted_at: 2026-04-23 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00

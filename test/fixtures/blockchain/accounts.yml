@@ -6,3 +6,13 @@ xpub_wallet_btc:
   balance: "0.0154"
   balance_changed_at: 2026-04-24 10:00:00
   last_seen_at: 2026-04-25 00:00:00
+
+# 1.5 received - 0.25 sent - 0.000441 gas + 1 wei received.
+eth_wallet_eth:
+  connection: eth_wallet
+  remote_id: ETH
+  name: Ethereum
+  currency: ETH
+  balance: "1.249559000000000001"
+  balance_changed_at: 2026-04-24 10:00:00
+  last_seen_at: 2026-04-25 00:00:00

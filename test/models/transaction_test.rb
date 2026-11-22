@@ -1004,7 +1004,7 @@ class TransactionTest < ActiveSupport::TestCase
     end
 
     def eth_currency
-      Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+      currencies(:eth)
     end
 
     # Builds two non-transfer legs (asset→expense and revenue→asset) that pair into a

@@ -26,7 +26,7 @@ class Csv::ParseJobTest < ActiveJob::TestCase
   end
 
   test "stores an 18-decimal amount exactly" do
-    eth = Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+    eth = currencies(:eth)
     @bank_account = Account.create!(user: @user, currency: eth, name: "ETH Wallet", kind: :asset)
     csv_import = build_csv_import_with_file(<<~CSV)
       Date,Description,Amount

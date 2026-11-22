@@ -2,7 +2,9 @@ class Blockchain::ConnectionsController < ApplicationController
   before_action :set_blockchain_connection, only: %i[edit update refresh destroy]
 
   def new
-    @blockchain_connection = current_user.blockchain_connections.build(chain: "bitcoin")
+    chain = params[:chain].to_s
+    chain = "bitcoin" unless Blockchain::Connection.available_chains.include?(chain)
+    @blockchain_connection = current_user.blockchain_connections.build(chain: chain)
   end
 
   def create
