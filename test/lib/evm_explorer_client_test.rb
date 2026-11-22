@@ -197,6 +197,13 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
     assert_equal "The explorer refused the request (Invalid address format [FILTERED])", error.message
   end
 
+  test "a failure status with a non-empty list is still a refusal" do
+    body = { "status" => "0", "message" => "Query timeout", "result" => [ { "unexpected" => true } ] }
+
+    error = assert_raises(EvmExplorerClient::Error) { stub_responses(body) { @client.normal_transactions(WALLET) } }
+    assert_equal "The explorer refused the request (Query timeout)", error.message
+  end
+
   test "a missing key fails before any request" do
     client = build_client(api_key: "")
 

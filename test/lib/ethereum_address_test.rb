@@ -12,6 +12,7 @@ class EthereumAddressTest < ActiveSupport::TestCase
   test "accepts checksummed addresses and returns them lowercase" do
     EIP55_EXAMPLES.each do |address|
       assert_equal address.downcase, EthereumAddress.parse(address)
+      assert EthereumAddress.valid?(address)
       assert_equal address[2..], EthereumAddress.checksummed(address[2..].downcase)
     end
   end
