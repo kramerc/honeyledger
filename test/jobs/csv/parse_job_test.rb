@@ -25,6 +25,19 @@ class Csv::ParseJobTest < ActiveJob::TestCase
     assert_nil csv_import.error
   end
 
+  test "stores an 18-decimal amount exactly" do
+    eth = Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+    @bank_account = Account.create!(user: @user, currency: eth, name: "ETH Wallet", kind: :asset)
+    csv_import = build_csv_import_with_file(<<~CSV)
+      Date,Description,Amount
+      2026-01-15,Deposit,1000.000000000000000001
+    CSV
+
+    Csv::ParseJob.perform_now(csv_import.id)
+
+    assert_equal 10**21 + 1, csv_import.transactions.sole.reload.amount_minor
+  end
+
   test "is idempotent on re-parse via (import_id, row_index) uniqueness" do
     csv_import = build_csv_import_with_file(<<~CSV)
       Date,Description,Amount

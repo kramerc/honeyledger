@@ -197,8 +197,14 @@ export default class extends Controller {
       originDestAccountIds: (row.dataset.mergeOriginDestAccountIds || "").split(",").filter(Boolean),
       transactedAt: row.dataset.mergeTransactedAt,
       currencyCode: row.dataset.mergeCurrencyCode,
-      currencyDecimalPlaces: parseInt(row.dataset.mergeCurrencyDecimalPlaces, 10) || 2
+      currencyDecimalPlaces: this.parseDecimalPlaces(row.dataset.mergeCurrencyDecimalPlaces)
     }
+  }
+
+  // Zero is a real value (JPY), so only a missing or malformed attribute falls back to 2.
+  parseDecimalPlaces(value) {
+    const parsed = parseInt(value, 10)
+    return Number.isNaN(parsed) ? 2 : parsed
   }
 
   validatePair(a, b) {
@@ -430,9 +436,14 @@ export default class extends Controller {
     this.hideDeleteConfirmation()
   }
 
+  // String math, not Number: minor amounts of 18-decimal currencies exceed
+  // Number.MAX_SAFE_INTEGER.
   formatAmount(minorStr, decimalPlaces) {
-    const minor = parseInt(minorStr, 10)
-    const divisor = Math.pow(10, decimalPlaces)
-    return (minor / divisor).toFixed(decimalPlaces)
+    const places = parseInt(decimalPlaces, 10) || 0
+    const negative = minorStr.startsWith("-")
+    const digits = minorStr.replace(/^[-+]/, "").padStart(places + 1, "0")
+    const whole = digits.slice(0, digits.length - places)
+    const fraction = places > 0 ? `.${digits.slice(-places)}` : ""
+    return `${negative ? "-" : ""}${whole}${fraction}`
   }
 }

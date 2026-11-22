@@ -474,6 +474,58 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_no_selector "##{ActionView::RecordIdentifier.dom_id(deposit)}"
   end
 
+  test "the merge preview shows an 18-decimal amount exactly" do
+    eth = Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+    wallet = Account.create!(user: @user, currency: eth, name: "ETH Wallet", kind: :asset)
+    exchange = Account.create!(user: @user, currency: eth, name: "ETH Exchange", kind: :asset)
+    expense = Account.create!(user: @user, currency: eth, name: "ETH Outflow", kind: :expense)
+    revenue = Account.create!(user: @user, currency: eth, name: "ETH Inflow", kind: :revenue)
+    amount_minor = 10**21 + 1
+    withdrawal = Transaction.create!(
+      user: @user, src_account: exchange, dest_account: expense,
+      amount_minor: amount_minor, currency: eth, description: "Transfer out", transacted_at: 1.day.ago
+    )
+    deposit = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: wallet,
+      amount_minor: amount_minor, currency: eth, description: "Transfer in", transacted_at: 1.day.ago
+    )
+
+    visit transactions_path
+    toggle_select(withdrawal)
+    toggle_select(deposit)
+    click_button "Merge into Transfer"
+
+    within ".selection-confirmation:not([hidden])" do
+      assert_text "ETH 1000.000000000000000001"
+    end
+  end
+
+  test "the merge preview shows a zero-decimal currency without decimals" do
+    jpy = currencies(:jpy)
+    wallet = Account.create!(user: @user, currency: jpy, name: "JPY Wallet", kind: :asset)
+    bank = Account.create!(user: @user, currency: jpy, name: "JPY Bank", kind: :asset)
+    expense = Account.create!(user: @user, currency: jpy, name: "JPY Outflow", kind: :expense)
+    revenue = Account.create!(user: @user, currency: jpy, name: "JPY Inflow", kind: :revenue)
+    withdrawal = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 1500, currency: jpy, description: "Transfer out", transacted_at: 1.day.ago
+    )
+    deposit = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: wallet,
+      amount_minor: 1500, currency: jpy, description: "Transfer in", transacted_at: 1.day.ago
+    )
+
+    visit transactions_path
+    toggle_select(withdrawal)
+    toggle_select(deposit)
+    click_button "Merge into Transfer"
+
+    within ".selection-confirmation:not([hidden])" do
+      assert_text "JPY 1500"
+      assert_no_text "JPY 15.00"
+    end
+  end
+
   test "clicking a From cell enters edit mode on that field and Save confirms" do
     transaction = manual_transaction("Field edit probe", 1500)
     visit transactions_path

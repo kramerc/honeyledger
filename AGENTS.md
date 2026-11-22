@@ -81,7 +81,7 @@ database path (what CI uses) is fine.
 
 ### Domain Model (Double-Entry Bookkeeping)
 
-Every `Transaction` has `src_account` and `dest_account` (both FK to `accounts`). Amounts are stored as integers in `amount_minor` (smallest currency unit). Account `balance_minor` is kept in sync via `after_save`/`after_destroy` callbacks using `update_counters` for atomic updates.
+Every `Transaction` has `src_account` and `dest_account` (both FK to `accounts`). Amounts are stored as integers in `amount_minor` (smallest currency unit). Minor-unit columns (`amount_minor`, `fx_amount_minor`, `balance_minor`) are `numeric(78, 0)` so 18-decimal currencies such as ETH fit exactly; Rails reads them as Ruby `Integer`. A new minor-unit column uses the same type and declares `attribute :name, MinorUnitsType.new`, because ActiveModel's integer types truncate string input to 16 characters. Account `balance_minor` is kept in sync via `after_save`/`after_destroy` callbacks using `update_counters` for atomic updates.
 
 **`Account`** — `kind` enum: `asset`, `liability`, `equity`, `expense`, `revenue`. Accounts can be `real` (with currency and balance) or `virtual` (bookkeeping counterparts for opening balances).
 

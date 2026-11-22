@@ -89,4 +89,20 @@ class CurrenciesHelperTest < ActionView::TestCase
 
     assert_equal "1.00000000", result
   end
+
+  test "amount_minor_to_decimal keeps every digit of an 18 decimal place amount" do
+    currency = OpenStruct.new(symbol: "Ξ", decimal_places: 18)
+
+    result = amount_minor_to_decimal(10**21 + 1, currency)
+
+    assert_equal "1000.000000000000000001", result
+  end
+
+  test "amount_minor_to_decimal does not add a thousands delimiter" do
+    currency = currencies(:usd)
+
+    result = amount_minor_to_decimal(123_456_789, currency)
+
+    assert_equal "1234567.89", result
+  end
 end
