@@ -58,7 +58,10 @@ class IntegrationsHelperTest < ActionView::TestCase
     simplefin_account = simplefin_accounts(:linked_one)
     simplefin_account.currency = ""
 
-    assert_includes aggregator_currency(simplefin_account), "(missing)"
+    marker = aggregator_currency(simplefin_account)
+    assert_includes marker, "(missing)"
+    # A theme-aware token that passes 4.5:1 contrast in both themes.
+    assert_includes marker, "var(--accent-text)"
   end
 
   test "aggregator_currency flags a nil currency as missing" do

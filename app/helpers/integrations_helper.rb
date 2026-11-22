@@ -21,7 +21,7 @@ module IntegrationsHelper
   def aggregator_currency(aggregator_account)
     return aggregator_account.currency if aggregator_account.currency.present?
 
-    tag.span "(missing)", style: "color: orange",
+    tag.span "(missing)", style: "color: var(--accent-text)",
       title: "The aggregator did not report a currency for this account, so its balance is shown without a currency symbol."
   end
 end
