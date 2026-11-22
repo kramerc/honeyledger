@@ -50,10 +50,10 @@ gem "ruby-vips" # Backend for image_processing
 # Client for API requests
 gem "httparty"
 
-group :development, :test do
-  # Load ENV from .env.<RAILS_ENV>[.local], .env.local, and .env (all gitignored) at boot
-  gem "dotenv"
+# Load ENV from .env.<RAILS_ENV>[.local], .env.local, and .env (all gitignored) at boot
+gem "dotenv"
 
+group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 

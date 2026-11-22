@@ -21,7 +21,7 @@ bin/brakeman --no-pager                          # Security scan (Ruby)
 bin/bundler-audit                                # Security scan (gems)
 bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
-                                                 # Local ENV goes in gitignored .env.<RAILS_ENV>[.local] / .env (dotenv, dev and test only)
+                                                 # Local ENV goes in gitignored .env.<RAILS_ENV>[.local] / .env (dotenv; .dockerignore keeps them out of images)
 bin/rails db:create db:migrate                   # Set up database
 bin/worktree-clean --drop                        # Drop test databases left by deleted worktrees
 bin/sweep-pr status [123]                        # Review-sweep state of a PR, current branch's by default (see "Review sweep")
