@@ -81,12 +81,12 @@
               responses can scope their Turbo Stream targets to the list on screen.
               Rails omits the param when the index is unfiltered. %>
           <% if transaction.excluded? %>
-            <%= link_to "Restore", unexclude_transaction_path(transaction, account_id: @account&.id), role: "menuitem", data: { turbo_method: :post } %>
+            <%= link_to "Restore", unexclude_transaction_path(transaction, account_id: @account&.id, standalone: (1 if @standalone)), role: "menuitem", data: { turbo_method: :post } %>
           <% elsif transaction.excludable? %>
-            <%= link_to "Exclude", exclude_transaction_path(transaction, account_id: @account&.id), role: "menuitem", data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
+            <%= link_to "Exclude", exclude_transaction_path(transaction, account_id: @account&.id, standalone: (1 if @standalone)), role: "menuitem", data: { turbo_method: :post, turbo_confirm: "Exclude this transaction? It will be hidden from calculations but not reimported." } %>
           <% end %>
           <% if transaction.merged_sources.any? %>
-            <%= link_to "Unmerge", unmerge_transaction_path(transaction, account_id: @account&.id), role: "menuitem", data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
+            <%= link_to "Unmerge", unmerge_transaction_path(transaction, account_id: @account&.id, standalone: (1 if @standalone)), role: "menuitem", data: { turbo_method: :post, turbo_confirm: "Unmerge this transfer back into the original transactions?" } %>
           <% end %>
           <hr class="menu__separator">
           <%= link_to "Delete", transaction, role: "menuitem", class: "menu__item--danger", data: { turbo_method: :delete, turbo_confirm: "Delete this transaction?", turbo_frame: dom_id(transaction) } %>

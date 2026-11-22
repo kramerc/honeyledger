@@ -732,6 +732,23 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_not imported.excluded?
   end
 
+  test "restoring on the transaction's own page keeps the re-rendered row marked standalone" do
+    currency = currencies(:usd)
+    expense = Account.create!(user: @user, name: "Standalone Restore Expense", kind: :expense, currency: currency)
+    imported = create_sourced_transaction(
+      user: @user, src_account: accounts(:linked_asset), dest_account: expense,
+      amount_minor: 500, currency: currency, description: "Restore standalone",
+      transacted_at: Time.current, sourceable: simplefin_transactions(:transaction_two)
+    )
+    Transaction::Exclude.new(imported, user: @user).call
+
+    post unexclude_transaction_url(imported, standalone: 1), as: :turbo_stream
+
+    assert_response :success
+    # Later edits of the replaced row must still replace it in place.
+    assert_includes response.body, edit_transaction_path(imported, standalone: 1)
+  end
+
   test "index hides excluded transactions by default" do
     currency = currencies(:usd)
     bank = accounts(:linked_asset)
