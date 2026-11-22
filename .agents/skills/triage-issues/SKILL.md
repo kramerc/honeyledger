@@ -43,7 +43,7 @@ bin/triage sync-estimates       # repair Estimate everywhere (cleared on parents
 An XL issue is a signal to split it, but only with the user's approval. Rating something XL leads to a proposal, not to filing.
 
 1. **Propose.** List the children in build order, each with a one-line scope and a Size of L or smaller. Name any child that is useful on its own, and any child whose shape depends on a decision that hasn't been made yet.
-2. **File only what is ready.** If a child's shape hinges on an unmade decision (often one in another epic), hold it back and file it once that decision lands. A child filed early is a child rewritten later. Splitting part of an epic is fine; it is still a parent.
+2. **File only what is ready.** If a child's shape hinges on an unmade decision (often one in another epic), hold it back, list it under the decision issue's **Blocks**, and file it once that decision lands (the `decide` skill's propagate step does this). A child filed early is a child rewritten later. Splitting part of an epic is fine; it is still a parent.
 3. **File each approved child as a sub-issue.** Run `gh issue create --parent N` with the usual labels. Phrase each body so that it stands on its own and names its parent.
 4. **Link dependencies.** When one child needs another (in this epic or another), run `gh issue edit CHILD --add-blocked-by OTHER`. Don't rely on prose in the body for ordering.
 5. **Triage each child** with `bin/triage set`, then run `bin/triage sync-estimates` to clear the parent's Estimate.
