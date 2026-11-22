@@ -62,8 +62,15 @@
   <tr>
     <td>Bitcoin wallet</td>
     <td colspan="2">Track an address or extended public key from public chain data</td>
-    <td><%= button_to "Add wallet", new_blockchain_connection_path, method: :get %></td>
+    <td><%= button_to "Add wallet", new_blockchain_connection_path, method: :get, params: { chain: "bitcoin" }, "aria-label": "Add Bitcoin wallet" %></td>
   </tr>
+  <% if Blockchain::Connection.chain_available?(:ethereum) %>
+    <tr>
+      <td>Ethereum wallet</td>
+      <td colspan="2">Track an address's ETH and gas fees from public chain data</td>
+      <td><%= button_to "Add wallet", new_blockchain_connection_path, method: :get, params: { chain: "ethereum" }, "aria-label": "Add Ethereum wallet" %></td>
+    </tr>
+  <% end %>
 </table>
 
 <% if @simplefin_connection %>

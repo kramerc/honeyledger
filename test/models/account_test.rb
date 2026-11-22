@@ -213,7 +213,7 @@ class AccountTest < ActiveSupport::TestCase
   end
 
   test "reset_balance stays exact for 18-decimal amounts" do
-    eth = Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+    eth = currencies(:eth)
     wallet = Account.create!(user: users(:one), currency: eth, name: "ETH Wallet", kind: :asset)
     Transaction.create!(
       user: users(:one), src_account: accounts(:revenue_account), dest_account: wallet,

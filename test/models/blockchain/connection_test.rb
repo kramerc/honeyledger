@@ -82,6 +82,66 @@ class Blockchain::ConnectionTest < ActiveSupport::TestCase
     Rails.configuration.x.esplora_url = original
   end
 
+  ETHEREUM_ADDRESS = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359".freeze
+
+  test "accepts a checksummed Ethereum address, stores it lowercase, and names the wallet" do
+    with_evm_explorer do
+      connection = Blockchain::Connection.create!(user: users(:one), chain: "ethereum", identifier: " #{ETHEREUM_ADDRESS} ")
+
+      assert_equal ETHEREUM_ADDRESS.downcase, connection.identifier
+      assert_equal "Ethereum wallet", connection.name
+      assert_not connection.extended_key?
+      assert connection.reload.valid?, "a stored lowercase address stays valid"
+    end
+  end
+
+  test "rejects an Ethereum address with a broken checksum, a private key, or garbage" do
+    with_evm_explorer do
+      typo = Blockchain::Connection.new(user: users(:one), chain: "ethereum", identifier: ETHEREUM_ADDRESS.sub("bB79", "bb79"))
+      private_key = Blockchain::Connection.new(user: users(:one), chain: "ethereum", identifier: "0x#{"ab" * 32}")
+      garbage = Blockchain::Connection.new(user: users(:one), chain: "ethereum", identifier: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
+
+      assert_match(/checksum/, typo.tap(&:validate).errors[:identifier].first)
+      assert_match(/private key/, private_key.tap(&:validate).errors[:identifier].first)
+      assert_match(/not a valid Ethereum address/, garbage.tap(&:validate).errors[:identifier].first)
+    end
+  end
+
+  test "an Ethereum address differing only in case is the same wallet" do
+    with_evm_explorer do
+      duplicate = Blockchain::Connection.new(user: users(:two), chain: "ethereum", identifier: blockchain_connections(:eth_wallet).identifier.upcase.sub("0X", "0x"))
+
+      assert_includes duplicate.tap(&:validate).errors[:identifier], "is already tracked"
+    end
+  end
+
+  test "Ethereum wallets need an operator API key" do
+    with_evm_explorer(api_key: nil) do
+      connection = Blockchain::Connection.new(user: users(:one), chain: "ethereum", identifier: ETHEREUM_ADDRESS)
+
+      assert_not connection.valid?
+      assert_match(/Ethereum wallets are not configured/, connection.errors[:base].first)
+      assert_equal [ "bitcoin" ], Blockchain::Connection.available_chains
+      assert blockchain_connections(:eth_wallet).valid?, "existing wallets stay valid if the key is removed"
+    end
+
+    with_evm_explorer { assert_equal %w[bitcoin ethereum], Blockchain::Connection.available_chains }
+    with_evm_explorer(provider: "Etherscan") do
+      assert_not Blockchain::Connection.chain_available?(:ethereum), "a mistyped EVM_EXPLORER does not offer Ethereum"
+    end
+    assert_not Blockchain::Connection.chain_available?("dogecoin")
+  end
+
+  test "an Ethereum wallet's client is the configured EVM explorer" do
+    with_evm_explorer(provider: "etherscan") do
+      client = blockchain_connections(:eth_wallet).client
+
+      assert_kind_of EvmExplorerClient, client
+      assert_equal "https://api.etherscan.io/v2/api", client.instance_variable_get(:@base_url)
+      assert_equal EvmExplorerTestHelper::TEST_API_KEY, client.instance_variable_get(:@api_key)
+    end
+  end
+
   test "display_identifier shortens long identifiers" do
     assert_equal "zpub6rFR7y…GutZYs", blockchain_connections(:xpub_wallet).display_identifier
     assert_equal "short", Blockchain::Connection.new(identifier: "short").display_identifier

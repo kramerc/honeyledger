@@ -8,8 +8,17 @@ class Blockchain::RefreshJob < ApplicationJob
 
   # The asset each chain's native account tracks, keyed by chain.
   NATIVE_ASSETS = {
-    "bitcoin" => { remote_id: "BTC", name: "Bitcoin", currency: "BTC" }
+    "bitcoin" => { remote_id: "BTC", name: "Bitcoin", currency: "BTC" },
+    "ethereum" => { remote_id: "ETH", name: "Ethereum", currency: "ETH" }
   }.freeze
+
+  # The service that turns each chain's explorer data into Blockchain::Scan rows.
+  SCANNERS = {
+    "bitcoin" => Blockchain::Bitcoin::Scanner,
+    "ethereum" => Blockchain::Ethereum::Scanner
+  }.freeze
+
+  CLIENT_ERRORS = [ EsploraClient::Error, EvmExplorerClient::Error ].freeze
 
   NO_ACTIVITY_MESSAGE = "No activity found for this key. An xpub is read as a legacy (1…) wallet; " \
     "for a native SegWit (bc1q…) wallet add its zpub, and for nested SegWit (3…) its ypub.".freeze
@@ -29,7 +38,7 @@ class Blockchain::RefreshJob < ApplicationJob
     refreshed_at = Time.current
     begin
       refresh_connection(blockchain_connection, refreshed_at)
-    rescue EsploraClient::Error => e
+    rescue *CLIENT_ERRORS => e
       blockchain_connection.update!(error: e.message, refreshed_at: refreshed_at)
     end
   end
@@ -37,7 +46,7 @@ class Blockchain::RefreshJob < ApplicationJob
   private
 
     def refresh_connection(blockchain_connection, refreshed_at)
-      result = Blockchain::Bitcoin::Scanner.call(blockchain_connection)
+      result = SCANNERS.fetch(blockchain_connection.chain).call(blockchain_connection)
       asset = NATIVE_ASSETS.fetch(blockchain_connection.chain)
 
       blockchain_account = blockchain_connection.accounts.find_or_initialize_by(remote_id: asset[:remote_id])
@@ -67,6 +76,10 @@ class Blockchain::RefreshJob < ApplicationJob
       prune_vanished_rows(blockchain_account, result.rows.map(&:remote_id))
 
       error = NO_ACTIVITY_MESSAGE if blockchain_connection.extended_key? && result.used_addresses.zero?
+      # A scan that succeeded can still have something to say (a balance its
+      # history does not explain); it shows where refresh errors do, and the
+      # next refresh clears it once resolved.
+      error ||= result.warning
       blockchain_connection.update!(error: error, refreshed_at: refreshed_at)
 
       Blockchain::ImportTransactionsJob.perform_later(blockchain_account_id: blockchain_account.id) if blockchain_account.linked?

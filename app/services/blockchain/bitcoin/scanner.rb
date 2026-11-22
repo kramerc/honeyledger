@@ -20,10 +20,8 @@ class Blockchain::Bitcoin::Scanner
   GAP_LIMIT = 20
   SATOSHIS_PER_COIN = 100_000_000
 
-  Row = Data.define(:remote_id, :txid, :kind, :amount, :counterparty, :block_height, :transacted_at, :confirmed)
-  # used_addresses: how many wallet addresses have ever been used. Zero for an
-  # extended key usually means the wrong key type (an xpub from a SegWit wallet).
-  Result = Data.define(:balance, :rows, :used_addresses)
+  Row = Blockchain::Scan::Row
+  Result = Blockchain::Scan::Result
 
   def self.call(connection, client: connection.client)
     new(connection, client).call

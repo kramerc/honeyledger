@@ -12,3 +12,11 @@ address_wallet:
   name: Spending
   identifier: bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4
   refreshed_at: 2026-04-25 00:00:00
+
+# An EIP-55 example address, not a real wallet.
+eth_wallet:
+  user: two
+  chain: ethereum
+  name: Hot wallet
+  identifier: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"
+  refreshed_at: 2026-04-25 00:00:00

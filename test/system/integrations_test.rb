@@ -305,6 +305,43 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_text "bc1qw508d6…v8f3t4"
   end
 
+  test "offers Ethereum wallets only when the server has an explorer key" do
+    with_evm_explorer(api_key: nil) do
+      visit integrations_path
+      assert_text "Bitcoin wallet"
+      assert_no_text "Ethereum wallet"
+    end
+  end
+
+  test "adds an Ethereum wallet by address" do
+    with_evm_explorer do
+      visit integrations_path
+      within("tr", text: "Track an address's ETH") { click_button "Add wallet" }
+
+      assert_selector "h1", text: "Add an Ethereum wallet"
+      fill_in "Label", with: "Hot wallet"
+      fill_in "Address", with: "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359"
+      Blockchain::Connection.stub_any_instance(:refresh, nil) do
+        click_button "Add wallet"
+        assert_text "Wallet added"
+      end
+
+      assert_text "Hot wallet"
+      assert_text "0xfb691609…c5d359"
+    end
+  end
+
+  test "shows a checksum error for a mistyped Ethereum address" do
+    with_evm_explorer do
+      visit new_blockchain_connection_path(chain: "ethereum")
+
+      fill_in "Address", with: "0xfB6916095ca1df60bb79Ce92cE3Ea74c37c5d359"
+      click_button "Add wallet"
+
+      assert_text "checksum does not match"
+    end
+  end
+
   test "shows a validation error for a private key" do
     visit new_blockchain_connection_path
 

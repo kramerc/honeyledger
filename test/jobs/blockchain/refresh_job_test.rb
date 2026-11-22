@@ -108,6 +108,7 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
 
   test "without an id enqueues a refresh per stale wallet instead of scanning inline" do
     blockchain_connections(:xpub_wallet).update!(refreshed_at: 1.hour.ago)
+    blockchain_connections(:eth_wallet).update!(refreshed_at: 1.hour.ago)
     @connection.update!(refreshed_at: 2.days.ago)
 
     Scanner.stub :call, ->(*) { flunk "the sweep must not scan inline" } do
@@ -116,6 +117,51 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
       end
     end
     assert_enqueued_jobs 1, only: Blockchain::RefreshJob
+  end
+
+  test "an Ethereum wallet is scanned by the Ethereum scanner into an ETH account" do
+    connection = blockchain_connections(:eth_wallet)
+    connection.accounts.destroy_all
+    result = Scanner::Result.new(used_addresses: 1, balance: "0.99958", rows: [
+      row("0x#{"d" * 64}", "transfer", "1.0"),
+      row("0x#{"d" * 64}:fee", "fee", "-0.00042", txid: "0x#{"d" * 64}")
+    ])
+
+    Scanner.stub :call, ->(*) { flunk "not the Bitcoin scanner" } do
+      Blockchain::Ethereum::Scanner.stub :call, result do
+        Blockchain::RefreshJob.perform_now(connection.id)
+      end
+    end
+
+    account = connection.reload.accounts.sole
+    assert_equal [ "ETH", "Ethereum", "ETH", "0.99958" ], [ account.remote_id, account.name, account.currency, account.balance ]
+    assert_equal 2, account.transactions.count
+    assert_nil connection.reload.error
+  end
+
+  test "a scan warning is shown on the wallet and cleared once resolved" do
+    connection = blockchain_connections(:eth_wallet)
+    warned = Scanner::Result.new(used_addresses: 1, balance: "1.0", rows: [], warning: "Balance mismatch: the chain reports 1.5 ETH")
+
+    Blockchain::Ethereum::Scanner.stub :call, warned do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+    assert_equal "Balance mismatch: the chain reports 1.5 ETH", connection.reload.error
+
+    Blockchain::Ethereum::Scanner.stub :call, Scanner::Result.new(used_addresses: 1, balance: "1.5", rows: []) do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+    assert_nil connection.reload.error
+  end
+
+  test "records an EVM explorer error on the connection" do
+    connection = blockchain_connections(:eth_wallet)
+
+    Blockchain::Ethereum::Scanner.stub :call, ->(*) { raise EvmExplorerClient::Error, "The explorer returned HTTP 500" } do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+
+    assert_equal "The explorer returned HTTP 500", connection.reload.error
   end
 
   test "a refresh for a removed wallet does nothing" do
