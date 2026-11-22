@@ -13,10 +13,15 @@ export default class extends Controller {
 
     const rows = document.querySelectorAll("#transactions [data-page-cursor]")
     const last = rows[rows.length - 1]
-    if (!last) return
-
     const url = event.detail.url
-    new URLSearchParams(last.dataset.pageCursor).forEach((value, key) => url.searchParams.set(key, value))
+
+    if (last) {
+      new URLSearchParams(last.dataset.pageCursor).forEach((value, key) => url.searchParams.set(key, value))
+    } else {
+      // Every loaded row has gone (deleted, or moved further down): start
+      // again from the top, so nothing between it and the old cursor is lost.
+      ;[ "before_at", "before_created", "before_id" ].forEach((key) => url.searchParams.delete(key))
+    }
   }
 
   // A row already on screen may come back in the page, when a Turbo Stream

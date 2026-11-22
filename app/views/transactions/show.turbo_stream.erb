@@ -1,4 +1,6 @@
-<% if @reposition %>
+<% if @remove %>
+  <%= turbo_stream.remove @transaction %>
+<% elsif @reposition %>
   <%= turbo_stream.remove @transaction %>
   <%= render "insert", transaction: @transaction, preceding: @preceding %>
 <% else %>

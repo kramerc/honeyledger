@@ -2,5 +2,9 @@
     `preceding`, the row just below it, or before the end-of-list marker when
     nothing sorts below it. When that anchor hasn't been loaded yet (the reader
     hasn't scrolled that far), Turbo drops the stream and the row arrives with
-    its page instead, so it can never appear twice. %>
+    its page instead, so it can never appear twice.
+    Known gap, accepted: if a next-page request read its rows before this
+    row was committed but renders after this stream was dropped, the row is
+    missing until a reload. Closing it would need a client-side queue of
+    insertions waiting for their anchors, for a window of milliseconds. %>
 <%= turbo_stream.before(preceding ? dom_id(preceding) : "transactions_end", transaction) %>

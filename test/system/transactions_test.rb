@@ -1096,6 +1096,42 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "a date edit on the transaction's own page keeps it on screen" do
+    transaction = manual_transaction("Standalone date probe", 1500)
+    visit transaction_path(transaction)
+
+    # show.html.erb wraps the row in a frame sharing its id, so scope by class.
+    find(".transaction .date-cell .cell-edit").click
+    within(".transaction") do
+      fill_in "transaction[transacted_at]", with: Time.zone.parse("2020-01-01 10:00")
+      click_button "Save"
+    end
+
+    assert_selector ".transaction .date-cell", text: "2020-01-01"
+    assert_text "Standalone date probe"
+  end
+
+  test "the next page starts from the top once every loaded row is gone" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+      assert_text "Paged row 01"
+
+      # What the delete streams do, without scrolling the next page into view.
+      loaded = @user.transactions.where(description: (1..40).map { |index| format("Paged row %02d", index) })
+      page.execute_script("document.querySelectorAll('#transactions [data-page-cursor]').forEach((row) => row.closest('turbo-frame').remove())")
+      loaded.destroy_all
+
+      scroll_to find(".transactions-page")
+
+      assert_text "Paged row 41"
+      assert_text "Paged row 50"
+      assert_selector ".transaction", count: 10
+    end
+  end
+
   test "a row added where the last loaded row was still loads with the next page" do
     account = accounts(:liability_account)
     paged_rows(account, 50)

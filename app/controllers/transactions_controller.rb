@@ -75,13 +75,19 @@ class TransactionsController < ApplicationController
     respond_to do |format|
       if @transaction.update(transaction_params)
         format.turbo_stream do
-          # A new date moves the row. Re-inserting it at its sorted position
-          # keeps the rows on screen in order, which the next-page cursor
-          # relies on (transactions--pager), and drops it when it now belongs
-          # on a page not yet loaded, which then brings it, once.
-          if @transaction.saved_change_to_transacted_at? && row_visible?(@transaction)
-            @reposition = true
-            @preceding = find_preceding_transaction(@transaction)
+          # On the index, the rows on screen must stay sorted and within the
+          # list's scope, since the next page starts below the last of them
+          # (transactions--pager). A row the edit takes out of the list leaves
+          # it; a new date re-inserts the row at its sorted position, which
+          # drops it when it now belongs on a page not yet loaded. Elsewhere
+          # (the transaction's own page) the row is simply replaced.
+          if index_request?
+            if !row_visible?(@transaction)
+              @remove = true
+            elsif @transaction.saved_change_to_transacted_at?
+              @reposition = true
+              @preceding = find_preceding_transaction(@transaction)
+            end
           end
           render :show
         end
@@ -382,6 +388,18 @@ class TransactionsController < ApplicationController
     # counts as below.
     def find_preceding_transaction(transaction)
       Transaction::Page.below(visible_transactions(show_excluded: show_excluded?), transaction).first
+    end
+
+    # Whether the request came from the transactions index (filtered or not),
+    # judged by its referer like show_excluded?.
+    def index_request?
+      referer = request.referer
+      return false if referer.blank?
+
+      route = Rails.application.routes.recognize_path(URI.parse(referer).path)
+      route[:controller] == "transactions" && route[:action] == "index"
+    rescue URI::InvalidURIError, ActionController::RoutingError
+      false
     end
 
     def page_frame_request?

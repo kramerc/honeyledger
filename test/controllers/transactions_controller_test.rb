@@ -65,19 +65,60 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_operator response.parsed_body.size, :>, 1
   end
 
-  test "an update that moves the row re-inserts it at its new position" do
-    patch transaction_url(@transaction), params: { transaction: { transacted_at: 20.years.ago } }, as: :turbo_stream
+  test "an update on the index that moves the row re-inserts it at its new position" do
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: 20.years.ago } },
+      headers: { "Referer" => transactions_url }, as: :turbo_stream
 
     assert_response :success
     assert_includes response.body, %(action="remove" target="#{ActionView::RecordIdentifier.dom_id(@transaction)}")
     assert_includes response.body, %(action="before")
   end
 
-  test "an update that keeps the date replaces the row in place" do
-    patch transaction_url(@transaction), params: { transaction: { description: "Renamed in place" } }, as: :turbo_stream
+  test "an update on the index that keeps the date replaces the row in place" do
+    patch transaction_url(@transaction), params: { transaction: { description: "Renamed in place" } },
+      headers: { "Referer" => transactions_url }, as: :turbo_stream
 
     assert_response :success
     assert_includes response.body, %(action="replace" target="#{ActionView::RecordIdentifier.dom_id(@transaction)}")
+    assert_not_includes response.body, %(action="remove")
+  end
+
+  test "an update on an account-filtered index that takes the row out of the list removes it" do
+    account = accounts(:asset_account)
+    assert_equal account, @transaction.src_account
+
+    patch transaction_url(@transaction), params: { account_id: account.id, transaction: {
+      src_account_id: accounts(:linked_asset).id, transacted_at: 20.years.ago
+    } }, headers: { "Referer" => account_transactions_url(account) }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="remove" target="#{ActionView::RecordIdentifier.dom_id(@transaction)}")
+    assert_not_includes response.body, %(action="before")
+    assert_not_includes response.body, %(action="replace")
+  end
+
+  test "a date update on the transaction's own page replaces it in place" do
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: 20.years.ago } },
+      headers: { "Referer" => transaction_url(@transaction) }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="replace" target="#{ActionView::RecordIdentifier.dom_id(@transaction)}")
+    assert_not_includes response.body, %(action="remove")
+  end
+
+  test "a date update with an unrecognized referer replaces the row in place" do
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: 20.years.ago } },
+      headers: { "Referer" => "http://www.example.com/no/such/page" }, as: :turbo_stream
+
+    assert_response :success
+    assert_not_includes response.body, %(action="remove")
+  end
+
+  test "a date update with a malformed referer replaces the row in place" do
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: 20.years.ago } },
+      headers: { "Referer" => "http://exa mple.com/%" }, as: :turbo_stream
+
+    assert_response :success
     assert_not_includes response.body, %(action="remove")
   end
 
