@@ -6,3 +6,7 @@
 Rails.application.config.filter_parameters += [
   :passw, :email, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn, :cvv, :cvc
 ]
+
+# A wallet identifier is public data, but the field is where someone might paste
+# a private key or seed phrase by mistake, and request logging runs before validation.
+Rails.application.config.filter_parameters += [ "blockchain_connection.identifier" ]

@@ -33,6 +33,15 @@ class Blockchain::AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Account not found.", flash[:alert]
   end
 
+  test "link refuses an expense account even in the wallet's currency" do
+    btc_expense = @user.accounts.create!(name: "BTC spending", kind: :expense, currency: currencies(:btc))
+
+    post link_blockchain_account_url(@blockchain_account), params: { blockchain_account: { ledger_account_id: btc_expense.id } }
+
+    assert_equal "Account not found.", flash[:alert]
+    assert_empty @blockchain_account.reload.ledger_accounts
+  end
+
   test "link refuses an account in another currency" do
     usd_account = @user.accounts.create!(name: "Crypto (USD)", kind: :asset, currency: currencies(:usd))
 

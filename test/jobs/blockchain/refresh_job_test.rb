@@ -106,16 +106,20 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
     assert_not_nil @connection.refreshed_at
   end
 
-  test "without an id refreshes only stale connections" do
+  test "without an id enqueues a refresh per stale wallet instead of scanning inline" do
     blockchain_connections(:xpub_wallet).update!(refreshed_at: 1.hour.ago)
     @connection.update!(refreshed_at: 2.days.ago)
-    scanned = []
 
-    Scanner.stub :call, ->(connection) { scanned << connection.id; Scanner::Result.new(used_addresses: 1, balance: "0", rows: []) } do
-      Blockchain::RefreshJob.perform_now
+    Scanner.stub :call, ->(*) { flunk "the sweep must not scan inline" } do
+      assert_enqueued_with(job: Blockchain::RefreshJob, args: [ @connection.id ]) do
+        Blockchain::RefreshJob.perform_now
+      end
     end
+    assert_enqueued_jobs 1, only: Blockchain::RefreshJob
+  end
 
-    assert_equal [ @connection.id ], scanned
+  test "a refresh for a removed wallet does nothing" do
+    assert_nothing_raised { Blockchain::RefreshJob.perform_now(-1) }
   end
 
   private

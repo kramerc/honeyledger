@@ -3,6 +3,8 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
 
   FEE_ACCOUNT_NAME = "Network fees".freeze
 
+  class CounterpartUnavailable < StandardError; end
+
   def perform(blockchain_account_id:)
     return unless AccountSource.exists?(sourceable_type: "Blockchain::Account", sourceable_id: blockchain_account_id)
 
@@ -17,7 +19,9 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
       transactions.find_each do |blockchain_transaction|
         user = blockchain_transaction.account.connection.user
         ledger_account = blockchain_transaction.account.ledger_accounts.first
-        next if ledger_account.nil?
+        # A link in another currency would book coin minor units in it; the link
+        # and account-edit paths refuse that, and import checks again.
+        next if ledger_account.nil? || !blockchain_transaction.account.linkable_to?(ledger_account)
 
         description = blockchain_transaction.resolved_description
         transacted_at = blockchain_transaction.transacted_at || Time.current
@@ -136,10 +140,13 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
     # "Network fees", say), use a currency-suffixed sibling instead of booking
     # into it.
     def counterpart_for(user, name, kind, currency)
-      existing = user.accounts.where(kind: kind).where("LOWER(name) = LOWER(?)", name).first
-      name = "#{name} (#{currency.code})" if existing && existing.currency_id != currency.id
-
-      Account.find_or_create_for_import(user: user, description: name, kind: kind, currency: currency, skip_rules: true)
+      candidates = [ name, "#{name} (#{currency.code})" ] + (2..9).map { |number| "#{name} (#{currency.code} #{number})" }
+      candidates.each do |candidate|
+        account = Account.find_or_create_for_import(user: user, description: candidate, kind: kind, currency: currency, skip_rules: true)
+        # The helper matches by name only, so check what it actually returned.
+        return account if account.currency_id == currency.id
+      end
+      raise CounterpartUnavailable, "every #{kind} account named like #{name.inspect} is in a currency other than #{currency.code}"
     end
 
     def counterpart_name(blockchain_transaction, kind)

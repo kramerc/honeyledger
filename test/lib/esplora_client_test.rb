@@ -104,6 +104,35 @@ class EsploraClientTest < ActiveSupport::TestCase
     end
   end
 
+  test "null stats read as an unused address" do
+    EsploraClient.stub :get, ->(*_args, **_options) { response({ "chain_stats" => nil }) } do
+      assert_equal({ tx_count: 0, funded: 0, spent: 0 }, @client.address_stats(ADDRESS))
+    end
+  end
+
+  test "malformed nested fields raise Error instead of escaping as TypeError or NoMethodError" do
+    stats_cases = [ { "chain_stats" => [] }, { "chain_stats" => { "tx_count" => "3" } } ]
+    stats_cases.each do |body|
+      EsploraClient.stub :get, ->(*_args, **_options) { response(body) } do
+        assert_raises(EsploraClient::Error, body.inspect) { @client.address_stats(ADDRESS) }
+      end
+    end
+
+    transaction_cases = [
+      raw_transaction("aa").merge("status" => []),
+      raw_transaction("aa").merge("txid" => nil),
+      raw_transaction("aa").merge("vin" => "nope"),
+      raw_transaction("aa").merge("vin" => [ "nope" ]),
+      raw_transaction("aa").merge("vout" => [ { "scriptpubkey_address" => 7, "value" => 1 } ]),
+      raw_transaction("aa").merge("fee" => 1.5)
+    ]
+    transaction_cases.each do |raw|
+      EsploraClient.stub :get, ->(*_args, **_options) { response([ raw ]) } do
+        assert_raises(EsploraClient::Error, raw.inspect) { @client.address_transactions(ADDRESS) }
+      end
+    end
+  end
+
   test "a transaction list of non-objects raises Error" do
     EsploraClient.stub :get, ->(*_args, **_options) { response([ "aa" ]) } do
       assert_raises(EsploraClient::Error) { @client.address_transactions(ADDRESS) }

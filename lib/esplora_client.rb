@@ -40,13 +40,13 @@ class EsploraClient
   # mempool activity. tx_count > 0 marks an address as used for the gap limit.
   def address_stats(address)
     body = get("/address/#{address}", expect: Hash)
-    chain = body.fetch("chain_stats", {})
-    mempool = body.fetch("mempool_stats", {})
+    chain = object(body["chain_stats"], "chain_stats")
+    mempool = object(body["mempool_stats"], "mempool_stats")
 
     {
-      tx_count: chain["tx_count"].to_i + mempool["tx_count"].to_i,
-      funded: chain["funded_txo_sum"].to_i,
-      spent: chain["spent_txo_sum"].to_i
+      tx_count: integer(chain["tx_count"]) + integer(mempool["tx_count"]),
+      funded: integer(chain["funded_txo_sum"]),
+      spent: integer(chain["spent_txo_sum"])
     }
   end
 
@@ -134,21 +134,58 @@ class EsploraClient
       end
     end
 
+    # Every nested field is checked, so a malformed response raises Error (which
+    # the refresh job records) rather than a TypeError or NoMethodError.
     def normalize_transaction(raw_transaction)
-      status = raw_transaction["status"] || {}
+      txid = raw_transaction["txid"]
+      raise Error, "The explorer returned a transaction without a txid" unless txid.is_a?(String) && txid.present?
+
+      status = object(raw_transaction["status"], "status")
+      block_time = status["block_time"]
       {
-        txid: raw_transaction["txid"],
-        fee: raw_transaction["fee"].to_i,
-        block_height: status["block_height"],
-        block_time: status["block_time"] && Time.zone.at(status["block_time"]),
+        txid: txid,
+        fee: integer(raw_transaction["fee"]),
+        block_height: status["block_height"].nil? ? nil : integer(status["block_height"]),
+        block_time: block_time.nil? ? nil : Time.zone.at(integer(block_time)),
         confirmed: status["confirmed"] == true,
-        inputs: Array(raw_transaction["vin"]).map do |input|
-          prevout = input["prevout"] || {}
-          { address: prevout["scriptpubkey_address"], value: prevout["value"].to_i }
+        inputs: list(raw_transaction["vin"], "vin").map do |input|
+          prevout = object(object(input, "vin entry")["prevout"], "prevout")
+          { address: address(prevout["scriptpubkey_address"]), value: integer(prevout["value"]) }
         end,
-        outputs: Array(raw_transaction["vout"]).map do |output|
-          { address: output["scriptpubkey_address"], value: output["value"].to_i }
+        outputs: list(raw_transaction["vout"], "vout").map do |output|
+          output = object(output, "vout entry")
+          { address: address(output["scriptpubkey_address"]), value: integer(output["value"]) }
         end
       }
+    end
+
+    # Shape guards: nil means absent (an empty object, list, zero, or no
+    # address); any other wrong type is a malformed response.
+    def object(value, field)
+      return {} if value.nil?
+      raise Error, "The explorer returned a malformed #{field}" unless value.is_a?(Hash)
+
+      value
+    end
+
+    def list(value, field)
+      return [] if value.nil?
+      raise Error, "The explorer returned a malformed #{field}" unless value.is_a?(Array)
+
+      value
+    end
+
+    def integer(value)
+      return 0 if value.nil?
+      raise Error, "The explorer returned a non-numeric amount" unless value.is_a?(Integer)
+
+      value
+    end
+
+    def address(value)
+      return nil if value.nil?
+      raise Error, "The explorer returned a malformed address" unless value.is_a?(String)
+
+      value
     end
 end

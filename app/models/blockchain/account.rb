@@ -28,8 +28,10 @@ class Blockchain::Account < ApplicationRecord
     ledger_account.currency&.code == currency
   end
 
+  # Always the wallet's own coin, never the linked account's currency: the
+  # amounts are in that coin's minor units whatever the ledger account says.
   def ledger_currency
-    @ledger_currency ||= ledger_account&.currency || Currency.find_by(code: currency)
+    @ledger_currency ||= Currency.find_by(code: currency)
   end
 
   # Chain history is complete back to the wallet's first transaction, so walking

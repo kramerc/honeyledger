@@ -37,4 +37,28 @@ class Blockchain::AccountTest < ActiveSupport::TestCase
 
     assert_nil @blockchain_account.suggested_opening_balance
   end
+
+  test "amounts stay in the wallet's currency even if the link points elsewhere" do
+    usd_account = users(:one).accounts.create!(name: "Crypto (USD)", kind: :asset, currency: currencies(:usd))
+    AccountSource.create!(account: usd_account, sourceable: @blockchain_account)
+
+    assert_equal currencies(:btc), @blockchain_account.reload.ledger_currency
+  end
+
+  test "a ledger account linked to a wallet cannot switch currency" do
+    ledger_account = users(:one).accounts.create!(name: "Cold storage", kind: :asset, currency: currencies(:btc))
+    AccountSource.create!(account: ledger_account, sourceable: @blockchain_account)
+
+    assert_not ledger_account.update(currency: currencies(:usd))
+    assert_includes ledger_account.errors[:currency], "must stay BTC while a wallet is linked"
+    assert ledger_account.reload.update(name: "Renamed"), "other edits still work"
+  end
+
+  test "wallet identifiers are filtered from request logs" do
+    filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+    filtered = filter.filter("blockchain_connection" => { "identifier" => "zprv-pasted-by-mistake", "name" => "Vault" })
+
+    assert_equal "[FILTERED]", filtered["blockchain_connection"]["identifier"]
+    assert_equal "Vault", filtered["blockchain_connection"]["name"]
+  end
 end

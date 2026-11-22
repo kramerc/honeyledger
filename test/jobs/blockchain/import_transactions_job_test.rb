@@ -70,6 +70,34 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal 0, usd_fees.reload.balance_minor
   end
 
+  test "keeps disambiguating while suffixed names are also taken in another currency" do
+    @user.accounts.create!(name: "Network fees", kind: :expense, currency: currencies(:usd))
+    @user.accounts.create!(name: "Network fees (BTC)", kind: :expense, currency: currencies(:usd))
+
+    perform
+
+    fee = blockchain_transactions(:sent_fee).ledger_transactions.sole
+    assert_equal "Network fees (BTC 2)", fee.dest_account.name
+    assert_equal currencies(:btc), fee.currency
+  end
+
+  test "gives up loudly rather than book into a wrong-currency account" do
+    names = [ "Network fees", "Network fees (BTC)" ] + (2..9).map { |number| "Network fees (BTC #{number})" }
+    names.each { |name| @user.accounts.create!(name: name, kind: :expense, currency: currencies(:usd)) }
+
+    assert_raises(Blockchain::ImportTransactionsJob::CounterpartUnavailable) { perform }
+  end
+
+  test "rows are not imported while the link is to an account in another currency" do
+    AccountSource.where(sourceable: @blockchain_account).destroy_all
+    usd_account = @user.accounts.create!(name: "Crypto (USD)", kind: :asset, currency: currencies(:usd))
+    AccountSource.create!(account: usd_account, sourceable: @blockchain_account) # bypasses the link checks
+
+    assert_no_difference "Transaction.count" do
+      perform
+    end
+  end
+
   test "a rule pointing at an account in another currency is not applied" do
     usd_gifts = @user.accounts.create!(name: "Gifts", kind: :expense, currency: currencies(:usd))
     @user.import_rules.create!(match_pattern: "bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g", match_type: :contains, account: usd_gifts)
@@ -170,6 +198,39 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_enqueued_with(job: Blockchain::ImportTransactionsJob, args: [ { blockchain_account_id: blockchain_account.id } ]) do
       AccountSource::Attach.call(account: ledger_account, sourceable: blockchain_account)
     end
+  end
+
+  test "a receipt into another wallet does not merge with an equal wallet fee" do
+    perform
+    fee = blockchain_transactions(:sent_fee).ledger_transactions.sole
+    other_wallet = @user.accounts.create!(name: "Hot wallet", kind: :asset, currency: currencies(:btc))
+    revenue = @user.accounts.create!(name: "Incoming", kind: :revenue, currency: currencies(:btc))
+    receipt = Transaction.create!(user: @user, src_account: revenue, dest_account: other_wallet, amount_minor: fee.amount_minor,
+                                  currency: currencies(:btc), description: "Received", transacted_at: fee.transacted_at)
+
+    Transaction::AutoMerge.call(receipt, rule_account: @ledger_account)
+
+    assert_nil fee.reload.merged_into_id, "the fee stays an expense"
+    assert_equal 10_000, fee.amount_minor
+  end
+
+  test "retroactive rules never offer a wallet fee as a merge candidate" do
+    perform
+    fee = blockchain_transactions(:sent_fee).ledger_transactions.sole
+    other_wallet = @user.accounts.create!(name: "Hot wallet", kind: :asset, currency: currencies(:btc))
+    AccountSource.create!(account: other_wallet, sourceable: blockchain_connections(:xpub_wallet).accounts.create!(remote_id: "SECOND", name: "Bitcoin", currency: "BTC"))
+    revenue = @user.accounts.create!(name: "Incoming", kind: :revenue, currency: currencies(:btc))
+    create_sourced_transaction(
+      user: @user, src_account: revenue, dest_account: other_wallet, amount_minor: fee.amount_minor, currency: currencies(:btc),
+      description: "Top-up from cold storage", transacted_at: fee.transacted_at,
+      sourceable: Blockchain::Transaction.create!(account: Blockchain::Account.find_by!(remote_id: "SECOND"), remote_id: "55" * 32, txid: "55" * 32, amount: "0.0001", confirmed: true)
+    )
+    ImportRule.create!(user: @user, account: @ledger_account, match_pattern: "Top-up from cold storage", match_type: :exact)
+
+    change = ImportRule::RetroactiveApply.new(user: @user).preview.find { |candidate| candidate.transaction.description == "Top-up from cold storage" }
+
+    assert_not_nil change
+    assert_nil change.merge_candidate, "the fee is not a transfer leg"
   end
 
   private

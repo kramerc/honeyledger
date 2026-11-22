@@ -9,7 +9,7 @@ class Blockchain::AccountsController < ApplicationController
       return
     end
 
-    ledger_account = current_user.accounts.find_by(id: ledger_account_id)
+    ledger_account = current_user.accounts.linkable.find_by(id: ledger_account_id)
     unless ledger_account
       redirect_to integrations_path, alert: "Account not found."
       return

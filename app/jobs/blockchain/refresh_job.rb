@@ -14,15 +14,20 @@ class Blockchain::RefreshJob < ApplicationJob
   NO_ACTIVITY_MESSAGE = "No activity found for this key. An xpub is read as a legacy (1…) wallet; " \
     "for a native SegWit (bc1q…) wallet add its zpub, and for nested SegWit (3…) its ypub.".freeze
 
+  # With an id, refreshes that wallet. Without one, enqueues a refresh per
+  # stale wallet, so every scan runs under its own wallet's concurrency key and
+  # a sweep cannot overlap a manual refresh of the same wallet.
   def perform(blockchain_connection_id = nil)
-    connections = if blockchain_connection_id
-      Blockchain::Connection.where(id: blockchain_connection_id)
-    else
-      Blockchain::Connection.where("refreshed_at IS NULL OR refreshed_at < ?", 1.day.ago)
+    if blockchain_connection_id.nil?
+      Blockchain::Connection.where("refreshed_at IS NULL OR refreshed_at < ?", 1.day.ago).find_each(&:refresh)
+      return
     end
 
-    connections.find_each do |blockchain_connection|
-      refreshed_at = Time.current
+    blockchain_connection = Blockchain::Connection.find_by(id: blockchain_connection_id)
+    return if blockchain_connection.nil?
+
+    refreshed_at = Time.current
+    begin
       refresh_connection(blockchain_connection, refreshed_at)
     rescue EsploraClient::Error => e
       blockchain_connection.update!(error: e.message, refreshed_at: refreshed_at)
