@@ -23,6 +23,8 @@ The issue is the only state. Rerunning this skill reads the issue body and comme
 | No **Decide** section, or sub-questions not yet laid out | 1. Filing (restructure the body) |
 | Open, with sub-questions; maybe a `## Provisional direction` comment | 2. Deliberating |
 
+In GitHub text (issue and PR bodies, comments, the Follow-ups line), reference issues and PRs as `#N` so they link and backlink. In committed files, write "issue N" or "PR N".
+
 Every write in phases 3 to 5 checks for its own earlier result first (a comment, a sub-issue, a filed work item), so a rerun after an interruption never posts or files anything twice.
 
 This skill takes one optional argument, the issue number, written as `N` below. Without it, run `gh issue list --label decision --state open`, read each issue, report its number, title, and phase in a table, and ask which one to work on.
@@ -69,15 +71,15 @@ Only after the maintainer has explicitly signed off on every sub-question.
    > **Decided YYYY-MM-DD:** <one-line outcome>. See <Decision comment URL>.
    ```
 
-3. **Promote durable outcomes.** If the outcome is a rule a future agent would otherwise re-propose or break, add a short entry to "Known Design Decisions" in `AGENTS.md` that cites it as "issue N" (never a bare `#N`). Make the change in a worktree as a Markdown-only PR whose body names "issue N", labelled `documentation`; the gates are skipped for Markdown-only changes. A one-off outcome stays on the issue only.
+3. **Promote durable outcomes.** If the outcome is a rule a future agent would otherwise re-propose or break, add a short entry to "Known Design Decisions" in `AGENTS.md` that cites it as "issue N" (never a bare `#N`). Make the change in a worktree as a Markdown-only PR whose body opens with "Records the decision in #N." (no closing keyword, since phase 5 closes the issue), labelled `documentation`; the gates are skipped for Markdown-only changes. A one-off outcome stays on the issue only.
 
 ## 4. Propagating
 
-1. **Promotion check.** Confirm phase 3 step 3 happened: either an open or merged PR adds this decision to "Known Design Decisions" in `AGENTS.md` (`gh pr list --state all --search "issue N in:body"`), or the outcome is one-off and needs none. If neither, do it now.
-2. **Blocked issues.** For every issue under **Blocks** and every blocked-by link, update its body to match the outcome. Comment instead when an edit would erase discussion worth keeping, after checking that issue's comments for an earlier one that cites issue N. Remove the blocked-by link once nothing it guarded is still open (`gh issue edit X --remove-blocked-by N`).
+1. **Promotion check.** Confirm phase 3 step 3 happened: either an open or merged PR adds this decision to "Known Design Decisions" in `AGENTS.md` (`gh pr list --state all --search '"Records the decision in #N" in:body'`), or the outcome is one-off and needs none. If neither, do it now.
+2. **Blocked issues.** For every issue under **Blocks** and every blocked-by link, update its body to match the outcome. Comment instead when an edit would erase discussion worth keeping, after checking that issue's comments for an earlier one that cites #N. Remove the blocked-by link once nothing it guarded is still open (`gh issue edit X --remove-blocked-by N`).
 3. **Held epic children.** File the children that were waiting on this decision, following "Splitting an epic into sub-issues" in the `triage-issues` skill: re-read any plan comment on the parent first (it may have been edited), list the parent's existing sub-issues (`gh api --paginate repos/{owner}/{repo}/issues/P/sub_issues`) so a rerun reuses children already filed instead of duplicating them, `gh issue create --parent P` for each one still missing, add blocked-by links, triage each child, then `bin/triage sync-estimates`.
-4. **New work.** When the outcome needs implementation and no issue covers it (check first with `gh issue list --state all --search '"Follows the decision in issue N"'`, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in issue N." Triage each one.
-5. **Follow-ups line.** Edit the Decision comment so Follow-ups lists every PR opened and every issue edited or filed, plus any manual step that waits on a merge (for example, deleting a label once the docs stop naming it):
+4. **New work.** When the outcome needs implementation and no issue covers it (check first with `gh issue list --state all --search '"Follows the decision in #N"'`, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in #N." Triage each one.
+5. **Follow-ups line.** Edit the Decision comment so Follow-ups lists, as `#N` links, every PR opened and every issue edited or filed, plus any manual step that waits on a merge (for example, deleting a label once the docs stop naming it):
 
    ```
    gh api -X PATCH repos/{owner}/{repo}/issues/comments/<comment_id> -F body=@tmp/decision-N.md
