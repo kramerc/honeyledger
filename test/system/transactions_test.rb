@@ -1170,15 +1170,18 @@ class TransactionsTest < ApplicationSystemTestCase
       visit account_transactions_path(account)
       assert_text "Paged row 01"
 
-      # What the delete streams do, without scrolling the next page into view.
-      loaded = @user.transactions.where(description: (1..40).map { |index| format("Paged row %02d", index) })
-      page.execute_script("document.querySelectorAll('#transactions [data-page-cursor]').forEach((row) => row.closest('turbo-frame').remove())")
-      loaded.destroy_all
+      @user.transactions.where(description: (1..40).map { |index| format("Paged row %02d", index) }).destroy_all
       # Sorts inside the range that was loaded, above the frame's own cursor
       # (row 40), so only a restart from the top finds it.
       Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
                           amount_minor: 100, currency: currencies(:usd), description: "Restart probe",
                           transacted_at: 10.days.ago)
+      # Then what the delete streams do, without scrolling the next page into
+      # view. Emptying the list brings the lazy frame into view, so it may load
+      # at once: the database must already hold its final rows, as it does when
+      # real streams follow a committed destroy. Otherwise the restart fetches
+      # the old rows 1-40 plus another lazy frame.
+      page.execute_script("document.querySelectorAll('#transactions [data-page-cursor]').forEach((row) => row.closest('turbo-frame').remove())")
 
       scroll_to find(".transactions-page")
 
