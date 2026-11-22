@@ -22,6 +22,19 @@ class AccountsTest < ApplicationSystemTestCase
     assert_selector active_link_selector
   end
 
+  test "the sidebar lists asset and liability accounts but not expense or revenue accounts" do
+    visit transactions_path
+
+    within "#main-sidebar" do
+      assert_selector "##{Account.sidebar_kind_target_id("asset")}", text: accounts(:asset_account).name
+      assert_selector "##{Account.sidebar_kind_target_id("liability")}", text: accounts(:liability_account).name
+      assert_no_selector "##{Account.sidebar_kind_target_id("expense")}"
+      assert_no_selector "##{Account.sidebar_kind_target_id("revenue")}"
+      assert_no_selector "##{ActionView::RecordIdentifier.dom_id(accounts(:expense_account), :sidebar_item)}"
+      assert_no_selector "##{ActionView::RecordIdentifier.dom_id(accounts(:revenue_account), :sidebar_item)}"
+    end
+  end
+
   test "creating a new account makes it appear in the sidebar live" do
     visit transactions_path
 

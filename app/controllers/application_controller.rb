@@ -16,6 +16,6 @@ class ApplicationController < ActionController::Base
   def load_sidebar_accounts
     return unless authenticated? && request.format.html?
 
-    @accounts_by_kind = current_user.accounts.real.includes(:currency).order(:kind, :name).group_by(&:kind)
+    @accounts_by_kind = current_user.accounts.in_sidebar.includes(:currency).order(:kind, :name).group_by(&:kind)
   end
 end

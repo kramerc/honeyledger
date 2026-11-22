@@ -23,9 +23,8 @@ class TransactionsTest < ApplicationSystemTestCase
     within("##{ActionView::RecordIdentifier.dom_id(src, :sidebar_link)}") do
       assert_text "-$12.34"
     end
-    within("##{ActionView::RecordIdentifier.dom_id(dest, :sidebar_link)}") do
-      assert_text "$12.34"
-    end
+    # Expense accounts are not listed in the sidebar.
+    assert_no_selector "##{ActionView::RecordIdentifier.dom_id(dest, :sidebar_link)}"
   end
 
   test "transaction with multiple sources shows a badge per aggregator" do
