@@ -24,6 +24,14 @@ services:
   selenium:
     image: selenium/standalone-chromium
     restart: unless-stopped
+    # System tests run in up to eight parallel workers (test/test_helper.rb),
+    # each needing its own browser session. The image defaults to one session
+    # and caps sessions at the CPU count unless overridden. Several Chromes
+    # also need more shared memory than Docker's 64 MB default.
+    shm_size: 2gb
+    environment:
+      SE_NODE_MAX_SESSIONS: 8
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
 
   postgres:
     image: postgres:18
