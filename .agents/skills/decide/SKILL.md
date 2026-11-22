@@ -10,15 +10,18 @@ allowed-tools: Bash(gh issue:*) Bash(gh api:*) Bash(bin/triage:*) Read Grep Glob
 
 A `decision` issue holds a design or process question that has to be answered before it can become a work item. This skill takes it through four phases: **file → deliberate → record & close → propagate**. Every agent follows the same procedure. The canonical copy lives at `.agents/skills/decide/SKILL.md`, and the copies under `.claude/skills/` and `.github/skills/` are links to it.
 
-The issue is the only state. Rerunning this skill reads the issue body and comments to find out which phase it is in:
+The issue is the only state. Rerunning this skill reads the issue body and comments to find out which phase it is in. Check the rows top to bottom; the first match wins:
 
 | What the issue shows | Phase |
 |---|---|
+| Closed, banner present, and the `## Decision` comment's Follow-ups line is filled in | Done: report the outcome and follow-ups, and stop |
+| Closed, banner present, Follow-ups still reads `pending` | 4. Propagating (its first step confirms the `AGENTS.md` promotion) |
+| A `## Decision` comment exists, but the banner is missing or the issue is still open | 3. Recording & closing, resumed: reuse that comment, never post a second one |
+| Maintainer sign-off in the session or a comment, but no `## Decision` comment | 3. Recording & closing |
 | No **Decide** section, or sub-questions not yet laid out | 1. Filing (restructure the body) |
 | Open, with sub-questions; maybe a `## Provisional direction` comment | 2. Deliberating |
-| Maintainer sign-off in the session or a comment, but no `## Decision` comment | 3. Recording & closing |
-| A `## Decision` comment exists but the banner is missing or the issue is still open | 3. Recording & closing, resumed: reuse that comment, never post a second one |
-| Closed with a `## Decision` comment whose Follow-ups line still reads `pending` | 4. Propagating |
+
+Every write in phases 3 and 4 checks for its own earlier result first (a comment, a sub-issue, a filed work item), so a rerun after an interruption never posts or files anything twice.
 
 This skill takes one optional argument, the issue number, written as `N` below. Without it, run `gh issue list --label decision --state open`, read each issue, report its number, title, and phase in a table, and ask which one to work on.
 
@@ -68,18 +71,19 @@ Only after the maintainer has explicitly signed off on every sub-question.
    - `gh issue close N --reason completed` when an answer was chosen, including "keep the current behaviour".
    - `gh issue close N --reason "not planned"` when the question was dropped or superseded. Name the superseding issue in the Decision comment.
    - Keep the `decision` label, so closed decisions stay searchable as a log (`gh issue list --label decision --state closed`).
-4. **Promote durable outcomes.** If the outcome is a rule a future agent would otherwise re-propose or break, add a short entry to "Known Design Decisions" in `AGENTS.md` that cites it as "issue N" (never a bare `#N`). Make the change in a worktree as a Markdown-only PR labelled `AI generated` + `documentation`; the gates are skipped for Markdown-only changes. A one-off outcome stays on the issue only.
+4. **Promote durable outcomes.** If the outcome is a rule a future agent would otherwise re-propose or break, add a short entry to "Known Design Decisions" in `AGENTS.md` that cites it as "issue N" (never a bare `#N`). Make the change in a worktree as a Markdown-only PR whose body names "issue N", labelled `AI generated` + `documentation`; the gates are skipped for Markdown-only changes. A one-off outcome stays on the issue only.
 
 ## 4. Propagating
 
-1. **Blocked issues.** For every issue under **Blocks** and every blocked-by link, update its body to match the outcome. Comment instead when an edit would erase discussion worth keeping. Remove the blocked-by link once nothing it guarded is still open (`gh issue edit X --remove-blocked-by N`).
-2. **Held epic children.** File the children that were waiting on this decision, following "Splitting an epic into sub-issues" in the `triage-issues` skill: re-read any plan comment on the parent first (it may have been edited), list the parent's existing sub-issues (`gh api --paginate repos/{owner}/{repo}/issues/P/sub_issues`) so a rerun reuses children already filed instead of duplicating them, `gh issue create --parent P` for each one still missing, add blocked-by links, triage each child, then `bin/triage sync-estimates`.
-3. **New work.** When the outcome needs implementation and no issue covers it (search for "Follows the decision in issue N" first, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in issue N." Triage each one.
-4. **Follow-ups line.** Edit the Decision comment so Follow-ups lists every issue edited or filed:
+1. **Promotion check.** Confirm phase 3 step 4 happened: either an open or merged PR adds this decision to "Known Design Decisions" in `AGENTS.md` (`gh pr list --state all --search "issue N in:body"`), or the outcome is one-off and needs none. If neither, do it now.
+2. **Blocked issues.** For every issue under **Blocks** and every blocked-by link, update its body to match the outcome. Comment instead when an edit would erase discussion worth keeping, after checking that issue's comments for an earlier one that cites issue N. Remove the blocked-by link once nothing it guarded is still open (`gh issue edit X --remove-blocked-by N`).
+3. **Held epic children.** File the children that were waiting on this decision, following "Splitting an epic into sub-issues" in the `triage-issues` skill: re-read any plan comment on the parent first (it may have been edited), list the parent's existing sub-issues (`gh api --paginate repos/{owner}/{repo}/issues/P/sub_issues`) so a rerun reuses children already filed instead of duplicating them, `gh issue create --parent P` for each one still missing, add blocked-by links, triage each child, then `bin/triage sync-estimates`.
+4. **New work.** When the outcome needs implementation and no issue covers it (check first with `gh issue list --state all --search '"Follows the decision in issue N"'`, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in issue N." Triage each one.
+5. **Follow-ups line.** Edit the Decision comment so Follow-ups lists every issue edited or filed:
 
    ```
    gh api -X PATCH repos/{owner}/{repo}/issues/comments/<comment_id> -F body=@tmp/decision-N.md
    ```
 
-5. **Claude Code only:** update or delete memory files that tracked the pending decision (for example, held epic splits waiting on it).
-6. **Report to the user**: the outcome, the issues edited, filed, and triaged, and whether an `AGENTS.md` PR was opened.
+6. **Claude Code only:** update or delete memory files that tracked the pending decision (for example, held epic splits waiting on it).
+7. **Report to the user**: the outcome, the issues edited, filed, and triaged, and whether an `AGENTS.md` PR was opened.
