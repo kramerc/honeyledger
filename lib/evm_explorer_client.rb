@@ -155,15 +155,19 @@ class EvmExplorerClient
 
         result
       when "0"
-        # Only the documented "nothing here" answer is an empty history. Any
-        # other refusal ("Query timeout", say) with an empty list must stay an
-        # error, or the scan would read an empty wallet and prune its rows.
-        return [] if result.is_a?(Array) && result.empty? && body["message"].to_s.match?(NO_RECORDS)
-
-        reject!(body)
+        # Only the documented empty history gets here; get refuses every other
+        # status-0 reply inside its retry.
+        []
       else
         raise Error, "The explorer did not return an Etherscan-style response; check EVM_EXPLORER and EVM_EXPLORER_URL"
       end
+    end
+
+    # Only the documented "nothing here" answer is an empty history. Any other
+    # refusal ("Query timeout", say) with an empty list must stay an error, or
+    # the scan would read an empty wallet and prune its rows.
+    def no_records?(body)
+      body["result"].is_a?(Array) && body["result"].empty? && body["message"].to_s.match?(NO_RECORDS)
     end
 
     def reject!(body)
@@ -186,8 +190,9 @@ class EvmExplorerClient
         parsed = response.parsed_response
         raise Error, "The explorer did not return JSON; check EVM_EXPLORER_URL" unless parsed.is_a?(Hash)
 
-        # Etherscan's JSON-RPC proxy reports a rate limit inside a 200 body.
-        reject!(parsed) if parsed["status"].to_s == "0" && !parsed["result"].is_a?(Array)
+        # Failures arrive inside a 200 body. Refusing them here, inside the
+        # retry, lets a rate limit be retried whatever shape its result takes.
+        reject!(parsed) if parsed["status"].to_s == "0" && !no_records?(parsed)
         parsed
       rescue RateLimitedError
         attempt += 1
@@ -245,8 +250,8 @@ class EvmExplorerClient
         hash: transaction_hash(raw["hash"]),
         from: address(raw["from"]),
         to: address(raw["to"]),
-        value: integer(raw["value"]),
-        fee: integer(raw["gasUsed"]) * integer(raw["gasPrice"]),
+        value: required_integer(raw["value"], "value"),
+        fee: required_integer(raw["gasUsed"], "gas used") * required_integer(raw["gasPrice"], "gas price"),
         failed: raw["isError"].to_s == "1" || raw["txreceipt_status"].to_s == "0",
         block_number: required_integer(raw["blockNumber"], "block number"),
         timestamp: Time.zone.at(required_integer(raw["timeStamp"], "timestamp")),
@@ -263,14 +268,16 @@ class EvmExplorerClient
         trace_id: (raw["traceId"].presence || raw["index"]).to_s,
         from: address(raw["from"]),
         to: address(raw["to"]) || address(raw["contractAddress"]),
-        value: integer(raw["value"]),
+        value: required_integer(raw["value"], "value"),
         failed: raw["isError"].to_s == "1",
         block_number: required_integer(raw["blockNumber"], "block number"),
         timestamp: Time.zone.at(required_integer(raw["timeStamp"], "timestamp"))
       }
     end
 
-    # A missing block number would read as block 0 and so as deeply confirmed.
+    # A field every transaction carries. Reading a missing one as zero would
+    # pass silently: block 0 looks deeply confirmed, and a zero value or gas
+    # price drops a real transfer or fee from the scan.
     def required_integer(value, field)
       raise Error, "The explorer returned a transaction without a #{field}" if value.nil? || value == ""
 

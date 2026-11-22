@@ -167,6 +167,28 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
     end
   end
 
+  test "a transaction missing its value or gas fields is an Error, not a zero amount" do
+    valid = normal("0x#{"8" * 64}", from: WALLET, to: OTHER, value: "1")
+
+    [ { "value" => nil }, { "gasUsed" => "" }, { "gasPrice" => nil } ].each do |change|
+      error = assert_raises(EvmExplorerClient::Error, change.inspect) { stub_responses(envelope([ valid.except(*change.keys).merge(change.compact) ])) { @client.normal_transactions(WALLET) } }
+      assert_match(/without a (value|gas used|gas price)/, error.message)
+    end
+
+    internal = { "transactionHash" => "0x#{"7" * 64}", "index" => "0", "from" => OTHER, "to" => WALLET,
+                 "isError" => "0", "blockNumber" => "1", "timeStamp" => "1700000000" }
+    assert_raises(EvmExplorerClient::Error) { stub_responses(envelope([ internal ])) { @client.internal_transactions(WALLET) } }
+  end
+
+  test "a rate limit with a list result is retried too" do
+    responses = [ response({ "status" => "0", "message" => "Max rate limit reached", "result" => [] }), response(envelope([])) ]
+
+    EvmExplorerClient.stub :get, ->(*_args, **_options) { responses.shift } do
+      assert_equal [], @client.normal_transactions(WALLET)
+    end
+    assert_equal [ 2 ], @sleeps
+  end
+
   test "a malformed status line is recorded as an Error" do
     EvmExplorerClient.stub :get, ->(*_args, **_options) { raise Net::HTTPBadResponse, "wrong status line" } do
       assert_match(/Could not reach/, assert_raises(EvmExplorerClient::Error) { @client.block_number }.message)
