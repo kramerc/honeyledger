@@ -60,5 +60,6 @@ class Blockchain::AccountTest < ActiveSupport::TestCase
 
     assert_equal "[FILTERED]", filtered["blockchain_connection"]["identifier"]
     assert_equal "Vault", filtered["blockchain_connection"]["name"]
+    assert_includes Blockchain::Connection.new(identifier: "zprv-pasted-by-mistake").inspect, "identifier: [FILTERED]"
   end
 end

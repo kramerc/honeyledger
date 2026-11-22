@@ -8,6 +8,15 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
   def perform(blockchain_account_id:)
     return unless AccountSource.exists?(sourceable_type: "Blockchain::Account", sourceable_id: blockchain_account_id)
 
+    blockchain_account = Blockchain::Account.find(blockchain_account_id)
+    ledger_account = blockchain_account.ledger_accounts.first
+    # A link in another currency would book coin minor units in it. The link and
+    # account-edit paths refuse that; import checks again and says why it stopped.
+    unless blockchain_account.linkable_to?(ledger_account)
+      blockchain_account.connection.update!(error: "Not imported: #{ledger_account.name} is not in #{blockchain_account.currency}. Link the wallet to a #{blockchain_account.currency} account.")
+      return
+    end
+
     transactions = Blockchain::Transaction
       .confirmed
       .where(account_id: blockchain_account_id)
@@ -18,10 +27,6 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
     Transaction.collecting_sidebar_broadcasts do
       transactions.find_each do |blockchain_transaction|
         user = blockchain_transaction.account.connection.user
-        ledger_account = blockchain_transaction.account.ledger_accounts.first
-        # A link in another currency would book coin minor units in it; the link
-        # and account-edit paths refuse that, and import checks again.
-        next if ledger_account.nil? || !blockchain_transaction.account.linkable_to?(ledger_account)
 
         description = blockchain_transaction.resolved_description
         transacted_at = blockchain_transaction.transacted_at || Time.current
@@ -91,7 +96,12 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
           # One shared counterpart per direction rather than one account per
           # counterparty address; the address stays in the description, where
           # an import rule can pick it up.
-          counterpart_for(user, counterpart_name(blockchain_transaction, kind), kind, ledger_account.currency)
+          begin
+            counterpart_for(user, counterpart_name(blockchain_transaction, kind), kind, ledger_account.currency)
+          rescue CounterpartUnavailable => e
+            blockchain_account.connection.update!(error: "Some transactions were not imported: #{e.message}.")
+            next
+          end
         end
 
         if ledger_side == :src

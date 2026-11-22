@@ -81,11 +81,16 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal currencies(:btc), fee.currency
   end
 
-  test "gives up loudly rather than book into a wrong-currency account" do
+  test "skips a row with no free counterpart name, imports the rest, and says why" do
     names = [ "Network fees", "Network fees (BTC)" ] + (2..9).map { |number| "Network fees (BTC #{number})" }
     names.each { |name| @user.accounts.create!(name: name, kind: :expense, currency: currencies(:usd)) }
 
-    assert_raises(Blockchain::ImportTransactionsJob::CounterpartUnavailable) { perform }
+    assert_difference "Transaction.count", 2 do # the receipt and the send; the fee has nowhere to go
+      perform
+    end
+
+    assert_empty blockchain_transactions(:sent_fee).ledger_transactions
+    assert_match(/Some transactions were not imported/, blockchain_connections(:xpub_wallet).reload.error)
   end
 
   test "rows are not imported while the link is to an account in another currency" do
@@ -96,6 +101,7 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_no_difference "Transaction.count" do
       perform
     end
+    assert_match(/Crypto \(USD\) is not in BTC/, blockchain_connections(:xpub_wallet).reload.error)
   end
 
   test "a rule pointing at an account in another currency is not applied" do
