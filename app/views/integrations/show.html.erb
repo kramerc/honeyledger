@@ -121,9 +121,9 @@
             <% when "ACTIVE" %>
               <span style="color: green"><%= lf_account.status %></span>
             <% when "ERROR" %>
-              <span style="color: red"><%= lf_account.status %> - resolve on <a href="https://lunchflow.app">Lunch Flow</a></span>
+              <span class="text-error"><%= lf_account.status %> - resolve on <a href="https://lunchflow.app">Lunch Flow</a></span>
             <% when "DISCONNECTED" %>
-              <span style="color: red"><%= lf_account.status %> - reconnect on <a href="https://lunchflow.app">Lunch Flow</a></span>
+              <span class="text-error"><%= lf_account.status %> - reconnect on <a href="https://lunchflow.app">Lunch Flow</a></span>
             <% else %>
               <%= lf_account.status %>
             <% end %>

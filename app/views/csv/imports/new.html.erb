@@ -4,11 +4,13 @@
 
 <%= form_with model: @csv_import, url: account_csv_imports_path(@account), html: { multipart: true } do |form| %>
   <% if @csv_import.errors.any? %>
-    <ul style="color: red">
-      <% @csv_import.errors.full_messages.each do |message| %>
-        <li><%= message %></li>
-      <% end %>
-    </ul>
+    <div class="error-panel">
+      <ul>
+        <% @csv_import.errors.full_messages.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
   <% end %>
 
   <div data-controller="file-drop" data-file-drop-active-class="file-drop--active">

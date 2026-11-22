@@ -5,7 +5,7 @@
   <% end %>
 
   <% if account.errors.any? %>
-    <div style="color: red">
+    <div class="error-panel">
       <h2><%= pluralize(account.errors.count, "error") %> prohibited this account from being saved:</h2>
 
       <ul>

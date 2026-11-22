@@ -1,6 +1,6 @@
 <%= form_with(model: import_rule) do |form| %>
   <% if import_rule.errors.any? %>
-    <div id="error_explanation">
+    <div id="error_explanation" class="error-panel">
       <h2><%= pluralize(import_rule.errors.count, "error") %> prohibited this rule from being saved:</h2>
       <ul>
         <% import_rule.errors.full_messages.each do |message| %>

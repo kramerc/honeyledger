@@ -50,7 +50,7 @@ class SettingsTest < ApplicationSystemTestCase
     page.execute_script("document.getElementById('passkey_nickname').removeAttribute('required')")
     click_button "Rename passkey"
 
-    within "#error_explanation" do
+    within "#error_explanation.error-panel" do
       assert_text "Nickname can't be blank"
     end
   end

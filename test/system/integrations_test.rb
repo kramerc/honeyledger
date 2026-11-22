@@ -161,7 +161,7 @@ class IntegrationsTest < ApplicationSystemTestCase
 
     visit integrations_path
 
-    assert_text "ERROR - resolve on"
+    assert_selector "span.text-error", text: "ERROR - resolve on"
     assert_link "Lunch Flow", href: "https://lunchflow.app"
   end
 
@@ -171,7 +171,7 @@ class IntegrationsTest < ApplicationSystemTestCase
 
     visit integrations_path
 
-    assert_text "DISCONNECTED - reconnect on"
+    assert_selector "span.text-error", text: "DISCONNECTED - reconnect on"
     assert_link "Lunch Flow", href: "https://lunchflow.app"
   end
 

@@ -35,6 +35,15 @@ class AccountsTest < ApplicationSystemTestCase
     end
   end
 
+  test "account form validation errors are listed in an error panel" do
+    visit new_account_path
+    click_button "Create Account"
+
+    within ".error-panel" do
+      assert_text "Name can't be blank"
+    end
+  end
+
   test "creating a new account makes it appear in the sidebar live" do
     visit transactions_path
 
