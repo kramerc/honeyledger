@@ -819,4 +819,66 @@ class AccountTest < ActiveSupport::TestCase
       account.broadcast_sidebar_insert
     end
   end
+
+  test "in_sidebar scope keeps real asset, liability, and equity accounts only" do
+    Account.create!(user: users(:one), currency: currencies(:usd), name: "Retained Earnings", kind: :equity)
+    Account.opening_balance_for(user: users(:one), kind: :asset)
+
+    kinds = users(:one).accounts.in_sidebar.distinct.pluck(:kind)
+    assert_equal %w[ asset equity liability ], kinds.sort
+    assert users(:one).accounts.in_sidebar.none?(&:virtual?)
+  end
+
+  test "in_sidebar? is false for expense, revenue, and virtual accounts" do
+    assert accounts(:asset_account).in_sidebar?
+    assert accounts(:liability_account).in_sidebar?
+    assert_not accounts(:expense_account).in_sidebar?
+    assert_not accounts(:revenue_account).in_sidebar?
+    assert_not Account.opening_balance_for(user: users(:one), kind: :asset).in_sidebar?
+  end
+
+  test "creating an expense or revenue account does not broadcast to the sidebar" do
+    user = users(:one)
+
+    streams = capture_turbo_stream_broadcasts([ user, :sidebar ]) do
+      Account.create!(user: user, currency: currencies(:usd), name: "New Vendor", kind: :expense)
+      Account.create!(user: user, currency: currencies(:usd), name: "New Payer", kind: :revenue)
+    end
+
+    assert_empty streams
+  end
+
+  test "renaming, updating, or destroying an expense account does not broadcast to the sidebar" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Hidden Vendor", kind: :expense)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(name: "Renamed Vendor")
+      account.broadcast_sidebar_update
+      account.destroy!
+    end
+
+    assert_empty streams
+  end
+
+  test "changing an expense account into an asset appends it without a remove" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Promoted", kind: :expense)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(kind: :asset)
+    end
+
+    assert_equal [ "append" ], streams.map { |s| s["action"] }
+    assert_equal Account.sidebar_kind_target_id("asset"), streams.first["target"]
+  end
+
+  test "changing an asset account into an expense removes it without an append" do
+    account = Account.create!(user: users(:one), currency: currencies(:usd), name: "Demoted", kind: :asset)
+
+    streams = capture_turbo_stream_broadcasts([ account.user, :sidebar ]) do
+      account.update!(kind: :expense)
+    end
+
+    assert_equal [ "remove" ], streams.map { |s| s["action"] }
+    assert_equal ActionView::RecordIdentifier.dom_id(account, :sidebar_item), streams.first["target"]
+  end
 end

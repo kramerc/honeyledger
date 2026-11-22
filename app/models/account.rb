@@ -1,5 +1,8 @@
 class Account < ApplicationRecord
   RESERVED_NAMES = [ "Opening Balance" ].freeze
+  # Expense and revenue accounts are categories rather than places money sits,
+  # and imports create one per merchant, so the sidebar lists only these kinds.
+  SIDEBAR_KINDS = %w[ asset liability equity ].freeze
 
   belongs_to :user
   belongs_to :currency, optional: true
@@ -20,9 +23,9 @@ class Account < ApplicationRecord
   has_many :account_sources, dependent: :destroy
   has_many :csv_imports, class_name: "Csv::Import", dependent: :destroy
 
-  after_create_commit  :broadcast_sidebar_insert, if: :real?
+  after_create_commit  :broadcast_sidebar_insert, if: :in_sidebar?
   after_update_commit  :broadcast_sidebar_change, if: :real?
-  after_destroy_commit :broadcast_sidebar_remove, if: :real?
+  after_destroy_commit :broadcast_sidebar_remove, if: :in_sidebar?
 
   enum :kind, %i[ asset liability equity expense revenue ]
 
@@ -34,6 +37,7 @@ class Account < ApplicationRecord
 
   scope :real, -> { where(virtual: false) }
   scope :virtual, -> { where(virtual: true) }
+  scope :in_sidebar, -> { real.where(kind: SIDEBAR_KINDS) }
   scope :linkable, -> { where(kind: %i[ asset liability ]) }
   scope :unlinked, -> { where.missing(:account_sources) }
 
@@ -147,7 +151,13 @@ class Account < ApplicationRecord
     "sidebar_accounts_#{kind}"
   end
 
+  def in_sidebar?
+    real? && kind.in?(SIDEBAR_KINDS)
+  end
+
   def broadcast_sidebar_update
+    return unless in_sidebar?
+
     broadcast_update_to(
       user, :sidebar,
       target: [ self, :sidebar_link ],
@@ -173,8 +183,8 @@ class Account < ApplicationRecord
 
     def broadcast_sidebar_change
       if saved_change_to_kind?
-        broadcast_sidebar_remove
-        broadcast_sidebar_insert
+        broadcast_sidebar_remove if kind_before_last_save.in?(SIDEBAR_KINDS)
+        broadcast_sidebar_insert if in_sidebar?
       elsif saved_change_to_name?
         broadcast_sidebar_update
       end

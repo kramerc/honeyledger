@@ -980,13 +980,13 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
 
     targets = streams.map { |s| s["target"] }
     # Destroying the duplicate reverses its posting, touching the bank and the
-    # duplicate's expense account. Assert the set, not a fixed count.
+    # duplicate's expense account; only the bank is listed in the sidebar.
     assert_includes targets, ActionView::RecordIdentifier.dom_id(bank, :sidebar_link)
-    assert_includes targets, ActionView::RecordIdentifier.dom_id(expense_b, :sidebar_link)
+    refute_includes targets, ActionView::RecordIdentifier.dom_id(expense_b, :sidebar_link)
   end
 
   test "create broadcasts sidebar replaces for affected accounts" do
-    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 1) do
       post transactions_url, params: { transaction: {
         transacted_at: Time.current,
         src_account_id: accounts(:asset_account).id,
@@ -1001,23 +1001,18 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
       patch transaction_url(@transaction), params: { transaction: { description: "Updated" } }, as: :turbo_stream
     end
-    targets = streams.map { |s| s["target"] }.sort
-    expected = [
-      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link),
-      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_link)
-    ].sort
-    assert_equal expected, targets
+    targets = streams.map { |s| s["target"] }
+    assert_equal [ ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link) ], targets
   end
 
   test "destroy broadcasts sidebar replaces for affected accounts" do
     src_id = ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link)
-    dest_id = ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_link)
 
     streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
       delete transaction_url(@transaction), as: :turbo_stream
     end
 
-    assert_equal [ src_id, dest_id ].sort, streams.map { |s| s["target"] }.sort
+    assert_equal [ src_id ], streams.map { |s| s["target"] }
   end
 
   test "merge broadcasts sidebar replaces for affected accounts" do
@@ -1065,12 +1060,8 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     streams = capture_turbo_stream_broadcasts([ @user, :sidebar ]) do
       post exclude_transaction_url(@transaction), as: :turbo_stream
     end
-    targets = streams.map { |s| s["target"] }.sort
-    expected = [
-      ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link),
-      ActionView::RecordIdentifier.dom_id(@transaction.dest_account, :sidebar_link)
-    ].sort
-    assert_equal expected, targets
+    targets = streams.map { |s| s["target"] }
+    assert_equal [ ActionView::RecordIdentifier.dom_id(@transaction.src_account, :sidebar_link) ], targets
   end
 
   test "unexclude broadcasts sidebar replaces for affected accounts" do
@@ -1236,7 +1227,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
                                              transacted_at: 1.day.ago)
     transaction.reload
 
-    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 1) do
       delete bulk_destroy_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
     end
   end
@@ -1249,7 +1240,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
                                              amount_minor: 100, currency: currency, description: "Bulk exclude bcast",
                                              transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
 
-    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 1) do
       post bulk_exclude_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
     end
   end
@@ -1263,7 +1254,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
                                              transacted_at: 1.day.ago, sourceable: simplefin_transactions(:transaction_one))
     Transaction::Exclude.new(transaction, user: @user).call
 
-    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 2) do
+    assert_turbo_stream_broadcasts([ @user, :sidebar ], count: 1) do
       post bulk_unexclude_transactions_url, params: { transaction_ids: [ transaction.id ] }, as: :turbo_stream
     end
   end

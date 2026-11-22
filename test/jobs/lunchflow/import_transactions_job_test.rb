@@ -391,12 +391,10 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
       Lunchflow::ImportTransactionsJob.perform_now(lunchflow_account_id: lf_account.id)
     end
 
-    targets = streams.select { |s| s["action"] == "update" }.map { |s| s["target"] }.sort
-    expected = [
-      ActionView::RecordIdentifier.dom_id(lf_bank_account, :sidebar_link),
-      ActionView::RecordIdentifier.dom_id(expense_account, :sidebar_link)
-    ].sort
-    assert_equal expected, targets
+    targets = streams.select { |s| s["action"] == "update" }.map { |s| s["target"] }
+    # The expense account's balance moved too, but it is not listed in the sidebar.
+    assert_equal [ ActionView::RecordIdentifier.dom_id(lf_bank_account, :sidebar_link) ], targets
+    refute_includes targets, ActionView::RecordIdentifier.dom_id(expense_account, :sidebar_link)
   end
 
   test "broadcasts nothing when there are no aggregator transactions to import" do
@@ -445,12 +443,13 @@ class Lunchflow::ImportTransactionsJobTest < ActiveJob::TestCase
     end
 
     targets = streams.select { |s| s["action"] == "update" }.map { |s| s["target"] }
-    # Broadcasts must cover every real account whose balance moved during the job:
-    # the two bank accounts from the final transfer, plus the revenue counterparty
-    # whose balance was reversed when its transaction was absorbed into the merge.
+    # Broadcasts must cover every sidebar account whose balance moved during the job:
+    # the two bank accounts from the final transfer. The revenue counterparty's balance
+    # was reversed when its transaction was absorbed into the merge, but revenue
+    # accounts are not listed in the sidebar.
     assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_a, :sidebar_link)
     assert_includes targets, ActionView::RecordIdentifier.dom_id(bank_b, :sidebar_link)
-    assert_includes targets, ActionView::RecordIdentifier.dom_id(revenue_counterparty, :sidebar_link)
+    refute_includes targets, ActionView::RecordIdentifier.dom_id(revenue_counterparty, :sidebar_link)
     # Each affected account should appear exactly once (aggregation).
     assert_equal targets.uniq.size, targets.size
   end

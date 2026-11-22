@@ -63,7 +63,7 @@ Transitions only answer the user (hover, open, close) and stay short: 0.1–0.2s
 
 ## Layout
 
-- **Shell:** a sticky 60px header with the honey gradient, a resizable sidebar (`--sidebar-width`, default 200px), and `main`. `main` has `min-width: 0`, so wide content scrolls inside its own container or truncates instead of widening the page.
+- **Shell:** a sticky 60px header with the honey gradient, a resizable sidebar (`--sidebar-width`, default 200px), and `main`. `main` has `min-width: 0`, so wide content scrolls inside its own container or truncates instead of widening the page. The sidebar lists asset, liability, and equity accounts only (`Account::SIDEBAR_KINDS`); expense and revenue accounts are categories that imports create per merchant, so they live on the Accounts page instead.
 - **Breakpoints:**
   - `< 768px`: the sidebar becomes an off-canvas drawer behind the hamburger button; account and settings tables collapse to cards.
   - `< 1024px`: the transactions table switches to phone rows (below).
