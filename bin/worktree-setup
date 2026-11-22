@@ -64,8 +64,15 @@ unless system(FROZEN_BUNDLE, "bundle", "install", chdir: APP_ROOT, out: File::NU
 end
 
 # The gems are installed now, so dotenv can be loaded to read the .env files.
+# Frozen like every other Bundler call here, so Gemfile.lock is never rewritten.
 ENV["BUNDLE_GEMFILE"] ||= File.join(APP_ROOT, "Gemfile")
-require "bundler/setup"
+ENV.update(FROZEN_BUNDLE)
+begin
+  require "bundler/setup"
+rescue StandardError, LoadError => error
+  say "Could not load this worktree's gems to check its .env files (#{error.class}) -- run bin/rails db:prepare by hand."
+  exit 0
+end
 
 # The symlinks above are useful regardless, but database preparation is only
 # worth doing when it prepares databases of this worktree's own. Rails reads

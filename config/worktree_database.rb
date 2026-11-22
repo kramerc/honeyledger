@@ -79,22 +79,22 @@ module WorktreeDatabase
       [ ".env.#{environment}.local", (".env.local" unless environment.to_s == "test"), ".env.#{environment}", ".env" ].compact
     end
 
-    # The DATABASE_URL `environment` boots with. As in Dotenv.load, a variable
-    # already in `env` beats every file, and otherwise the first file that sets
-    # it wins. bin/worktree-setup runs outside Rails, so it must resolve this
-    # itself before db:prepare, which loads the files the shell never saw.
+    # The DATABASE_URL `environment` boots with. A variable already in `env`
+    # beats every file; otherwise the files are loaded exactly as Dotenv::Rails
+    # loads them -- first file wins, and a later file can interpolate a
+    # variable an earlier one set -- inside Dotenv.modify, which puts ENV back
+    # afterwards. bin/worktree-setup runs outside Rails, so it must resolve
+    # this itself before db:prepare, which loads the files the shell never saw.
     def effective_database_url(application_root, environment, env: ENV)
       return env["DATABASE_URL"] if env.key?("DATABASE_URL")
 
       require "dotenv"
-      dotenv_files(environment).each do |name|
-        path = File.join(application_root, name)
-        next unless File.file?(path)
-
-        values = Dotenv.parse(path)
-        return values["DATABASE_URL"] if values.key?("DATABASE_URL")
+      files = dotenv_files(environment).map { |name| File.join(application_root, name) }
+      Dotenv.modify do
+        ENV.delete("DATABASE_URL")
+        Dotenv.load(*files)
+        ENV["DATABASE_URL"]
       end
-      nil
     end
 
     private

@@ -127,6 +127,28 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     assert_equal "postgres://localhost", WorktreeDatabase.effective_database_url(root, "test", env: {})
   end
 
+  test "effective_database_url expands a variable set by another dotenv file, as Rails does" do
+    root = linked_worktree
+    write_env_files(root,
+      ".env.local" => "SHARED_DATABASE_NAME=shared\n",
+      ".env.development" => "DATABASE_URL=postgres://localhost/${SHARED_DATABASE_NAME}\n")
+
+    url = WorktreeDatabase.effective_database_url(root, "development", env: {})
+
+    assert_equal "postgres://localhost/shared", url
+    assert WorktreeDatabase.database_url_names_database?(url)
+  end
+
+  test "effective_database_url leaves ENV as it found it" do
+    root = linked_worktree
+    write_env_files(root, ".env.development" => "DATABASE_URL=postgres://localhost/from_file\nWORKTREE_PROBE=1\n")
+    before = ENV.to_h
+
+    WorktreeDatabase.effective_database_url(root, "development", env: {})
+
+    assert_equal before, ENV.to_h
+  end
+
   test "effective_database_url is nil when neither the environment nor any file sets it" do
     root = linked_worktree
     write_env_files(root, ".env.development" => "EVM_EXPLORER_API_KEY=placeholder\n")
