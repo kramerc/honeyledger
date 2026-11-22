@@ -20,7 +20,7 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
     result = scan(normal: [ normal_tx("a", from: PAYER, to: WALLET, value: 2 * ETHER) ])
 
     row = result.rows.sole
-    assert_equal [ hash("a"), hash("a"), "transfer", "2.0", PAYER, true ],
+    assert_equal [ tx_hash("a"), tx_hash("a"), "transfer", "2.0", PAYER, true ],
       [ row.remote_id, row.txid, row.kind, row.amount, row.counterparty, row.confirmed ]
     assert_equal "2.0", result.balance
     assert_equal 1, result.used_addresses
@@ -33,8 +33,8 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
     ])
 
     transfer, fee = result.rows.last(2)
-    assert_equal [ hash("b"), "transfer", "-0.25", PAYEE ], [ transfer.remote_id, transfer.kind, transfer.amount, transfer.counterparty ]
-    assert_equal [ "#{hash("b")}:fee", "fee", "-0.00042", nil ], [ fee.remote_id, fee.kind, fee.amount, fee.counterparty ]
+    assert_equal [ tx_hash("b"), "transfer", "-0.25", PAYEE ], [ transfer.remote_id, transfer.kind, transfer.amount, transfer.counterparty ]
+    assert_equal [ "#{tx_hash("b")}:fee", "fee", "-0.00042", nil ], [ fee.remote_id, fee.kind, fee.amount, fee.counterparty ]
     assert_equal "0.74958", result.balance
   end
 
@@ -98,6 +98,35 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
     assert_equal ROUTER, result.rows.first.counterparty
   end
 
+  test "a deployment with value is not counted twice when the explorer repeats its root trace" do
+    result = scan(
+      normal: [ normal_tx("a", from: WALLET, to: nil, value: ETHER, contract_address: ROUTER) ],
+      # Blockscout lists the top-level create trace in the internal list too.
+      internal: [ internal_tx("a", from: WALLET, to: ROUTER, value: ETHER) ]
+    )
+
+    transfer, fee = result.rows
+    assert_equal [ "-1.0", ROUTER ], [ transfer.amount, transfer.counterparty ]
+    assert_equal "fee", fee.kind
+    assert_equal "-1.00042", result.balance
+  end
+
+  test "a deployment's root trace is dropped only once" do
+    result = scan(
+      normal: [ normal_tx("a", from: PAYER, to: nil, value: ETHER, contract_address: WALLET) ],
+      internal: [ internal_tx("a", from: PAYER, to: WALLET, value: ETHER), internal_tx("a", from: PAYER, to: WALLET, value: ETHER, trace: "1") ]
+    )
+
+    assert_equal "2.0", result.balance, "a second, distinct transfer of the same value still counts"
+  end
+
+  test "a tracked contract is credited the value it was deployed with" do
+    result = scan(normal: [ normal_tx("a", from: PAYER, to: nil, value: 2 * ETHER, contract_address: WALLET) ])
+
+    row = result.rows.sole
+    assert_equal [ "transfer", "2.0", PAYER ], [ row.kind, row.amount, row.counterparty ]
+  end
+
   test "rows short of finality are unconfirmed and left out of the balance" do
     result = scan(normal: [
       normal_tx("a", from: PAYER, to: WALLET, value: ETHER, block: TIP - Blockchain::Ethereum::Scanner::FINALITY_DEPTH + 1),
@@ -136,17 +165,17 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
       Blockchain::Ethereum::Scanner.new(WALLET, FakeClient.new(normal, internal, TIP)).call
     end
 
-    def hash(seed)
+    def tx_hash(seed)
       "0x#{seed * 64}"
     end
 
     def normal_tx(seed, from:, to:, value:, failed: false, block: 1_000, contract_address: nil)
-      { hash: hash(seed), from: from, to: to, value: value, fee: FEE, failed: failed, block_number: block,
+      { hash: tx_hash(seed), from: from, to: to, value: value, fee: FEE, failed: failed, block_number: block,
         timestamp: Time.zone.at(1_700_000_000 + block), contract_address: contract_address }
     end
 
     def internal_tx(seed, from:, to:, value:, failed: false, block: 1_000, trace: "0")
-      { hash: hash(seed), trace_id: trace, from: from, to: to, value: value, failed: failed, block_number: block,
+      { hash: tx_hash(seed), trace_id: trace, from: from, to: to, value: value, failed: failed, block_number: block,
         timestamp: Time.zone.at(1_700_000_000 + block) }
     end
 end

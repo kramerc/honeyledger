@@ -36,7 +36,9 @@ class Blockchain::Connection < ApplicationRecord
   def self.chain_available?(chain)
     case chain.to_s
     when "bitcoin" then true
-    when "ethereum" then Rails.configuration.x.evm_explorer[:api_key].present?
+    when "ethereum"
+      settings = Rails.configuration.x.evm_explorer
+      settings[:api_key].present? && EvmExplorerClient.known_provider?(settings[:provider])
     else false
     end
   end
@@ -118,6 +120,6 @@ class Blockchain::Connection < ApplicationRecord
     def chain_must_be_available
       return if chain.blank? || !self.class.chains.key?(chain)
 
-      errors.add(:chain, "#{chain.titleize} wallets are not configured on this server") unless self.class.chain_available?(chain)
+      errors.add(:base, "#{chain.titleize} wallets are not configured on this server") unless self.class.chain_available?(chain)
     end
 end

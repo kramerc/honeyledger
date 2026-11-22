@@ -48,7 +48,11 @@ class Blockchain::Ethereum::Scanner
     balance_wei = 0
     rows = hashes.flat_map do |hash|
       outer = normal_by_hash[hash]
-      inner = outer&.dig(:failed) ? [] : Array(internal_by_hash[hash]).reject { |entry| entry[:failed] }
+      # A reverted parent discards every internal transfer. For a hash seen only
+      # in the internal list (a contract paying the wallet inside someone else's
+      # transaction) each entry's own isError is trusted; Blockscout flags the
+      # children of a reverted parent, and issue 373 tracks checking the rest.
+      inner = outer&.dig(:failed) ? [] : without_root_trace(outer, Array(internal_by_hash[hash])).reject { |entry| entry[:failed] }
       first = outer || internal_by_hash[hash].first
 
       net = movement(outer) + inner.sum { |entry| movement(entry) }
@@ -67,12 +71,27 @@ class Blockchain::Ethereum::Scanner
 
   private
 
-    # Signed value an entry moved for the wallet. A self-send nets to zero.
+    # Blockscout lists a contract creation's top-level "create" trace in the
+    # internal list as well, repeating the outer transaction's value; counting
+    # both would move it twice. Ordinary calls get no such root trace.
+    def without_root_trace(outer, inner)
+      return inner if outer.nil? || outer[:to] || outer[:contract_address].nil?
+
+      index = inner.index do |entry|
+        entry[:from] == outer[:from] && entry[:to] == outer[:contract_address] && entry[:value] == outer[:value]
+      end
+      index ? inner.dup.tap { |entries| entries.delete_at(index) } : inner
+    end
+
+    # Signed value an entry moved for the wallet. A self-send nets to zero. A
+    # contract creation has no "to"; its value goes to the created contract,
+    # which may be the tracked address itself.
     def movement(entry)
       return 0 if entry.nil? || entry[:failed]
 
+      recipient = entry[:to] || entry[:contract_address]
       amount = 0
-      amount += entry[:value] if entry[:to] == @address
+      amount += entry[:value] if recipient == @address
       amount -= entry[:value] if entry[:from] == @address
       amount
     end

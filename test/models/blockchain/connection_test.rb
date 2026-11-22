@@ -120,12 +120,15 @@ class Blockchain::ConnectionTest < ActiveSupport::TestCase
       connection = Blockchain::Connection.new(user: users(:one), chain: "ethereum", identifier: ETHEREUM_ADDRESS)
 
       assert_not connection.valid?
-      assert_match(/not configured/, connection.errors[:chain].first)
+      assert_match(/Ethereum wallets are not configured/, connection.errors[:base].first)
       assert_equal [ "bitcoin" ], Blockchain::Connection.available_chains
       assert blockchain_connections(:eth_wallet).valid?, "existing wallets stay valid if the key is removed"
     end
 
     with_evm_explorer { assert_equal %w[bitcoin ethereum], Blockchain::Connection.available_chains }
+    with_evm_explorer(provider: "Etherscan") do
+      assert_not Blockchain::Connection.chain_available?(:ethereum), "a mistyped EVM_EXPLORER does not offer Ethereum"
+    end
     assert_not Blockchain::Connection.chain_available?("dogecoin")
   end
 

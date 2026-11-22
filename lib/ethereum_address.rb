@@ -8,7 +8,7 @@ module EthereumAddress
   class InvalidAddress < StandardError; end
 
   FORMAT = /\A0x[0-9a-fA-F]{40}\z/
-  PRIVATE_KEY_FORMAT = /\A(0x)?[0-9a-fA-F]{64}\z/
+  PRIVATE_KEY_FORMAT = /\A(0x)?[0-9a-f]{64}\z/i
 
   # Returns the lowercase address, or raises InvalidAddress.
   def self.parse(value)

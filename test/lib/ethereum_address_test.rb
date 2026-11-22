@@ -39,5 +39,6 @@ class EthereumAddressTest < ActiveSupport::TestCase
 
     assert_match(/private key/, error.message)
     assert_not EthereumAddress.valid?("cd" * 32)
+    assert_match(/private key/, assert_raises(EthereumAddress::InvalidAddress) { EthereumAddress.parse("0X#{"EF" * 32}") }.message)
   end
 end

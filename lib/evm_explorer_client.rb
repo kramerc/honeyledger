@@ -25,15 +25,20 @@ class EvmExplorerClient
   class RateLimitedError < Error; end
 
   PROVIDERS = {
+    # Blockscout charges credits per request rather than per record, so a
+    # larger page is cheaper; PRO accepts at least 5,000.
     "blockscout" => {
       base_url: "https://api.blockscout.com/v2/api",
       chain_param: "chain_id",
-      tip: { module: "block", action: "eth_block_number" }
+      tip: { module: "block", action: "eth_block_number" },
+      page_size: 5_000
     },
+    # Etherscan's free keys return at most 1,000 records per request.
     "etherscan" => {
       base_url: "https://api.etherscan.io/v2/api",
       chain_param: "chainid",
-      tip: { module: "proxy", action: "eth_blockNumber" }
+      tip: { module: "proxy", action: "eth_blockNumber" },
+      page_size: 1_000
     }
   }.freeze
 
@@ -41,9 +46,6 @@ class EvmExplorerClient
 
   default_timeout 30
 
-  # Etherscan's free keys return at most 1,000 records per request; Blockscout
-  # charges per request rather than per record, so a full page costs the same.
-  PAGE_SIZE = 1_000
   # Etherscan's free tier allows 3 requests a second, Blockscout's 5.
   MIN_INTERVAL = 0.4
   MAX_RETRIES = 4
@@ -52,10 +54,15 @@ class EvmExplorerClient
   TRANSPORT_ERRORS = [
     Net::OpenTimeout, Net::ReadTimeout, SocketError, Timeout::Error, IOError,
     Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH, Errno::ENETUNREACH, Errno::ETIMEDOUT,
+    Errno::EPIPE, Net::HTTPBadResponse, Net::ProtocolError, Zlib::Error,
     OpenSSL::SSL::SSLError, JSON::ParserError, HTTParty::Error
   ].freeze
 
-  def initialize(provider:, api_key:, chain_id:, base_url: nil, min_interval: MIN_INTERVAL, sleeper: ->(seconds) { sleep(seconds) })
+  def self.known_provider?(provider)
+    PROVIDERS.key?(provider.to_s)
+  end
+
+  def initialize(provider:, api_key:, chain_id:, base_url: nil, page_size: nil, min_interval: MIN_INTERVAL, sleeper: ->(seconds) { sleep(seconds) })
     @preset = PROVIDERS.fetch(provider.to_s) do
       raise Error, "Unknown EVM explorer #{provider.inspect}; set EVM_EXPLORER to one of #{PROVIDERS.keys.join(", ")}"
     end
@@ -63,6 +70,7 @@ class EvmExplorerClient
     @api_key = api_key.to_s
     @chain_id = chain_id
     @base_url = (base_url.presence || @preset[:base_url]).to_s.chomp("/")
+    @page_size = page_size || @preset[:page_size]
     @min_interval = min_interval
     @sleeper = sleeper
     @last_request_at = nil
@@ -101,14 +109,14 @@ class EvmExplorerClient
       start_block = 0
 
       loop do
-        page = records(get({ module: "account", action: action, address: address, startblock: start_block, sort: "asc", page: 1, offset: PAGE_SIZE }))
+        page = records(get({ module: "account", action: action, address: address, startblock: start_block, sort: "asc", page: 1, offset: @page_size }))
         normalized = page.map { |raw| yield(object(raw, "transaction")) }
         normalized.each { |entry| entries[key.call(entry)] ||= entry }
-        break if page.size < PAGE_SIZE
+        break if page.size < @page_size
 
         next_start = normalized.last[:block_number]
         # A whole page from one block would loop forever on the same request.
-        raise Error, "The explorer returned more than #{PAGE_SIZE} records in a single block" if next_start == start_block
+        raise Error, "The explorer returned more than #{@page_size} records in a single block" if next_start == start_block
 
         start_block = next_start
       end
@@ -118,14 +126,17 @@ class EvmExplorerClient
 
     # The Etherscan envelope: status "1" with a result list, or status "0" with
     # a message ("No transactions found" is an empty list, not a failure).
-    # Blockscout adds status "2" when it has not finished indexing internal
-    # transactions for an old block range; what it returns is still correct, and
-    # the next refresh fetches the rest.
+    # Blockscout adds status "2" when any block in the queried range has
+    # internal transactions it has not processed. Its backfill has gaps
+    # scattered through history (the first near block 63,000), so a
+    # full-history query nearly always reports it, while bounded windows across
+    # 2017–2026 came back complete. It describes the range, not this wallet, so
+    # the results are used as they are.
     def records(body)
       result = body["result"]
       case body["status"].to_s
       when "1", "2"
-        Rails.logger.warn("EVM explorer #{@provider}: #{body["message"].to_s.first(120)}") if body["status"].to_s == "2"
+        Rails.logger.info("EVM explorer #{@provider}: #{scrub(body["message"].to_s).first(120)}") if body["status"].to_s == "2"
         raise Error, "The explorer returned an unexpected transaction list" unless result.is_a?(Array)
 
         result
@@ -220,8 +231,8 @@ class EvmExplorerClient
         value: integer(raw["value"]),
         fee: integer(raw["gasUsed"]) * integer(raw["gasPrice"]),
         failed: raw["isError"].to_s == "1" || raw["txreceipt_status"].to_s == "0",
-        block_number: integer(raw["blockNumber"]),
-        timestamp: Time.zone.at(integer(raw["timeStamp"])),
+        block_number: required_integer(raw["blockNumber"], "block number"),
+        timestamp: Time.zone.at(required_integer(raw["timeStamp"], "timestamp")),
         contract_address: address(raw["contractAddress"])
       }
     end
@@ -237,9 +248,16 @@ class EvmExplorerClient
         to: address(raw["to"]) || address(raw["contractAddress"]),
         value: integer(raw["value"]),
         failed: raw["isError"].to_s == "1",
-        block_number: integer(raw["blockNumber"]),
-        timestamp: Time.zone.at(integer(raw["timeStamp"]))
+        block_number: required_integer(raw["blockNumber"], "block number"),
+        timestamp: Time.zone.at(required_integer(raw["timeStamp"], "timestamp"))
       }
+    end
+
+    # A missing block number would read as block 0 and so as deeply confirmed.
+    def required_integer(value, field)
+      raise Error, "The explorer returned a transaction without a #{field}" if value.nil? || value == ""
+
+      integer(value)
     end
 
     def object(value, field)

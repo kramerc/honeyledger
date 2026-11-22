@@ -14,3 +14,7 @@ module EvmExplorerTestHelper
 end
 
 ActiveSupport::TestCase.include(EvmExplorerTestHelper)
+
+# Tests start from an unconfigured explorer whatever the developer's
+# credentials or environment hold, and opt in with with_evm_explorer.
+Rails.configuration.x.evm_explorer = Rails.configuration.x.evm_explorer.merge(provider: "blockscout", base_url: nil, api_key: nil)

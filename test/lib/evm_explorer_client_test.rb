@@ -5,6 +5,8 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
   WALLET = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed".freeze
   OTHER = "0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359".freeze
   API_KEY = "proapi_secretkey123".freeze
+  # Paging tests use a small page so they stay fast.
+  PAGE_SIZE = 10
 
   setup do
     @sleeps = []
@@ -22,7 +24,7 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
     assert_equal "https://api.blockscout.com/v2/api", url
     assert_equal 1, query["chain_id"]
     assert_equal API_KEY, query[:apikey]
-    assert_equal({ module: "account", action: "txlist", address: WALLET, startblock: 0, sort: "asc", page: 1, offset: EvmExplorerClient::PAGE_SIZE },
+    assert_equal({ module: "account", action: "txlist", address: WALLET, startblock: 0, sort: "asc", page: 1, offset: 5_000 },
       query.slice(:module, :action, :address, :startblock, :sort, :page, :offset))
   end
 
@@ -99,7 +101,8 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
   end
 
   test "pages by block range past a full page and drops the repeated block" do
-    page_size = EvmExplorerClient::PAGE_SIZE
+    page_size = PAGE_SIZE
+    client = build_client(page_size: page_size)
     first_page = (1..page_size).map { |index| normal(format("0x%064x", index), from: OTHER, to: WALLET, value: "1", block: (index / 2 + 1).to_s) }
     last_block = first_page.last["blockNumber"]
     # The second request restarts at the last block, so it repeats that block's transactions.
@@ -110,7 +113,7 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
       start_blocks << query[:startblock]
       response(envelope(query[:startblock].zero? ? first_page : second_page))
     } do
-      @client.normal_transactions(WALLET)
+      client.normal_transactions(WALLET)
     end
 
     assert_equal [ 0, last_block.to_i ], start_blocks
@@ -119,10 +122,41 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
   end
 
   test "a full page from a single block raises instead of looping" do
-    page = (1..EvmExplorerClient::PAGE_SIZE).map { |index| normal(format("0x%064x", index), from: OTHER, to: WALLET, value: "1", block: "0") }
+    page = (1..PAGE_SIZE).map { |index| normal(format("0x%064x", index), from: OTHER, to: WALLET, value: "1", block: "0") }
 
-    error = assert_raises(EvmExplorerClient::Error) { stub_responses(envelope(page)) { @client.normal_transactions(WALLET) } }
+    client = build_client(page_size: PAGE_SIZE)
+
+    error = assert_raises(EvmExplorerClient::Error) { stub_responses(envelope(page)) { client.normal_transactions(WALLET) } }
     assert_match(/single block/, error.message)
+  end
+
+  test "each preset pages at its own size" do
+    offsets = []
+    capture = ->(_url, query:, **_options) { offsets << query[:offset]; response(envelope([])) }
+
+    EvmExplorerClient.stub :get, capture do
+      build_client(provider: "blockscout").normal_transactions(WALLET)
+      build_client(provider: "etherscan").normal_transactions(WALLET)
+    end
+
+    assert_equal [ 5_000, 1_000 ], offsets
+    assert EvmExplorerClient.known_provider?(:etherscan)
+    assert_not EvmExplorerClient.known_provider?("Etherscan")
+  end
+
+  test "a transaction without a block number or timestamp is an Error, not block 0" do
+    valid = normal("0x#{"9" * 64}", from: OTHER, to: WALLET, value: "1")
+
+    [ { "blockNumber" => "" }, { "timeStamp" => nil } ].each do |change|
+      error = assert_raises(EvmExplorerClient::Error) { stub_responses(envelope([ valid.merge(change) ])) { @client.normal_transactions(WALLET) } }
+      assert_match(/without a (block number|timestamp)/, error.message)
+    end
+  end
+
+  test "a malformed status line is recorded as an Error" do
+    EvmExplorerClient.stub :get, ->(*_args, **_options) { raise Net::HTTPBadResponse, "wrong status line" } do
+      assert_match(/Could not reach/, assert_raises(EvmExplorerClient::Error) { @client.block_number }.message)
+    end
   end
 
   test "a rate limit inside a 200 body is retried with backoff" do
@@ -216,9 +250,9 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
 
   private
 
-    def build_client(provider: "blockscout", api_key: API_KEY, base_url: nil, min_interval: 0)
+    def build_client(provider: "blockscout", api_key: API_KEY, base_url: nil, page_size: nil, min_interval: 0)
       EvmExplorerClient.new(provider: provider, api_key: api_key, base_url: base_url, chain_id: EvmExplorerClient::ETHEREUM_MAINNET,
-        min_interval: min_interval, sleeper: ->(seconds) { @sleeps << seconds })
+        page_size: page_size, min_interval: min_interval, sleeper: ->(seconds) { @sleeps << seconds })
     end
 
     def stub_responses(body, &block)
