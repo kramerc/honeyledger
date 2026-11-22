@@ -104,6 +104,19 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_match(/Crypto \(USD\) is not in BTC/, blockchain_connections(:xpub_wallet).reload.error)
   end
 
+  test "a successful import clears an error the import wrote earlier, not a refresh error" do
+    connection = blockchain_connections(:xpub_wallet)
+    connection.update!(error: "Not imported: Crypto (USD) is not in BTC. Link the wallet to a BTC account.")
+
+    perform
+
+    assert_nil connection.reload.error, "relinked to a BTC account, the stale import error is gone"
+
+    connection.update!(error: "The explorer returned HTTP 503")
+    perform
+    assert_equal "The explorer returned HTTP 503", connection.reload.error, "a refresh error is left for the refresh to clear"
+  end
+
   test "a rule pointing at an account in another currency is not applied" do
     usd_gifts = @user.accounts.create!(name: "Gifts", kind: :expense, currency: currencies(:usd))
     @user.import_rules.create!(match_pattern: "bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g", match_type: :contains, account: usd_gifts)

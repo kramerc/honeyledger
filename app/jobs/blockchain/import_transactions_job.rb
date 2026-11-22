@@ -5,6 +5,11 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
 
   class CounterpartUnavailable < StandardError; end
 
+  # Prefixes of the errors this job writes on the wallet. Only these are cleared
+  # when an import can proceed; a refresh's own errors are the refresh's to clear.
+  MISMATCHED_LINK_PREFIX = "Not imported:".freeze
+  SKIPPED_ROWS_PREFIX = "Some transactions were not imported:".freeze
+
   def perform(blockchain_account_id:)
     return unless AccountSource.exists?(sourceable_type: "Blockchain::Account", sourceable_id: blockchain_account_id)
 
@@ -13,9 +18,13 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
     # A link in another currency would book coin minor units in it. The link and
     # account-edit paths refuse that; import checks again and says why it stopped.
     unless blockchain_account.linkable_to?(ledger_account)
-      blockchain_account.connection.update!(error: "Not imported: #{ledger_account.name} is not in #{blockchain_account.currency}. Link the wallet to a #{blockchain_account.currency} account.")
+      blockchain_account.connection.update!(error: "#{MISMATCHED_LINK_PREFIX} #{ledger_account.name} is not in #{blockchain_account.currency}. Link the wallet to a #{blockchain_account.currency} account.")
       return
     end
+    # Linking enqueues an import without a refresh, so an error this job wrote
+    # earlier (before a relink or a rename) would otherwise linger until the
+    # next refresh. A row that still cannot import writes it again below.
+    clear_import_error(blockchain_account.connection)
 
     transactions = Blockchain::Transaction
       .confirmed
@@ -99,7 +108,7 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
           begin
             counterpart_for(user, counterpart_name(blockchain_transaction, kind), kind, ledger_account.currency)
           rescue CounterpartUnavailable => e
-            blockchain_account.connection.update!(error: "Some transactions were not imported: #{e.message}.")
+            blockchain_account.connection.update!(error: "#{SKIPPED_ROWS_PREFIX} #{e.message}.")
             next
           end
         end
@@ -144,6 +153,12 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
   end
 
   private
+
+    def clear_import_error(connection)
+      return unless connection.error.to_s.start_with?(MISMATCHED_LINK_PREFIX, SKIPPED_ROWS_PREFIX)
+
+      connection.update!(error: nil)
+    end
 
     # Account.find_or_create_for_import matches by name alone. If the user
     # already has an account with that name in another currency (a fiat
