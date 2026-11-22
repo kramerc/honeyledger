@@ -197,6 +197,19 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
     assert_equal "The explorer refused the request (Invalid address format [FILTERED])", error.message
   end
 
+  test "Blockscout's empty internal list is an empty history" do
+    body = { "status" => "0", "message" => "No internal transactions found", "result" => [] }
+
+    assert_equal [], stub_responses(body) { @client.internal_transactions(WALLET) }
+  end
+
+  test "any other failure with an empty list is an Error, not an empty wallet" do
+    body = { "status" => "0", "message" => "Query timeout", "result" => [] }
+
+    error = assert_raises(EvmExplorerClient::Error) { stub_responses(body) { @client.normal_transactions(WALLET) } }
+    assert_equal "The explorer refused the request (Query timeout)", error.message
+  end
+
   test "a failure status with a non-empty list is still a refusal" do
     body = { "status" => "0", "message" => "Query timeout", "result" => [ { "unexpected" => true } ] }
 

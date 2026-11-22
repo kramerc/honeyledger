@@ -44,6 +44,10 @@ class EvmExplorerClient
 
   ETHEREUM_MAINNET = 1
 
+  # Etherscan says "No transactions found"; Blockscout says that for txlist and
+  # "No internal transactions found" for txlistinternal.
+  NO_RECORDS = /\ANo (internal )?transactions found\z/i
+
   default_timeout 30
 
   # Etherscan's free tier allows 3 requests a second, Blockscout's 5.
@@ -141,7 +145,10 @@ class EvmExplorerClient
 
         result
       when "0"
-        return [] if result.is_a?(Array) && result.empty?
+        # Only the documented "nothing here" answer is an empty history. Any
+        # other refusal ("Query timeout", say) with an empty list must stay an
+        # error, or the scan would read an empty wallet and prune its rows.
+        return [] if result.is_a?(Array) && result.empty? && body["message"].to_s.match?(NO_RECORDS)
 
         reject!(body)
       else
