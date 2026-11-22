@@ -49,4 +49,22 @@ class IntegrationsHelperTest < ActionView::TestCase
 
     assert_equal "—", aggregator_balance(lunchflow_account)
   end
+
+  test "aggregator_currency returns the reported currency code" do
+    assert_equal "USD", aggregator_currency(simplefin_accounts(:linked_one))
+  end
+
+  test "aggregator_currency flags a blank currency as missing" do
+    simplefin_account = simplefin_accounts(:linked_one)
+    simplefin_account.currency = ""
+
+    assert_includes aggregator_currency(simplefin_account), "(missing)"
+  end
+
+  test "aggregator_currency flags a nil currency as missing" do
+    lunchflow_account = lunchflow_accounts(:unlinked_one)
+    lunchflow_account.currency = nil
+
+    assert_includes aggregator_currency(lunchflow_account), "(missing)"
+  end
 end
