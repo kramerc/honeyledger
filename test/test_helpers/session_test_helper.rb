@@ -1,11 +1,15 @@
 module SessionTestHelper
+  # The raw session_id cookie value the app would set for this session: the
+  # session id signed with the app's key, as Authentication writes it.
+  def self.signed_session_cookie(session)
+    ActionDispatch::TestRequest.create.cookie_jar.tap do |cookie_jar|
+      cookie_jar.signed[:session_id] = session.id
+    end[:session_id]
+  end
+
   def sign_in_as(user)
     Current.session = user.sessions.create!
-
-    ActionDispatch::TestRequest.create.cookie_jar.tap do |cookie_jar|
-      cookie_jar.signed[:session_id] = Current.session.id
-      cookies["session_id"] = cookie_jar[:session_id]
-    end
+    cookies["session_id"] = SessionTestHelper.signed_session_cookie(Current.session)
   end
 
   # Each request runs in its own Current context and pops back to the test's

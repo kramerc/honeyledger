@@ -51,7 +51,11 @@ Everything derives from the worktree's path, via `config/worktree_database.rb`:
 - **Databases.** A linked worktree's development and test databases are named
   `honeyledger_<env>_wt_<label>_<digest>`; the primary checkout keeps the plain
   names and production is untouched. Two sessions can run `bin/rails test` at
-  once, and a migration on one branch cannot break another.
+  once, and a migration on one branch cannot break another. Tests run in up to
+  eight parallel worker processes (system test workers each with their own
+  Chrome), and each worker gets its own copy of the test database with `_<n>` appended to the
+  name. `PARALLEL_WORKERS=1` runs them serially, which helps when debugging one
+  failure.
 - **Secrets and local settings.** Run `bin/worktree-setup` after creating a
   worktree: it symlinks the gitignored `config/master.key` and
   `.claude/settings.local.json` from the primary checkout, installs any
@@ -66,7 +70,7 @@ primary checkout's `honeyledger_development`, and real aggregator credentials.
 
 **Cleanup.** `git worktree remove` leaves databases behind. From the primary
 checkout, `bin/worktree-clean` lists them and `--drop` removes the orphaned
-**test** databases (rebuilt from `db/schema.rb` on demand). Orphaned development
+**test** databases, parallel workers' `_<n>` copies included (rebuilt from `db/schema.rb` on demand). Orphaned development
 databases are only ever reported with the `dropdb` command to run by hand.
 
 **Caveat.** `DATABASE_URL` naming a database outranks `database.yml` and defeats
@@ -147,7 +151,7 @@ Authentication is the Rails 8 generator pattern, not Devise: `app/controllers/co
 
 The only other public controller is `HomeController`, which opts out with `allow_unauthenticated_access` because the landing page carries no user data. Everything else, including `CurrenciesController`, is authenticated implicitly, and user-owned queries are scoped to `current_user` to prevent cross-user data access. In views and controllers use `authenticated?` and `current_user`.
 
-Tests: integration tests call `sign_in_as(user)` / `sign_out` from `test/test_helpers/session_test_helper.rb` (sets the cookie directly); system tests call the `sign_in_as(user)` defined in `ApplicationSystemTestCase`, which logs in through the form. Every user fixture carries the `"password123"` digest.
+Tests: integration tests call `sign_in_as(user)` / `sign_out` from `test/test_helpers/session_test_helper.rb` (sets the cookie directly); system tests call the `sign_in_as(user)` defined in `ApplicationSystemTestCase`, which creates the session row and hands the browser its signed cookie (`SessionTestHelper.signed_session_cookie`), then lands on the home page. Only tests of the login flow itself use `sign_in_through_form(user)`. Every user fixture carries the `"password123"` digest.
 
 ### Passkeys
 
@@ -157,7 +161,7 @@ Passkeys are usernameless WebAuthn credentials (`webauthn` gem) stored in `Passk
 
 - Framework: Minitest (not RSpec). Use `test "description" do ... end` syntax.
 - Fixtures for test data; `minitest-mock` for mocking external dependencies.
-- Coverage tracked with SimpleCov, uploaded to Codecov.
+- Coverage tracked with SimpleCov, uploaded to Codecov. Tests run in parallel workers, and SimpleCov merges their coverage into one report.
 - Every item in a PR's test plan must have corresponding test coverage (unit, integration, or system test).
 - **Layering:** controller tests (`test/controllers/*`) assert request flow only — `assert_response`, `assert_redirected_to`, controller-level branching. Anything about rendered content (text, row visibility, status tags, conditional rendering) belongs in `test/system/*` with Capybara matchers (`assert_text`, `assert_no_text`, scoped with `within(...)` for row-level checks). Don't `assert_match` against `response.body` in controller tests.
 - **Coverage:** only the non-system `test` CI job uploads to Codecov; `system-test` does not. A Ruby line exercised only by a system test reads as uncovered and fails `codecov/patch`, so back every new or changed `.rb` branch with a model/controller/integration test as well.
