@@ -82,6 +82,7 @@ The main data tables (transactions, accounts, passkeys) are CSS grids of `.row` 
 - Row hover (desktop only): `--honey-light` background.
 - Long text (description, account names): one line with an ellipsis, the full text in `title`.
 - Actions cell (transactions): icons only, with no visible header (the word "Actions" stays for screen readers). The column (`--actions-column`) is one icon button wide plus padding, and widens to two buttons only while a row is being edited (`.transactions:has(.transaction.editing)`); both widths derive from the button size, so the icons fill the cell exactly. Opening an edit shifts the other columns slightly; that is the accepted cost of not reserving the room. A shown row has its kebab menu (see Action menus); the new-transaction and edit form rows have their icon form actions (see Buttons).
+- Long lists (transactions): infinite scroll, never page links. The server sends one page (`Transaction::Page::SIZE` rows); a lazy Turbo Frame at its foot (`.transactions-page`) fetches the next page when it scrolls into view, showing a centred "Load more transactions" link in `--bark-light` at `0.85rem` until it does (the link is also the no-JavaScript fallback). Rows carry `content-visibility: auto`, so the browser skips off-screen rows however far the reader scrolls.
 
 ### Links and action clusters
 

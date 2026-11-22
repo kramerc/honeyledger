@@ -2,12 +2,11 @@
 
 <h1 class="sr-only">Transactions</h1>
 
-<% base_path = @account ? account_transactions_path(@account) : transactions_path %>
 <div class="transactions-filter">
   <% if @show_excluded %>
-    <%= link_to "Hide excluded transactions", base_path %>
+    <%= link_to "Hide excluded transactions", transactions_page_path(account: @account, show_excluded: false) %>
   <% else %>
-    <%= link_to "Show excluded transactions", "#{base_path}?show_excluded=1" %>
+    <%= link_to "Show excluded transactions", transactions_page_path(account: @account, show_excluded: true) %>
   <% end %>
   <% if @account&.real? %>
     | <%= link_to "Import CSV", account_csv_imports_path(@account) %>
@@ -45,7 +44,7 @@
     <% end %>
 
     <%= turbo_frame_tag :transactions do %>
-      <%= render @transactions %>
+      <%= render "page", transactions: @transactions, next_cursor: @next_cursor %>
     <% end %>
   </div>
 

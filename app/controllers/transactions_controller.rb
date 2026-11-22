@@ -1,16 +1,41 @@
 class TransactionsController < ApplicationController
+  # The prefix of the lazy frame that loads the next page (transactions/_page).
+  PAGE_FRAME_PREFIX = "transactions_page_"
+
   before_action :set_filter_account
+  before_action :set_standalone
   before_action :set_transaction, only: %i[ show edit update destroy ]
-  before_action :set_form_collections, only: %i[ index new create edit update show ]
+  before_action :set_form_collections, only: %i[ new create edit update show ]
 
   # GET /transactions or /transactions.json
   def index
-    @new_transaction = build_new_transaction
-
     @show_excluded = params[:show_excluded] == "1"
-    @transactions = visible_transactions(show_excluded: @show_excluded)
+    scope = visible_transactions(show_excluded: @show_excluded)
       .includes(:category, :src_account, :dest_account, :currency, :fx_currency, transaction_sources: :sourceable, merged_sources: [ :src_account, :dest_account, { transaction_sources: :sourceable } ])
-      .order(transacted_at: :desc, created_at: :desc)
+      .order(Transaction::Page::ORDER)
+
+    respond_to do |format|
+      format.html do
+        # One page at a time; the next loads as the reader scrolls to it.
+        page = Transaction::Page.new(scope, cursor: Transaction::Page::Cursor.from_params(params))
+        @transactions = page.transactions
+        @next_cursor = page.next_cursor
+
+        # A later page, requested by the lazy frame at the foot of the list:
+        # only the rows and the next frame, without the form or the layout.
+        if page_frame_request?
+          render partial: "page", layout: false, locals: {
+            frame_id: request.headers["Turbo-Frame"],
+            transactions: @transactions,
+            next_cursor: @next_cursor
+          }
+        else
+          @new_transaction = build_new_transaction
+          set_form_collections
+        end
+      end
+      format.json { @transactions = scope }
+    end
   end
 
   # GET /transactions/1 or /transactions/1.json
@@ -50,7 +75,23 @@ class TransactionsController < ApplicationController
   def update
     respond_to do |format|
       if @transaction.update(transaction_params)
-        format.turbo_stream { render :show }
+        format.turbo_stream do
+          # On the index, the rows on screen must stay sorted and within the
+          # list's scope, since the next page starts below the last of them
+          # (transactions--pager). A row the edit takes out of the list leaves
+          # it; a new date re-inserts the row at its sorted position, which
+          # drops it when it now belongs on a page not yet loaded. Elsewhere
+          # (the transaction's own page) the row is simply replaced.
+          unless @standalone
+            if !row_visible?(@transaction)
+              @remove = true
+            elsif @transaction.saved_change_to_transacted_at?
+              @reposition = true
+              @preceding = find_preceding_transaction(@transaction)
+            end
+          end
+          render :show
+        end
         format.html { redirect_to @transaction, notice: "Transaction was successfully updated." }
         format.json { render :show, status: :ok, location: @transaction }
       else
@@ -71,21 +112,15 @@ class TransactionsController < ApplicationController
       if unmerger.call
         scope = visible_transactions(show_excluded: show_excluded?)
         restored = unmerger.restored_transactions
-          .sort_by { |transaction| [ transaction.transacted_at, transaction.created_at ] }.reverse
         # Only legs that belong in the list being rendered can be inserted; an
         # account-filtered index may exclude some or all of them.
         visible_ids = scope.where(id: restored.map(&:id)).pluck(:id)
-        @restored_transactions = restored.select { |transaction| visible_ids.include?(transaction.id) }
-
-        # Find the nearest transaction that's newer (appears above in the list) to insert after.
-        # This element is already in the DOM, unlike older ones which may be off-screen or absent.
-        newest = @restored_transactions.first
-        @after_transaction = if newest
-          scope.where.not(id: restored.map(&:id))
-            .where("transacted_at > :at OR (transacted_at = :at AND created_at > :cat)",
-                   at: newest.transacted_at, cat: newest.created_at)
-            .order(transacted_at: :asc, created_at: :asc).first
-        end
+        # Oldest first: a newer leg may sort directly above an older one, which
+        # must already be in the DOM to anchor it (transactions/_insert).
+        @restored_insertions = restored
+          .select { |transaction| visible_ids.include?(transaction.id) }
+          .sort_by { |transaction| [ transaction.transacted_at, transaction.created_at, transaction.id ] }
+          .map { |transaction| [ transaction, find_preceding_transaction(transaction) ] }
         @removed_id = @transaction.id
         format.turbo_stream
       else
@@ -307,6 +342,15 @@ class TransactionsController < ApplicationController
       @account = current_user.accounts.find(account_id) if account_id.present?
     end
 
+    # Whether the rows belong to a transaction's own page rather than the
+    # index. That page marks its edit frame, form and Cleared toggle with
+    # standalone=1, so their updates replace the row in place. Without the
+    # marker an update keeps the index's rows sorted (see update), so a
+    # stripped Referer or a missing param can never leave them out of order.
+    def set_standalone
+      @standalone = action_name == "show" || params[:standalone] == "1"
+    end
+
     def bulk_transaction_ids
       Array(params[:transaction_ids]).uniq
     end
@@ -349,14 +393,15 @@ class TransactionsController < ApplicationController
     end
 
     # The nearest row that sorts below `transaction`, i.e. the one it must be
-    # inserted before. The predicate mirrors the (transacted_at, created_at)
+    # inserted before. The predicate mirrors the (transacted_at, created_at, id)
     # sort order exactly, so a row older by date but newer by creation still
     # counts as below.
     def find_preceding_transaction(transaction)
-      visible_transactions(show_excluded: show_excluded?)
-        .where("transacted_at < :at OR (transacted_at = :at AND created_at < :cat)",
-               at: transaction.transacted_at, cat: transaction.created_at)
-        .order(transacted_at: :desc, created_at: :desc).first
+      Transaction::Page.below(visible_transactions(show_excluded: show_excluded?), transaction).first
+    end
+
+    def page_frame_request?
+      turbo_frame_request? && request.headers["Turbo-Frame"].to_s.start_with?(PAGE_FRAME_PREFIX)
     end
 
     def set_form_collections

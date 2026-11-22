@@ -629,6 +629,29 @@ class TransactionsTest < ApplicationSystemTestCase
     assert_nil transaction.reload.cleared_at
   end
 
+  test "a rejected edit's error box is painted below the row, not clipped by it" do
+    transaction = manual_transaction("Clipped error probe", 1500)
+    transaction.update_columns(dest_account_id: transaction.src_account_id)
+    visit transactions_path
+
+    within_row(transaction) do
+      find(".cleared-cell button").click
+      assert_selector ".edit .error", text: "Transaction could not be saved"
+    end
+
+    # Hit-testing follows paint, so the box is the topmost element at its own
+    # centre only when nothing clips it.
+    painted = page.evaluate_script(<<~JS)
+      (() => {
+        const error = document.querySelector(".transaction.editing .edit .error")
+        error.scrollIntoView({ block: "center" })
+        const box = error.getBoundingClientRect()
+        return error.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+      })()
+    JS
+    assert painted
+  end
+
   test "opening balances keep their cells as plain text" do
     opening_balance = transactions(:opening_balance_revenue)
     accept_confirm { click_link "Logout" }
@@ -976,6 +999,174 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "scrolling to the foot of the list loads the next page" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+
+      assert_text "Paged row 01"
+      assert_no_text "Paged row 50"
+
+      scroll_to find(".transactions-page")
+
+      assert_text "Paged row 50"
+      assert_selector ".transaction", count: 50
+      assert_no_link "Load more transactions"
+    end
+  end
+
+  test "a transaction older than every loaded row arrives with its page, once" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+      assert_text "Paged row 01"
+
+      fill_in "transaction[transacted_at]", with: Time.zone.parse("2020-01-01 10:00")
+      fill_in "transaction[description]", with: "Backdated probe"
+      select account.name, from: "transaction[src_account_id]"
+      select accounts(:expense_account).name, from: "transaction[dest_account_id]"
+      fill_in "transaction[amount]", with: "3.00"
+      click_button "Create"
+
+      # The form resets once the create lands; the row's page isn't loaded yet.
+      assert_field "transaction[description]", with: ""
+      assert_no_text "Backdated probe"
+
+      scroll_to find(".transactions-page")
+
+      assert_selector ".transaction", text: "Backdated probe", count: 1
+    end
+  end
+
+  test "an unmerged leg that sorts below the loaded rows arrives with its page, once" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+    currency = currencies(:usd)
+    withdrawal = Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                                     amount_minor: 700, currency: currency, description: "Old withdrawal leg",
+                                     transacted_at: Time.zone.parse("2020-01-01 10:00"))
+    deposit = Transaction.create!(user: @user, src_account: accounts(:revenue_account), dest_account: accounts(:asset_account),
+                                  amount_minor: 700, currency: currency, description: "Old deposit leg",
+                                  transacted_at: Time.zone.parse("2020-01-01 10:00"))
+    merger = Transaction::Merge.new(withdrawal, deposit, user: @user, transacted_at: Time.current)
+    assert merger.call
+    merged = merger.merged_transaction
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+
+      within_row(merged) do
+        open_row_menu
+        accept_confirm { click_link "Unmerge" }
+      end
+
+      assert_no_selector "##{ActionView::RecordIdentifier.dom_id(merged)}"
+      assert_no_text "Old withdrawal leg"
+
+      scroll_to find(".transactions-page")
+
+      assert_selector ".transaction", text: "Old withdrawal leg", count: 1
+    end
+  end
+
+  test "a row whose new date sorts below the loaded rows leaves and arrives with its page, once" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+    moved = @user.transactions.find_by!(description: "Paged row 03")
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+
+      within_row(moved) { find(".date-cell .cell-edit").click }
+      within_row(moved) do
+        fill_in "transaction[transacted_at]", with: Time.zone.parse("2020-01-01 10:00")
+        click_button "Save"
+      end
+
+      assert_no_text "Paged row 03"
+
+      scroll_to find(".transactions-page")
+
+      assert_selector ".transaction", text: "Paged row 03", count: 1
+      assert_selector ".transaction", count: 50
+    end
+  end
+
+  test "a date edit on the transaction's own page keeps it on screen" do
+    transaction = manual_transaction("Standalone date probe", 1500)
+    visit transaction_path(transaction)
+
+    # show.html.erb wraps the row in a frame sharing its id, so scope by class.
+    find(".transaction .date-cell .cell-edit").click
+    within(".transaction") do
+      fill_in "transaction[transacted_at]", with: Time.zone.parse("2020-01-01 10:00")
+      click_button "Save"
+    end
+
+    assert_selector ".transaction .date-cell", text: "2020-01-01"
+    assert_text "Standalone date probe"
+  end
+
+  test "the next page starts from the top once every loaded row is gone" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+      assert_text "Paged row 01"
+
+      # What the delete streams do, without scrolling the next page into view.
+      loaded = @user.transactions.where(description: (1..40).map { |index| format("Paged row %02d", index) })
+      page.execute_script("document.querySelectorAll('#transactions [data-page-cursor]').forEach((row) => row.closest('turbo-frame').remove())")
+      loaded.destroy_all
+      # Sorts inside the range that was loaded, above the frame's own cursor
+      # (row 40), so only a restart from the top finds it.
+      Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                          amount_minor: 100, currency: currencies(:usd), description: "Restart probe",
+                          transacted_at: 10.days.ago)
+
+      scroll_to find(".transactions-page")
+
+      assert_text "Restart probe"
+      assert_text "Paged row 41"
+      assert_text "Paged row 50"
+      assert_selector ".transaction", count: 11
+    end
+  end
+
+  test "a row added where the last loaded row was still loads with the next page" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+    last_loaded = @user.transactions.find_by!(description: "Paged row 40")
+    gap_time = last_loaded.transacted_at
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+
+      assert_text "Paged row 01"
+      # What the Delete action's stream does, without scrolling to the row:
+      # that would bring the next page into view and load it straight away.
+      last_loaded.destroy!
+      page.execute_script("document.getElementById('#{ActionView::RecordIdentifier.dom_id(last_loaded)}').remove()")
+      assert_no_text "Paged row 40"
+
+      # Sorts just above where the deleted row was (same date, created later),
+      # so below every row still loaded: it belongs to the next page.
+      Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                          amount_minor: 100, currency: currencies(:usd), description: "Gap probe",
+                          transacted_at: gap_time)
+
+      scroll_to find(".transactions-page")
+
+      assert_selector ".transaction", text: "Gap probe", count: 1
+      assert_text "Paged row 50"
+    end
+  end
+
   test "an outside click closes the menu" do
     transaction = manual_transaction("Menu dismiss probe", 1700)
     visit transactions_path
@@ -989,6 +1180,15 @@ class TransactionsTest < ApplicationSystemTestCase
   private
 
   ROW_MENU_TRIGGER = "button[aria-label='Transaction actions']".freeze
+
+  # `count` rows in `account`'s list, "Paged row 01" the newest, one day apart.
+  def paged_rows(account, count)
+    count.times do |index|
+      Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                          amount_minor: 100, currency: currencies(:usd),
+                          description: format("Paged row %02d", index + 1), transacted_at: (index + 1).days.ago)
+    end
+  end
 
   # Open the row's kebab menu; call inside within_row.
   # Open the row's kebab menu, by click or by Enter on the trigger; call
