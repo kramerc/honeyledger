@@ -60,6 +60,7 @@
         <th>Organization</th>
         <th>Account Name</th>
         <th style="text-align: right">Balance</th>
+        <th>Currency</th>
         <th>Balance As Of</th>
         <th>Linked Account</th>
       </tr>
@@ -73,6 +74,7 @@
             <% end %>
           </td>
           <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(sf_account) %></td>
+          <td><%= aggregator_currency(sf_account) %></td>
           <td style="white-space: nowrap"><%= sf_account.balance_date ? sf_account.balance_date.strftime("%B %d, %Y %I:%M %p") : "—" %></td>
           <td><%= render partial: "integrations/simplefin_link_form", locals: { sf_account: sf_account, linkable_accounts: @linkable_accounts } %></td>
         </tr>
@@ -97,6 +99,7 @@
         <th>Institution</th>
         <th>Account Name</th>
         <th style="text-align: right">Balance</th>
+        <th>Currency</th>
         <th>Balance As Of</th>
         <th>Status</th>
         <th>Linked Account</th>
@@ -111,6 +114,7 @@
             <% end %>
           </td>
           <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(lf_account) %></td>
+          <td><%= aggregator_currency(lf_account) %></td>
           <td style="white-space: nowrap"><%= lf_account.balance_changed_at ? lf_account.balance_changed_at.strftime("%B %d, %Y %I:%M %p") : "—" %></td>
           <td>
             <% case lf_account.status %>

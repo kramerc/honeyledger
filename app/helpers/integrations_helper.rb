@@ -14,4 +14,14 @@ module IntegrationsHelper
       "#{aggregator_account.balance} #{aggregator_account.currency}".strip
     end
   end
+
+  # The currency code an aggregator reported for one of its accounts. A blank
+  # code is flagged rather than left empty, because it is what makes
+  # `aggregator_balance` fall back to a bare number with no currency symbol.
+  def aggregator_currency(aggregator_account)
+    return aggregator_account.currency if aggregator_account.currency.present?
+
+    tag.span "(missing)", style: "color: var(--accent-text)",
+      title: "The aggregator did not report a currency for this account, so its balance is shown without a currency symbol."
+  end
 end

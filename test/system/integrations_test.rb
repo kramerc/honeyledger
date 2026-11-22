@@ -69,6 +69,30 @@ class IntegrationsTest < ApplicationSystemTestCase
     end
   end
 
+  test "shows the currency SimpleFIN reported for each account" do
+    simplefin_accounts(:unlinked_one).update!(currency: "")
+
+    visit integrations_path
+
+    within find("table", text: "Organization") do
+      assert_selector "th", text: "Currency"
+      assert_selector "td", exact_text: "USD"
+      within("tr", text: "Test Savings") do
+        assert_text "(missing)"
+        assert_no_text "$"
+      end
+    end
+  end
+
+  test "shows the currency Lunch Flow reported for each account" do
+    visit integrations_path
+
+    within find("table", text: "Institution") do
+      assert_selector "th", text: "Currency"
+      within("tr", text: "Test Bank Savings") { assert_text "USD" }
+    end
+  end
+
   test "sorts SimpleFIN accounts by institution then account name" do
     # Insertion order (linked, unlinked, reconciled) deliberately differs from the
     # expected sorted order, and account names alone sort differently than the
