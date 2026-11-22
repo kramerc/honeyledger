@@ -76,8 +76,9 @@ checkout, `bin/worktree-clean` lists them and `--drop` removes the orphaned
 databases are only ever reported with the `dropdb` command to run by hand.
 
 **Caveat.** `DATABASE_URL` naming a database outranks `database.yml` and defeats
-the isolation; `bin/worktree-setup` warns instead of claiming it. A URL with no
-database path (what CI uses) is fine.
+the isolation, whether it comes from the shell or a `.env*` file; `bin/worktree-setup`
+checks both and warns instead of claiming it. A URL with no database path (what
+CI uses) is fine.
 
 ## Architecture
 

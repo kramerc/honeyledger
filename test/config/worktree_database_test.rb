@@ -92,4 +92,45 @@ class WorktreeDatabaseTest < ActiveSupport::TestCase
     assert_not WorktreeDatabase.database_url_names_database?("postgres://localhost?pool=5")
     assert_not WorktreeDatabase.database_url_names_database?("not a url")
   end
+
+  def write_env_files(root, files)
+    files.each { |name, contents| File.write(File.join(root, name), contents) }
+  end
+
+  test "effective_database_url prefers a value already in the environment over every file" do
+    root = linked_worktree
+    write_env_files(root, ".env.development" => "DATABASE_URL=postgres://localhost/from_file\n")
+
+    assert_equal "postgres://localhost", WorktreeDatabase.effective_database_url(root, "development", env: { "DATABASE_URL" => "postgres://localhost" })
+  end
+
+  test "effective_database_url takes the first dotenv file that sets it, in Rails' order" do
+    root = linked_worktree
+    write_env_files(root,
+      ".env" => "DATABASE_URL=postgres://localhost/from_env\n",
+      ".env.development" => "DATABASE_URL=postgres://localhost/from_development\n",
+      ".env.local" => "OTHER=1\n")
+
+    assert_equal "postgres://localhost/from_development", WorktreeDatabase.effective_database_url(root, "development", env: {})
+
+    write_env_files(root, ".env.development.local" => "DATABASE_URL=postgres://localhost/from_development_local\n")
+    assert_equal "postgres://localhost/from_development_local", WorktreeDatabase.effective_database_url(root, "development", env: {})
+  end
+
+  test "effective_database_url ignores .env.local in test, like Rails" do
+    root = linked_worktree
+    write_env_files(root,
+      ".env.local" => "DATABASE_URL=postgres://localhost/from_local\n",
+      ".env" => "DATABASE_URL=postgres://localhost\n")
+
+    assert_equal "postgres://localhost/from_local", WorktreeDatabase.effective_database_url(root, "development", env: {})
+    assert_equal "postgres://localhost", WorktreeDatabase.effective_database_url(root, "test", env: {})
+  end
+
+  test "effective_database_url is nil when neither the environment nor any file sets it" do
+    root = linked_worktree
+    write_env_files(root, ".env.development" => "EVM_EXPLORER_API_KEY=placeholder\n")
+
+    assert_nil WorktreeDatabase.effective_database_url(root, "development", env: {})
+  end
 end

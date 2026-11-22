@@ -73,6 +73,30 @@ module WorktreeDatabase
       false
     end
 
+    # The dotenv files Rails loads at boot for `environment`, highest
+    # precedence first -- the list in dotenv 3's Dotenv::Rails.
+    def dotenv_files(environment)
+      [ ".env.#{environment}.local", (".env.local" unless environment.to_s == "test"), ".env.#{environment}", ".env" ].compact
+    end
+
+    # The DATABASE_URL `environment` boots with. As in Dotenv.load, a variable
+    # already in `env` beats every file, and otherwise the first file that sets
+    # it wins. bin/worktree-setup runs outside Rails, so it must resolve this
+    # itself before db:prepare, which loads the files the shell never saw.
+    def effective_database_url(application_root, environment, env: ENV)
+      return env["DATABASE_URL"] if env.key?("DATABASE_URL")
+
+      require "dotenv"
+      dotenv_files(environment).each do |name|
+        path = File.join(application_root, name)
+        next unless File.file?(path)
+
+        values = Dotenv.parse(path)
+        return values["DATABASE_URL"] if values.key?("DATABASE_URL")
+      end
+      nil
+    end
+
     private
 
     # Symlinks and relative segments must not make one worktree look like two,

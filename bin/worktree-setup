@@ -63,11 +63,17 @@ unless system(FROZEN_BUNDLE, "bundle", "install", chdir: APP_ROOT, out: File::NU
   exit 0
 end
 
+# The gems are installed now, so dotenv can be loaded to read the .env files.
+ENV["BUNDLE_GEMFILE"] ||= File.join(APP_ROOT, "Gemfile")
+require "bundler/setup"
+
 # The symlinks above are useful regardless, but database preparation is only
-# worth doing when it prepares databases of this worktree's own.
-if WorktreeDatabase.database_url_names_database?
-  say "Worktree databases are NOT isolated: DATABASE_URL names a database, which outranks " \
-      "config/database.yml, so every worktree shares it. Unset it or drop its database path."
+# worth doing when it prepares databases of this worktree's own. Rails reads
+# DATABASE_URL from the shell or from the .env files linked above, and
+# db:prepare touches both the development and test databases.
+if %w[development test].any? { |environment| WorktreeDatabase.database_url_names_database?(WorktreeDatabase.effective_database_url(APP_ROOT, environment)) }
+  say "Worktree databases are NOT isolated: DATABASE_URL (from the shell or a .env file) names a " \
+      "database, which outranks config/database.yml, so every worktree shares it. Unset it or drop its database path."
   exit 0
 end
 
