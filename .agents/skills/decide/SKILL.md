@@ -17,7 +17,8 @@ The issue is the only state. Rerunning this skill reads the issue body and comme
 | No **Decide** section, or sub-questions not yet laid out | 1. Filing (restructure the body) |
 | Open, with sub-questions; maybe a `## Provisional direction` comment | 2. Deliberating |
 | Maintainer sign-off in the session or a comment, but no `## Decision` comment | 3. Recording & closing |
-| Closed with a `## Decision` comment whose Follow-ups line is still empty | 4. Propagating |
+| A `## Decision` comment exists but the banner is missing or the issue is still open | 3. Recording & closing, resumed: reuse that comment, never post a second one |
+| Closed with a `## Decision` comment whose Follow-ups line still reads `pending` | 4. Propagating |
 
 This skill takes one optional argument, the issue number, written as `N` below. Without it, run `gh issue list --label decision --state open`, read each issue, report its number, title, and phase in a table, and ask which one to work on.
 
@@ -72,8 +73,8 @@ Only after the maintainer has explicitly signed off on every sub-question.
 ## 4. Propagating
 
 1. **Blocked issues.** For every issue under **Blocks** and every blocked-by link, update its body to match the outcome. Comment instead when an edit would erase discussion worth keeping. Remove the blocked-by link once nothing it guarded is still open (`gh issue edit X --remove-blocked-by N`).
-2. **Held epic children.** File the children that were waiting on this decision, following "Splitting an epic into sub-issues" in the `triage-issues` skill: re-read any plan comment on the parent first (it may have been edited), `gh issue create --parent P`, add blocked-by links, triage each child, then `bin/triage sync-estimates`.
-3. **New work.** When the outcome needs implementation and no issue covers it, file the work item(s). Each body says "Follows the decision in issue N." Triage each one.
+2. **Held epic children.** File the children that were waiting on this decision, following "Splitting an epic into sub-issues" in the `triage-issues` skill: re-read any plan comment on the parent first (it may have been edited), list the parent's existing sub-issues (`gh api --paginate repos/{owner}/{repo}/issues/P/sub_issues`) so a rerun reuses children already filed instead of duplicating them, `gh issue create --parent P` for each one still missing, add blocked-by links, triage each child, then `bin/triage sync-estimates`.
+3. **New work.** When the outcome needs implementation and no issue covers it (search for "Follows the decision in issue N" first, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in issue N." Triage each one.
 4. **Follow-ups line.** Edit the Decision comment so Follow-ups lists every issue edited or filed:
 
    ```
