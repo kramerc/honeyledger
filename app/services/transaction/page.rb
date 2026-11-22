@@ -14,13 +14,22 @@ class Transaction::Page
   ORDER = { transacted_at: :desc, created_at: :desc, id: :desc }.freeze
 
   Cursor = Data.define(:transacted_at, :created_at, :id) do
+    # The range Postgres can compare against: bigint ids and timestamp years.
+    ID_RANGE = (1..(2**63 - 1))
+    YEAR_RANGE = (1..9999)
+
     # Reads before_at / before_created / before_id. nil (the first page) when
-    # any part is missing or malformed.
+    # any part is missing, malformed, or out of the database's range.
     def self.from_params(params)
       values = params.values_at(:before_at, :before_created, :before_id)
       return if values.any?(&:blank?)
 
-      new(Time.iso8601(values[0].to_s), Time.iso8601(values[1].to_s), Integer(values[2].to_s))
+      transacted_at = Time.iso8601(values[0].to_s)
+      created_at = Time.iso8601(values[1].to_s)
+      id = Integer(values[2].to_s, 10)
+      return unless ID_RANGE.cover?(id) && YEAR_RANGE.cover?(transacted_at.year) && YEAR_RANGE.cover?(created_at.year)
+
+      new(transacted_at, created_at, id)
     rescue ArgumentError
       nil
     end

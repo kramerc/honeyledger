@@ -145,7 +145,7 @@ Development uses a single database.
 
 Turbo Frames for partial page updates, Turbo Streams for inline updates (e.g., `TransactionsController` index). Stimulus controllers in `app/javascript/controllers/`. Minimal custom JavaScript.
 
-The transactions index is paginated by keyset (`Transaction::Page`, ordered by `transacted_at, created_at, id` descending) and loads later pages through a lazy frame as the reader scrolls, so the browser holds only the rows scrolled past so far. A Turbo Stream that adds a row must place it with `transactions/_insert` (before the row that sorts just below it, or before the `transactions_end` marker that exists only once the last page is loaded), never `append`/`prepend` to `:transactions`. When that anchor isn't loaded yet, Turbo drops the stream and the row arrives with its page, so it never appears twice.
+The transactions index is paginated by keyset (`Transaction::Page`, ordered by `transacted_at, created_at, id` descending) and loads later pages through a lazy frame as the reader scrolls, so the browser holds only the rows scrolled past so far. A Turbo Stream that adds a row must place it with `transactions/_insert` (before the row that sorts just below it, or before the `transactions_end` marker that exists only once the last page is loaded), never `append`/`prepend` to `:transactions`. When that anchor isn't loaded yet, Turbo drops the stream and the row arrives with its page, so it never appears twice. A row whose date changes is re-inserted the same way, so the rows on screen stay sorted: the next-page frame (`transactions--pager`) starts from the last row on screen when it loads, and skips any row already there.
 
 ### Authentication and Authorization
 

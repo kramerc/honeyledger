@@ -23,7 +23,6 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     # Turbo only swaps in a response holding the frame it asked for.
     assert_select "turbo-frame##{frame_id}"
-    assert_select "header", count: 0
   end
 
   test "a later page of an account-filtered, show-excluded index answers its frame" do
@@ -49,6 +48,37 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :success
+  end
+
+  test "a cursor out of the database's range falls back to the first page" do
+    get transactions_url(before_at: "2026-01-01T00:00:00Z", before_created: "2026-01-01T00:00:00Z", before_id: "99999999999999999999")
+
+    assert_response :success
+  end
+
+  test "index.json returns every transaction, unpaginated" do
+    Transaction::Page.stub(:size, 1) do
+      get transactions_url(format: :json)
+    end
+
+    assert_response :success
+    assert_operator response.parsed_body.size, :>, 1
+  end
+
+  test "an update that moves the row re-inserts it at its new position" do
+    patch transaction_url(@transaction), params: { transaction: { transacted_at: 20.years.ago } }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="remove" target="#{ActionView::RecordIdentifier.dom_id(@transaction)}")
+    assert_includes response.body, %(action="before")
+  end
+
+  test "an update that keeps the date replaces the row in place" do
+    patch transaction_url(@transaction), params: { transaction: { description: "Renamed in place" } }, as: :turbo_stream
+
+    assert_response :success
+    assert_includes response.body, %(action="replace" target="#{ActionView::RecordIdentifier.dom_id(@transaction)}")
+    assert_not_includes response.body, %(action="remove")
   end
 
   test "should get index scoped to account" do

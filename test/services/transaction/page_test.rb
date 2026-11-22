@@ -81,6 +81,9 @@ class Transaction::PageTest < ActiveSupport::TestCase
     assert_nil Transaction::Page::Cursor.from_params(ActionController::Parameters.new(valid.except(:before_id)))
     assert_nil Transaction::Page::Cursor.from_params(ActionController::Parameters.new(valid.merge(before_at: "yesterday")))
     assert_nil Transaction::Page::Cursor.from_params(ActionController::Parameters.new(valid.merge(before_id: "one")))
+    assert_nil Transaction::Page::Cursor.from_params(ActionController::Parameters.new(valid.merge(before_id: "99999999999999999999")))
+    assert_nil Transaction::Page::Cursor.from_params(ActionController::Parameters.new(valid.merge(before_id: "0")))
+    assert_nil Transaction::Page::Cursor.from_params(ActionController::Parameters.new(valid.merge(before_created: "+20000-01-01T00:00:00Z")))
   end
 
   private

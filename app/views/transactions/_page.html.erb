@@ -6,7 +6,9 @@
   <% if next_cursor %>
     <%= turbo_frame_tag "#{TransactionsController::PAGE_FRAME_PREFIX}#{next_cursor.id}",
           src: transactions_page_path(account: @account, show_excluded: @show_excluded, cursor: next_cursor),
-          loading: :lazy, class: "transactions-page" do %>
+          loading: :lazy, class: "transactions-page",
+          data: { controller: "transactions--pager",
+                  action: "turbo:before-fetch-request->transactions--pager#rebase turbo:before-frame-render->transactions--pager#skipLoaded" } do %>
       <div class="transactions-loading">
         <%= link_to "Load more transactions", transactions_page_path(account: @account, show_excluded: @show_excluded, cursor: next_cursor) %>
       </div>

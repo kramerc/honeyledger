@@ -5,6 +5,7 @@
 <% sources = transaction.badge_transaction_sources %>
 <%= turbo_frame_tag transaction do %>
   <div class="transaction" data-controller="transactions--row" data-transactions--row-id-value="<%= transaction.id %>"
+       data-page-cursor="<%= Transaction::Page::Cursor.after(transaction).to_params.to_query %>"
        data-selection-excluded="<%= transaction.excluded? %>"
        data-selection-excludable="<%= transaction.excludable? %>"
        data-merge-amount-minor="<%= transaction.amount_minor %>"

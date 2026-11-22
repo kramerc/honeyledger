@@ -613,6 +613,12 @@
   contain-intrinsic-size: auto 3rem;
 }
 
+/* content-visibility clips paint to the row's box, and the edit form's error
+   box hangs below it (.transactions form .error), so an edited row opts out. */
+.transaction.editing {
+  content-visibility: visible;
+}
+
 /* Infinite scroll: the frame at the foot of each page fetches the next one
    when it scrolls into view (transactions/_page). It needs a box of its own
    for that, so no display: contents. */

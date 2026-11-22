@@ -74,7 +74,17 @@ class TransactionsController < ApplicationController
   def update
     respond_to do |format|
       if @transaction.update(transaction_params)
-        format.turbo_stream { render :show }
+        format.turbo_stream do
+          # A new date moves the row. Re-inserting it at its sorted position
+          # keeps the rows on screen in order, which the next-page cursor
+          # relies on (transactions--pager), and drops it when it now belongs
+          # on a page not yet loaded, which then brings it, once.
+          if @transaction.saved_change_to_transacted_at? && row_visible?(@transaction)
+            @reposition = true
+            @preceding = find_preceding_transaction(@transaction)
+          end
+          render :show
+        end
         format.html { redirect_to @transaction, notice: "Transaction was successfully updated." }
         format.json { render :show, status: :ok, location: @transaction }
       else
