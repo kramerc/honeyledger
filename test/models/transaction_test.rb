@@ -958,6 +958,22 @@ class TransactionTest < ActiveSupport::TestCase
     assert transaction.errors.include?(:fx_amount_minor)
   end
 
+  test "a minor amount zero-padded past the type's length cap fails validation instead of saving nil" do
+    padded = "0" * MinorUnitsType::MAX_STRING_LENGTH + "1"
+    transaction = minor_unit_transaction(amount_minor: padded)
+
+    assert_not transaction.valid?
+    assert transaction.errors.include?(:amount_minor)
+  end
+
+  test "an fx minor amount zero-padded past the type's length cap fails validation instead of clearing it" do
+    padded = "0" * MinorUnitsType::MAX_STRING_LENGTH + "1"
+    transaction = minor_unit_transaction(amount_minor: 5000, fx_amount_minor: padded, fx_currency: currencies(:eur))
+
+    assert_not transaction.valid?
+    assert transaction.errors.include?(:fx_amount_minor)
+  end
+
   test "a decimal amount too large for the minor-unit column fails validation" do
     transaction = minor_unit_transaction(amount: "1e80")
 

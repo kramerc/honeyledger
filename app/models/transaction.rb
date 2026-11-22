@@ -74,6 +74,7 @@ class Transaction < ApplicationRecord
     unless: -> { amount_written? || amount_minor_before_type_cast.blank? } # Blank is translated to 0
   validates :fx_amount_minor, numericality: { only_integer: true, in: MinorUnitsType::RANGE },
     unless: -> { fx_amount_written? || fx_amount_minor_before_type_cast.blank? }
+  validate :raw_minor_amounts_cast_to_a_value
   validate :written_amounts_fit_minor_units
   validates :transacted_at, presence: true
 
@@ -244,6 +245,17 @@ class Transaction < ApplicationRecord
       Account.transaction do
         Account.update_counters(persisted_src.id, balance_minor: src_amount_minor_was) if persisted_src&.real?
         Account.update_counters(persisted_dest.id, balance_minor: -amount_minor_was) if persisted_dest&.real?
+      end
+    end
+
+    # Backstop for input numericality accepts but MinorUnitsType cannot cast, such as an integer
+    # zero-padded past the type's length cap: without this it would be saved as nil.
+    def raw_minor_amounts_cast_to_a_value
+      { amount_minor: :amount_written?, fx_amount_minor: :fx_amount_written? }.each do |attribute, written|
+        next if send(written) || errors.include?(attribute)
+        next if send("#{attribute}_before_type_cast").blank? || !send(attribute).nil?
+
+        errors.add(attribute, :invalid)
       end
     end
 
