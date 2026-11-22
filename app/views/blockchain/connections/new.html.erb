@@ -1,0 +1,46 @@
+<h1>Add a Bitcoin wallet</h1>
+<p>
+  Track a self-custody wallet from public chain data. Paste a single address, or the wallet's
+  extended public key (<code>xpub</code>, <code>ypub</code>, or <code>zpub</code>) to follow every
+  address it uses. Never paste a private key or seed phrase; Honeyledger only needs public data.
+</p>
+<p>
+  An extended public key reveals the wallet's full history to whoever holds it, and the explorer
+  you query sees which addresses you look up. Point the explorer URL at your own Esplora instance
+  if you want to keep that private.
+</p>
+
+<%= form_with model: @blockchain_connection, url: blockchain_connections_path, method: :post, local: true do |form| %>
+  <% if @blockchain_connection.errors.any? %>
+    <div class="error-panel">
+      <h2><%= pluralize(@blockchain_connection.errors.count, "error") %> prohibited this wallet from being saved:</h2>
+
+      <ul>
+        <% @blockchain_connection.errors.each do |error| %>
+          <li><%= error.full_message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <%= form.hidden_field :chain %>
+
+  <div class="field">
+    <%= form.label :name, "Label" %><br>
+    <%= form.text_field :name, placeholder: "Cold storage" %>
+  </div>
+
+  <div class="field">
+    <%= form.label :identifier, "Address or extended public key" %><br>
+    <%= form.text_field :identifier, autocomplete: "off", spellcheck: false, size: 60 %>
+  </div>
+
+  <div class="field">
+    <%= form.label :api_url, "Explorer API URL (Esplora)" %><br>
+    <%= form.url_field :api_url, placeholder: Blockchain::Connection::DEFAULT_API_URLS["bitcoin"], size: 60 %>
+  </div>
+
+  <div class="actions">
+    <%= form.submit "Add wallet" %>
+  </div>
+<% end %>

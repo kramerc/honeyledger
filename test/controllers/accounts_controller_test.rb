@@ -295,6 +295,47 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Lunch Flow account to import was not found.", flash[:alert]
   end
 
+  # Wallet (blockchain) import tests
+
+  test "should get new with an unlinked wallet account" do
+    get new_account_url, params: { blockchain_account_id: blockchain_accounts(:xpub_wallet_btc).id }
+
+    assert_response :success
+  end
+
+  test "should create an account linked to a wallet account" do
+    blockchain_account = blockchain_accounts(:xpub_wallet_btc)
+
+    assert_difference("Account.count", 1) do
+      post accounts_url, params: {
+        blockchain_account_id: blockchain_account.id,
+        account: { name: "Cold storage", kind: "asset", currency_id: currencies(:btc).id }
+      }
+    end
+
+    assert_redirected_to account_url(Account.last)
+    assert_equal Account.last, blockchain_account.reload.ledger_account
+  end
+
+  test "should redirect on new with a linked wallet account" do
+    blockchain_account = blockchain_accounts(:xpub_wallet_btc)
+    AccountSource::Attach.call(account: @user.accounts.create!(name: "Wallet", kind: :asset, currency: currencies(:btc)), sourceable: blockchain_account)
+
+    get new_account_url, params: { blockchain_account_id: blockchain_account.id }
+
+    assert_redirected_to integrations_url
+    assert_equal "Wallet account already linked to another account.", flash[:alert]
+  end
+
+  test "should redirect on new with a wallet account of another user" do
+    blockchain_account = blockchain_connections(:address_wallet).accounts.create!(remote_id: "BTC", name: "Bitcoin", currency: "BTC")
+
+    get new_account_url, params: { blockchain_account_id: blockchain_account.id }
+
+    assert_redirected_to integrations_url
+    assert_equal "Wallet account to import was not found.", flash[:alert]
+  end
+
   test "should validate on create" do
     assert_no_difference("Account.count") do
       post accounts_url, params: {

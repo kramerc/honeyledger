@@ -12,6 +12,8 @@ class AccountSource < ApplicationRecord
         Simplefin::ImportTransactionsJob.perform_later(simplefin_account_id: sourceable_id)
       when Lunchflow::Account
         Lunchflow::ImportTransactionsJob.perform_later(lunchflow_account_id: sourceable_id)
+      when Blockchain::Account
+        Blockchain::ImportTransactionsJob.perform_later(blockchain_account_id: sourceable_id)
       end
     end
 end

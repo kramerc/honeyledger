@@ -4,6 +4,8 @@ class IntegrationsController < ApplicationController
     @lunchflow_connection = current_user.lunchflow_connection
     @simplefin_accounts = visible_aggregator_accounts(@simplefin_connection)
     @lunchflow_accounts = visible_aggregator_accounts(@lunchflow_connection)
+    @blockchain_connections = current_user.blockchain_connections.order(:name, :id).to_a
+    @blockchain_accounts = @blockchain_connections.flat_map { |connection| visible_aggregator_accounts(connection) }
     @linkable_accounts = current_user.accounts.linkable.order(:name)
   end
 

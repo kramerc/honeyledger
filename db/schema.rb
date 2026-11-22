@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_22_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -66,6 +66,67 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "blockchain_accounts", force: :cascade do |t|
+    t.bigint "connection_id", null: false
+    t.string "remote_id", default: "", null: false
+    t.string "name", default: "", null: false
+    t.string "currency", default: "", null: false
+    t.string "balance"
+    t.datetime "last_seen_at"
+    t.datetime "balance_changed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["connection_id", "remote_id"], name: "index_blockchain_accounts_on_connection_id_and_remote_id", unique: true
+    t.index ["connection_id"], name: "index_blockchain_accounts_on_connection_id"
+  end
+
+  create_table "blockchain_addresses", force: :cascade do |t|
+    t.bigint "connection_id", null: false
+    t.integer "branch", null: false
+    t.integer "index", null: false
+    t.string "address", default: "", null: false
+    t.boolean "used", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["connection_id", "address"], name: "index_blockchain_addresses_on_connection_id_and_address", unique: true
+    t.index ["connection_id", "branch", "index"], name: "idx_on_connection_id_branch_index_83cb7f39ff", unique: true
+    t.index ["connection_id"], name: "index_blockchain_addresses_on_connection_id"
+  end
+
+  create_table "blockchain_connections", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "chain", default: "", null: false
+    t.string "name", default: "", null: false
+    t.string "identifier", default: "", null: false
+    t.string "api_url", default: "", null: false
+    t.string "error"
+    t.datetime "refreshed_at", precision: nil
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["refreshed_at"], name: "index_blockchain_connections_on_refreshed_at"
+    t.index ["user_id", "chain", "identifier"], name: "idx_on_user_id_chain_identifier_f0a59620d5", unique: true
+    t.index ["user_id"], name: "index_blockchain_connections_on_user_id"
+  end
+
+  create_table "blockchain_transactions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "remote_id", default: "", null: false
+    t.string "txid", default: "", null: false
+    t.string "kind", default: "transfer", null: false
+    t.string "amount", default: "0", null: false
+    t.string "counterparty"
+    t.integer "block_height"
+    t.datetime "transacted_at"
+    t.boolean "confirmed", default: false, null: false
+    t.datetime "synced_at", precision: nil
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "remote_id"], name: "index_blockchain_transactions_on_account_id_and_remote_id", unique: true
+    t.index ["account_id"], name: "index_blockchain_transactions_on_account_id"
+    t.index ["synced_at"], name: "index_blockchain_transactions_on_synced_at"
+    t.index ["txid"], name: "index_blockchain_transactions_on_txid"
   end
 
   create_table "categories", force: :cascade do |t|
@@ -323,6 +384,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
   add_foreign_key "accounts", "users"
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "blockchain_accounts", "blockchain_connections", column: "connection_id"
+  add_foreign_key "blockchain_addresses", "blockchain_connections", column: "connection_id"
+  add_foreign_key "blockchain_connections", "users"
+  add_foreign_key "blockchain_transactions", "blockchain_accounts", column: "account_id"
   add_foreign_key "categories", "users"
   add_foreign_key "csv_imports", "accounts"
   add_foreign_key "csv_imports", "users"

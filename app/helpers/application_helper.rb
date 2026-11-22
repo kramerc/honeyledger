@@ -8,6 +8,7 @@ module ApplicationHelper
     case sourceable
     when Simplefin::Account, Simplefin::Transaction then "SimpleFIN"
     when Lunchflow::Account, Lunchflow::Transaction then "Lunch Flow"
+    when Blockchain::Account, Blockchain::Transaction then "On-chain"
     when Csv::Transaction then "CSV"
     else sourceable.class.name
     end
@@ -17,18 +18,20 @@ module ApplicationHelper
     case sourceable
     when Simplefin::Account, Simplefin::Transaction then "source-badge--simplefin"
     when Lunchflow::Account, Lunchflow::Transaction then "source-badge--lunchflow"
+    when Blockchain::Account, Blockchain::Transaction then "source-badge--blockchain"
     when Csv::Transaction then "source-badge--csv"
     end
   end
 
   # Sort rank for source badges, matching the aggregator order on the integrations
-  # page (SimpleFIN, then Lunch Flow, then CSV) rather than sorting alphabetically.
+  # page (SimpleFIN, Lunch Flow, wallets, then CSV) rather than sorting alphabetically.
   def source_badge_order(sourceable)
     case sourceable
     when Simplefin::Account, Simplefin::Transaction then 0
     when Lunchflow::Account, Lunchflow::Transaction then 1
-    when Csv::Transaction then 2
-    else 3
+    when Blockchain::Account, Blockchain::Transaction then 2
+    when Csv::Transaction then 3
+    else 4
     end
   end
 

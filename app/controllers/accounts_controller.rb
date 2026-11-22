@@ -2,6 +2,7 @@ class AccountsController < ApplicationController
   before_action :set_account, only: %i[ show edit update destroy ]
   before_action :set_simplefin_account, only: %i[ new create ], if: -> { simplefin_account_id.present? }
   before_action :set_lunchflow_account, only: %i[ new create ], if: -> { lunchflow_account_id.present? }
+  before_action :set_blockchain_account, only: %i[ new create ], if: -> { blockchain_account_id.present? }
 
   # GET /accounts or /accounts.json
   def index
@@ -60,7 +61,7 @@ class AccountsController < ApplicationController
   def new
     @account = current_user.accounts.build
 
-    source_account = @simplefin_account || @lunchflow_account
+    source_account = @simplefin_account || @lunchflow_account || @blockchain_account
     if source_account
       @account.name = source_account.name
       @account.currency = Currency.find_by(code: source_account.currency)
@@ -79,7 +80,7 @@ class AccountsController < ApplicationController
   # POST /accounts or /accounts.json
   def create
     @account = current_user.accounts.build(account_params)
-    sourceable = @simplefin_account || @lunchflow_account
+    sourceable = @simplefin_account || @lunchflow_account || @blockchain_account
 
     saved =
       if sourceable && !@account.linkable?
@@ -243,5 +244,19 @@ class AccountsController < ApplicationController
 
     def lunchflow_account_id
       params.fetch(:lunchflow_account_id, nil)
+    end
+
+    def set_blockchain_account
+      @blockchain_account = current_user.blockchain_accounts.find_by(id: blockchain_account_id)
+
+      if @blockchain_account.nil?
+        redirect_to integrations_path, alert: "Wallet account to import was not found."
+      elsif @blockchain_account.linked?
+        redirect_to integrations_path, alert: "Wallet account already linked to another account."
+      end
+    end
+
+    def blockchain_account_id
+      params.fetch(:blockchain_account_id, nil)
     end
 end

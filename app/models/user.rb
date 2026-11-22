@@ -29,5 +29,8 @@ class User < ApplicationRecord
   has_one :lunchflow_connection, class_name: "Lunchflow::Connection", dependent: :destroy
   has_many :lunchflow_accounts, class_name: "Lunchflow::Account", through: :lunchflow_connection, source: :accounts
 
+  has_many :blockchain_connections, class_name: "Blockchain::Connection", dependent: :destroy
+  has_many :blockchain_accounts, class_name: "Blockchain::Account", through: :blockchain_connections, source: :accounts
+
   has_many :csv_imports, class_name: "Csv::Import", dependent: :destroy
 end

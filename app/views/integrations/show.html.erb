@@ -38,6 +38,31 @@
       <td><%= button_to "Connect", new_lunchflow_connection_path, method: :get %></td>
     <% end %>
   </tr>
+  <% @blockchain_connections.each do |blockchain_connection| %>
+    <tr>
+      <td>
+        <%= blockchain_connection.name %>
+        <span class="marker" title="<%= blockchain_connection.identifier %>"><%= blockchain_connection.display_identifier %></span>
+      </td>
+      <td>
+        <% if blockchain_connection.error.present? %>
+          <span class="text-error"><%= blockchain_connection.error %></span>
+        <% else %>
+          Tracking since <%= blockchain_connection.created_at.strftime("%B %d, %Y") %>
+        <% end %>
+      </td>
+      <td><%= blockchain_connection.refreshed_at ? blockchain_connection.refreshed_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
+      <td style="display: flex; gap: 0.25em; align-items: center">
+        <%= button_to "Refresh", refresh_blockchain_connection_path(blockchain_connection), "aria-label": "Refresh #{blockchain_connection.name}" %>
+        <%= button_to "Remove", blockchain_connection_path(blockchain_connection), method: :delete, "aria-label": "Remove #{blockchain_connection.name}", data: { turbo_confirm: "Stop tracking this wallet? Its imported ledger transactions stay." } %>
+      </td>
+    </tr>
+  <% end %>
+  <tr>
+    <td>Bitcoin wallet</td>
+    <td colspan="2">Track an address or extended public key from public chain data</td>
+    <td><%= button_to "Add wallet", new_blockchain_connection_path, method: :get %></td>
+  </tr>
 </table>
 
 <% if @simplefin_connection %>
@@ -134,5 +159,34 @@
     </table>
   <% else %>
     <p>No accounts found. Try refreshing your connection.</p>
+  <% end %>
+<% end %>
+
+<% if @blockchain_connections.any? %>
+  <h2>Wallet Accounts</h2>
+
+  <% if @blockchain_accounts.any? %>
+    <table>
+      <tr>
+        <th>Wallet</th>
+        <th>Asset</th>
+        <th style="text-align: right">Balance</th>
+        <th>Currency</th>
+        <th>Balance As Of</th>
+        <th>Linked Account</th>
+      </tr>
+      <% @blockchain_accounts.each do |blockchain_account| %>
+        <tr>
+          <td><%= blockchain_account.institution_name %></td>
+          <td><%= blockchain_account.name %></td>
+          <td style="text-align: right; white-space: nowrap"><%= aggregator_balance(blockchain_account) %></td>
+          <td><%= aggregator_currency(blockchain_account) %></td>
+          <td style="white-space: nowrap"><%= blockchain_account.balance_changed_at ? blockchain_account.balance_changed_at.strftime("%B %d, %Y %I:%M %p") : "—" %></td>
+          <td><%= render partial: "integrations/blockchain_link_form", locals: { blockchain_account: blockchain_account, linkable_accounts: @linkable_accounts } %></td>
+        </tr>
+      <% end %>
+    </table>
+  <% else %>
+    <p>No wallet history yet. It appears after the first refresh finishes.</p>
   <% end %>
 <% end %>
