@@ -235,6 +235,20 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 10**21, Transaction.order(:id).last.amount_minor
   end
 
+  test "create rejects a non-integer minor amount param as unprocessable" do
+    assert_no_difference("Transaction.count") do
+      post transactions_url, params: { transaction: {
+        transacted_at: Time.current,
+        src_account_id: accounts(:asset_account).id,
+        dest_account_id: accounts(:expense_account).id,
+        description: "Fractional minor amount",
+        amount_minor: "12.5"
+      } }, as: :turbo_stream
+    end
+
+    assert_response :unprocessable_entity
+  end
+
   test "create anchors the new row to the newest transaction on the unfiltered index" do
     # asset_account -> expense_account, 2 days ago; the newest row user one owns.
     newest = transactions(:one)

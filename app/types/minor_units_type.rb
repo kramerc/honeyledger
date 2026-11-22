@@ -4,9 +4,13 @@
 # string input to 16 bytes before parsing, so a large amount submitted as a
 # form param would be silently truncated. This type parses the whole string,
 # accepting only plain integers up to MAX_STRING_LENGTH characters; anything
-# else casts to nil.
+# else casts to nil. Models validate user-supplied values against RANGE (with
+# `only_integer`), so rejected input fails validation instead of reaching the
+# database as nil or as an overflowing value.
 class MinorUnitsType < ActiveModel::Type::BigInteger
-  MAX_STRING_LENGTH = 80
+  DIGITS = 78
+  RANGE = (-(10**DIGITS) + 1)..(10**DIGITS - 1)
+  MAX_STRING_LENGTH = DIGITS + 1 # room for a sign
   INTEGER_PATTERN = /\A[+-]?\d+\z/
 
   private

@@ -5,6 +5,7 @@ module CurrenciesHelper
 
   def amount_minor_to_decimal(amount_minor, currency)
     decimal_value = BigDecimal(amount_minor) / (10 ** currency.decimal_places)
-    format("%.#{currency.decimal_places}f", decimal_value)
+    # number_with_precision rounds the BigDecimal itself; format("%f") would go through a Float.
+    number_with_precision(decimal_value, precision: currency.decimal_places, delimiter: "")
   end
 end

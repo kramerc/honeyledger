@@ -67,7 +67,14 @@ class Transaction < ApplicationRecord
       !parent_transaction_id?
   end
 
-  validates :amount_minor, numericality: { allow_blank: true, unless: :amount_written? } # Blank is translated to 0
+  # Numericality checks the raw input, so non-integer or oversized strings fail here rather
+  # than reaching the database. The blank check also reads the raw input: `allow_blank` would
+  # test the cast value, which MinorUnitsType sets to nil for exactly the input to reject.
+  validates :amount_minor, numericality: { only_integer: true, in: MinorUnitsType::RANGE },
+    unless: -> { amount_written? || amount_minor_before_type_cast.blank? } # Blank is translated to 0
+  validates :fx_amount_minor, numericality: { only_integer: true, in: MinorUnitsType::RANGE },
+    unless: -> { fx_amount_written? || fx_amount_minor_before_type_cast.blank? }
+  validate :written_amounts_fit_minor_units
   validates :transacted_at, presence: true
 
   validate :src_account_accessible_to_user
@@ -237,6 +244,21 @@ class Transaction < ApplicationRecord
       Account.transaction do
         Account.update_counters(persisted_src.id, balance_minor: src_amount_minor_was) if persisted_src&.real?
         Account.update_counters(persisted_dest.id, balance_minor: -amount_minor_was) if persisted_dest&.real?
+      end
+    end
+
+    # A decimal amount is converted to minor units only before save, so check here that the
+    # converted value will fit the numeric(78, 0) column.
+    def written_amounts_fit_minor_units
+      { amount: :currency, fx_amount: :fx_currency }.each do |attribute, currency_attribute|
+        next unless send("#{attribute}_written?")
+
+        value = send(attribute)
+        currency = send(currency_attribute)
+        next if value.blank? || currency.nil? || errors.include?(attribute)
+
+        minor = Minorable::Helpers.minor_from(value, currency.decimal_places)
+        errors.add(attribute, "is too large") unless MinorUnitsType::RANGE.cover?(minor)
       end
     end
 

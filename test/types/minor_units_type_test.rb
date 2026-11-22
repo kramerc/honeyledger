@@ -31,7 +31,7 @@ class MinorUnitsTypeTest < ActiveSupport::TestCase
   end
 
   test "rejects strings longer than the cap" do
+    assert_equal(-(10**78 - 1), @type.cast("-" + "9" * 78))
     assert_nil @type.cast("9" * (MinorUnitsType::MAX_STRING_LENGTH + 1))
-    assert_equal 10**79 - 1, @type.cast("9" * 79)
   end
 end

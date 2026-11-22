@@ -926,6 +926,52 @@ class TransactionTest < ActiveSupport::TestCase
     assert_equal(-15 * 10**17, wallet.reload.balance_minor)
   end
 
+  test "the largest 78-digit minor amount saves" do
+    transaction = minor_unit_transaction(amount_minor: "9" * 78)
+
+    assert transaction.save, transaction.errors.full_messages.to_sentence
+    assert_equal 10**78 - 1, transaction.reload.amount_minor
+  end
+
+  test "a non-integer minor amount fails validation instead of reaching the database" do
+    %w[ 12.5 1e3 1_000 abc ].each do |raw|
+      transaction = minor_unit_transaction(amount_minor: raw)
+
+      assert_not transaction.valid?, "#{raw} should be invalid"
+      assert transaction.errors.include?(:amount_minor), "#{raw} should error on amount_minor"
+    end
+  end
+
+  test "a minor amount wider than 78 digits fails validation" do
+    [ "9" * 79, "9" * 100, 10**78 ].each do |raw|
+      transaction = minor_unit_transaction(amount_minor: raw)
+
+      assert_not transaction.valid?
+      assert transaction.errors.include?(:amount_minor)
+    end
+  end
+
+  test "a non-integer fx minor amount fails validation instead of being stored as nil" do
+    transaction = minor_unit_transaction(amount_minor: 5000, fx_amount_minor: "1.5", fx_currency: currencies(:eur))
+
+    assert_not transaction.valid?
+    assert transaction.errors.include?(:fx_amount_minor)
+  end
+
+  test "a decimal amount too large for the minor-unit column fails validation" do
+    transaction = minor_unit_transaction(amount: "1e80")
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount], "is too large"
+  end
+
+  test "a decimal fx amount too large for the minor-unit column fails validation" do
+    transaction = minor_unit_transaction(amount_minor: 5000, fx_amount: "1e80", fx_currency: currencies(:eur))
+
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:fx_amount], "is too large"
+  end
+
   test "a minor amount assigned as a long string is stored without truncation" do
     transaction = Transaction.new(amount_minor: "1000000000000000000001")
 
@@ -933,6 +979,13 @@ class TransactionTest < ActiveSupport::TestCase
   end
 
   private
+
+    def minor_unit_transaction(**attributes)
+      Transaction.new(
+        user: users(:one), src_account: accounts(:asset_account), dest_account: accounts(:expense_account),
+        currency: currencies(:usd), description: "Minor unit check", transacted_at: Time.current, **attributes
+      )
+    end
 
     def eth_currency
       Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)

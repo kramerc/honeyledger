@@ -500,6 +500,32 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "the merge preview shows a zero-decimal currency without decimals" do
+    jpy = currencies(:jpy)
+    wallet = Account.create!(user: @user, currency: jpy, name: "JPY Wallet", kind: :asset)
+    bank = Account.create!(user: @user, currency: jpy, name: "JPY Bank", kind: :asset)
+    expense = Account.create!(user: @user, currency: jpy, name: "JPY Outflow", kind: :expense)
+    revenue = Account.create!(user: @user, currency: jpy, name: "JPY Inflow", kind: :revenue)
+    withdrawal = Transaction.create!(
+      user: @user, src_account: bank, dest_account: expense,
+      amount_minor: 1500, currency: jpy, description: "Transfer out", transacted_at: 1.day.ago
+    )
+    deposit = Transaction.create!(
+      user: @user, src_account: revenue, dest_account: wallet,
+      amount_minor: 1500, currency: jpy, description: "Transfer in", transacted_at: 1.day.ago
+    )
+
+    visit transactions_path
+    toggle_select(withdrawal)
+    toggle_select(deposit)
+    click_button "Merge into Transfer"
+
+    within ".selection-confirmation:not([hidden])" do
+      assert_text "JPY 1500"
+      assert_no_text "JPY 15.00"
+    end
+  end
+
   test "clicking a From cell enters edit mode on that field and Save confirms" do
     transaction = manual_transaction("Field edit probe", 1500)
     visit transactions_path
