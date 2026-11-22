@@ -36,7 +36,7 @@ This phase runs without being asked whenever an agent opens a `decision` issue. 
   - **Options** (optional at filing): known options for each sub-question, described neutrally.
   - **Blocks**: the issues and work that wait on the outcome, including epic children deliberately held back (see "Splitting an epic" in the `triage-issues` skill). Record every blocked issue with `gh issue edit X --add-blocked-by N` as well; prose alone does not order the board.
   - **Done when**: the decision is recorded here and the issues it names are updated or filed.
-- **Labels**: `decision` + `AI generated`, applied once on `gh issue create`.
+- **Labels**: `decision`, applied on `gh issue create`.
 - **Triage**: follow the `triage-issues` skill right after creating the issue. Its rubric covers decisions: P1 when the decision blocks a P1 issue, otherwise P2. Size is the work to settle the question plus the work to implement the option it currently leans toward.
 - **Privacy**: the `AGENTS.md` Privacy rules apply. Describe an option by its shape, never with real ledger data.
 
@@ -71,7 +71,7 @@ Only after the maintainer has explicitly signed off on every sub-question.
    - `gh issue close N --reason completed` when an answer was chosen, including "keep the current behaviour".
    - `gh issue close N --reason "not planned"` when the question was dropped or superseded. Name the superseding issue in the Decision comment.
    - Keep the `decision` label, so closed decisions stay searchable as a log (`gh issue list --label decision --state closed`).
-4. **Promote durable outcomes.** If the outcome is a rule a future agent would otherwise re-propose or break, add a short entry to "Known Design Decisions" in `AGENTS.md` that cites it as "issue N" (never a bare `#N`). Make the change in a worktree as a Markdown-only PR whose body names "issue N", labelled `AI generated` + `documentation`; the gates are skipped for Markdown-only changes. A one-off outcome stays on the issue only.
+4. **Promote durable outcomes.** If the outcome is a rule a future agent would otherwise re-propose or break, add a short entry to "Known Design Decisions" in `AGENTS.md` that cites it as "issue N" (never a bare `#N`). Make the change in a worktree as a Markdown-only PR whose body names "issue N", labelled `documentation`; the gates are skipped for Markdown-only changes. A one-off outcome stays on the issue only.
 
 ## 4. Propagating
 
