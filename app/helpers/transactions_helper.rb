@@ -82,7 +82,7 @@ module TransactionsHelper
     tick = cleared ? "✓" : ""
     return tick if transaction.opening_balance?
 
-    toggle = button_to transaction_path(transaction, account_id: filter_account&.id),
+    toggle = button_to transaction_path(transaction, account_id: filter_account&.id, standalone: (1 if @standalone)),
       method: :patch,
       params: { "transaction[cleared]" => cleared ? "0" : "1" },
       form_class: "cleared-toggle",

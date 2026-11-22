@@ -3,6 +3,7 @@ class TransactionsController < ApplicationController
   PAGE_FRAME_PREFIX = "transactions_page_"
 
   before_action :set_filter_account
+  before_action :set_standalone
   before_action :set_transaction, only: %i[ show edit update destroy ]
   before_action :set_form_collections, only: %i[ new create edit update show ]
 
@@ -81,7 +82,7 @@ class TransactionsController < ApplicationController
           # it; a new date re-inserts the row at its sorted position, which
           # drops it when it now belongs on a page not yet loaded. Elsewhere
           # (the transaction's own page) the row is simply replaced.
-          if index_request?
+          unless @standalone
             if !row_visible?(@transaction)
               @remove = true
             elsif @transaction.saved_change_to_transacted_at?
@@ -341,6 +342,15 @@ class TransactionsController < ApplicationController
       @account = current_user.accounts.find(account_id) if account_id.present?
     end
 
+    # Whether the rows belong to a transaction's own page rather than the
+    # index. That page marks its edit frame, form and Cleared toggle with
+    # standalone=1, so their updates replace the row in place. Without the
+    # marker an update keeps the index's rows sorted (see update), so a
+    # stripped Referer or a missing param can never leave them out of order.
+    def set_standalone
+      @standalone = action_name == "show" || params[:standalone] == "1"
+    end
+
     def bulk_transaction_ids
       Array(params[:transaction_ids]).uniq
     end
@@ -388,18 +398,6 @@ class TransactionsController < ApplicationController
     # counts as below.
     def find_preceding_transaction(transaction)
       Transaction::Page.below(visible_transactions(show_excluded: show_excluded?), transaction).first
-    end
-
-    # Whether the request came from the transactions index (filtered or not),
-    # judged by its referer like show_excluded?.
-    def index_request?
-      referer = request.referer
-      return false if referer.blank?
-
-      route = Rails.application.routes.recognize_path(URI.parse(referer).path)
-      route[:controller] == "transactions" && route[:action] == "index"
-    rescue URI::InvalidURIError, ActionController::RoutingError
-      false
     end
 
     def page_frame_request?

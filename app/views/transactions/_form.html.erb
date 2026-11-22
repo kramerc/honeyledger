@@ -8,6 +8,10 @@
   <% if local_assigns[:filter_account] %>
     <%= hidden_field_tag :account_id, local_assigns[:filter_account].id %>
   <% end %>
+  <%# Marks an edit on the transaction's own page (TransactionsController#set_standalone). %>
+  <% if @standalone %>
+    <%= hidden_field_tag :standalone, 1 %>
+  <% end %>
 
   <div class="row" data-action="keydown.esc->transactions--row#cancelEdit">
     <div class="select"></div>

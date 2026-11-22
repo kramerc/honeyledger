@@ -1123,12 +1123,18 @@ class TransactionsTest < ApplicationSystemTestCase
       loaded = @user.transactions.where(description: (1..40).map { |index| format("Paged row %02d", index) })
       page.execute_script("document.querySelectorAll('#transactions [data-page-cursor]').forEach((row) => row.closest('turbo-frame').remove())")
       loaded.destroy_all
+      # Sorts inside the range that was loaded, above the frame's own cursor
+      # (row 40), so only a restart from the top finds it.
+      Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                          amount_minor: 100, currency: currencies(:usd), description: "Restart probe",
+                          transacted_at: 10.days.ago)
 
       scroll_to find(".transactions-page")
 
+      assert_text "Restart probe"
       assert_text "Paged row 41"
       assert_text "Paged row 50"
-      assert_selector ".transaction", count: 10
+      assert_selector ".transaction", count: 11
     end
   end
 
