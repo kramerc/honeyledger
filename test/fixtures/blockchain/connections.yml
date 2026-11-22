@@ -1,0 +1,14 @@
+# Identifiers come from the published BIP test vectors, never real wallets.
+xpub_wallet:
+  user: one
+  chain: bitcoin
+  name: Cold storage
+  identifier: zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs
+  refreshed_at: 2026-04-25 00:00:00
+
+address_wallet:
+  user: two
+  chain: bitcoin
+  name: Spending
+  identifier: bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4
+  refreshed_at: 2026-04-25 00:00:00

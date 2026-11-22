@@ -95,11 +95,11 @@ Two class macros for handling minor-unit currency math:
 - `minorable :amount, with: :currency` — computes read-only `amount_minor` from a decimal column scaled by `currency.decimal_places`
 - `unminorable :amount_minor, with: :currency` — adds a read/write `amount` virtual attribute that converts to/from `amount_minor` via `before_save`, with deferred currency resolution
 
-Used by `Transaction`, `Simplefin::Account`, `Simplefin::Transaction`, `Lunchflow::Account`, and `Lunchflow::Transaction`.
+Used by `Transaction`, `Simplefin::Account`, `Simplefin::Transaction`, `Lunchflow::Account`, `Lunchflow::Transaction`, `Blockchain::Account`, and `Blockchain::Transaction`.
 
 ### Aggregator Integration Pattern
 
-Both SimpleFIN and Lunch Flow follow the same namespaced pattern: `Connection` → `Account` → `Transaction`, with a refresh job to sync from the API and a namespaced `ImportTransactionsJob` to create ledger transactions. Aggregator accounts link to ledger accounts through `account_sources`. Linking triggers `ImportTransactionsJob`, and refresh jobs automatically enqueue it for linked accounts after each successful account refresh. A unified `/integrations` page managed by `IntegrationsController` shows both connections and all aggregator accounts.
+SimpleFIN, Lunch Flow, and the `Blockchain::` wallet integration follow the same namespaced pattern: `Connection` → `Account` → `Transaction`, with a refresh job to sync from the API and a namespaced `ImportTransactionsJob` to create ledger transactions. Aggregator accounts link to ledger accounts through `account_sources`. Linking triggers `ImportTransactionsJob`, and refresh jobs automatically enqueue it for linked accounts after each successful account refresh. A unified `/integrations` page managed by `IntegrationsController` shows both connections and all aggregator accounts.
 
 ### SimpleFIN Integration
 
@@ -122,6 +122,16 @@ Both SimpleFIN and Lunch Flow follow the same namespaced pattern: `Connection` �
    - `Lunchflow::Transaction` — Raw transaction records with `merchant` field; linked to app `Transaction` through `transaction_sources`, like `Simplefin::Transaction`
 
 3. **`Lunchflow::RefreshJob`** — Fetches accounts, balances, and transactions per-account. Rescues `LunchflowClient::Error` and stores message on connection.
+
+### Blockchain (self-custody wallets)
+
+Tracks crypto wallets from public chain data only: an address or an extended public key, never a private key or credential. Provider choices and the evaluation behind them are on issue 355.
+
+1. **`lib/esplora_client.rb`** (`EsploraClient`) — keyless HTTParty wrapper for an Esplora API. The URL is an operator setting, `ESPLORA_URL` (`config.x.esplora_url`, default mempool.space), never a per-wallet field: a user-supplied URL would let any account make the server request internal addresses. Normalizes transactions to satoshi amounts, paces requests, retries HTTP 429 with backoff (a fresh xpub scan makes dozens of lookups), and turns every transport or parse failure into `EsploraClient::Error` so the refresh job records it on the wallet.
+2. **`lib/bitcoin_extended_key.rb`** and **`lib/bitcoin_address.rb`** — public-only BIP32 derivation (xpub → P2PKH, ypub → P2SH-P2WPKH, zpub → P2WPKH) and address encoding/validation on the standard library's OpenSSL, tested against the published BIP32/49/84/173/350 vectors. An extended private key is recognised only to refuse it.
+3. **`app/models/blockchain/`** — `Connection` (many per user, unlike the bank aggregators), `Address` (derived-address cache), `Account` (one per asset; BTC for now), and `Transaction` (wallet-relative rows).
+4. **`Blockchain::Bitcoin::Scanner`** — gap-limit scan (20) of the receive and change branches, then nets each on-chain transaction against the wallet's whole address set so change cancels out. When the wallet funded a transaction it emits a transfer row (`remote_id` = txid, fee excluded) and a separate fee row (`<txid>:fee`), never a split, because the matching services skip split rows.
+5. **`Blockchain::ImportTransactionsJob`** — the shared import pipeline, except that only confirmed rows import, unmatched transfers use one shared counterpart per direction ("Bitcoin sent" / "Bitcoin received") rather than an account per address, fee rows always go to "Network fees" and skip rules and AutoMerge (`ImportRule::RetroactiveApply` skips them too). Counterparts and rule accounts must be in the wallet's currency, and a wallet account links only to a ledger account in its currency, because `Transaction` adopts its destination's currency and a fiat account would read satoshis as cents. The description keeps the full counterparty address so an import rule can route a known address.
 
 ### ImportTransactionsJob
 

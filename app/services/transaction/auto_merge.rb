@@ -104,6 +104,7 @@ class Transaction::AutoMerge
       @transaction.user.transactions
         .unmerged
         .unexcluded
+        .excluding_network_fees
         .includes(:src_account, :dest_account)
         .where.not(id: @transaction.id)
         .where(amount_minor: @transaction.amount_minor, currency_id: @transaction.currency_id)

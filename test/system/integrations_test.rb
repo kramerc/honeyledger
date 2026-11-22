@@ -12,7 +12,7 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_text "SimpleFIN"
     assert_text "Lunch Flow"
     assert_text "Connected since"
-    assert_button "Refresh", count: 2
+    assert_button "Refresh", count: 3 # two aggregators plus the fixture wallet
     assert_button "Disconnect", count: 2
   end
 
@@ -287,5 +287,86 @@ class IntegrationsTest < ApplicationSystemTestCase
     visit integrations_path
 
     assert_no_text "(stale)"
+  end
+
+  test "adds a Bitcoin wallet by address" do
+    visit integrations_path
+    click_button "Add wallet"
+
+    fill_in "Label", with: "Spending wallet"
+    fill_in "Address or extended public key", with: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+    # The refresh would query a public explorer; the job itself is covered elsewhere.
+    Blockchain::Connection.stub_any_instance(:refresh, nil) do
+      click_button "Add wallet"
+      assert_text "Wallet added"
+    end
+
+    assert_text "Spending wallet"
+    assert_text "bc1qw508d6…v8f3t4"
+  end
+
+  test "shows a validation error for a private key" do
+    visit new_blockchain_connection_path
+
+    fill_in "Address or extended public key", with: "zprvAdG4iTXWBoARxkkzNpNh8r6Qag3irQB8PzEMkAFeTRXxHpbF9z4QgEvBRmfvqWvGp42t42nvgGpNgYSJA9iefm1yYNZKEm7z6qUWCroSQnE"
+    click_button "Add wallet"
+
+    assert_text "Only paste the public key"
+  end
+
+  test "lists wallet accounts and links one to a ledger account" do
+    ledger_account = @user.accounts.create!(name: "Hardware wallet", kind: :asset, currency: currencies(:btc))
+
+    visit integrations_path
+
+    assert_text "Wallet Accounts"
+    within("tr", text: "Cold storage", match: :first) do
+      assert_button "Refresh"
+      assert_button "Remove"
+    end
+
+    row = find("select[name='blockchain_account[ledger_account_id]']").ancestor("tr")
+    within(row) do
+      assert_text "Bitcoin"
+      assert_text "BTC"
+      select "Hardware wallet", from: "blockchain_account[ledger_account_id]"
+      click_button "Link"
+    end
+
+    assert_text "Wallet account linked successfully."
+    visit account_path(ledger_account)
+    assert_text "On-chain: Bitcoin"
+  end
+
+  test "shows a wallet refresh error in its connection row" do
+    blockchain_connections(:xpub_wallet).update!(error: "Rate limited by the explorer")
+
+    visit integrations_path
+
+    within("tr", text: "Cold storage", match: :first) do
+      assert_text "Rate limited by the explorer"
+    end
+  end
+
+  test "an unlinked wallet account stays listed after a failed refresh" do
+    # A failed refresh advances the connection's refreshed_at past the account's last_seen_at.
+    blockchain_connections(:xpub_wallet).update!(error: "Rate limited by the explorer", refreshed_at: 1.minute.from_now)
+
+    visit integrations_path
+
+    assert_text "Wallet Accounts"
+    assert_selector "select[name='blockchain_account[ledger_account_id]']"
+    assert_no_text "No wallet history yet"
+  end
+
+  test "edits a wallet's label" do
+    visit integrations_path
+    within("tr", text: "Cold storage", match: :first) { click_button "Edit" }
+
+    fill_in "Label", with: "Vault"
+    click_button "Save"
+
+    assert_text "Wallet updated."
+    assert_text "Vault"
   end
 end

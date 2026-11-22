@@ -1,0 +1,17 @@
+<h1>Edit wallet</h1>
+<p>Tracking <code><%= @blockchain_connection.identifier %></code></p>
+
+<%= form_with model: @blockchain_connection, url: blockchain_connection_path(@blockchain_connection), method: :patch, local: true do |form| %>
+  <%= render "blockchain/connections/errors", connection: @blockchain_connection %>
+
+  <div class="field">
+    <%= form.label :name, "Label" %><br>
+    <%= form.text_field :name %>
+  </div>
+
+  <div class="actions">
+    <%= form.submit "Save" %>
+  </div>
+<% end %>
+
+<p><%= link_to "Back to integrations", integrations_path %></p>

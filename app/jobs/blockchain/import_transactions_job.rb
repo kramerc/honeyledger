@@ -1,0 +1,183 @@
+class Blockchain::ImportTransactionsJob < ApplicationJob
+  queue_as :default
+
+  FEE_ACCOUNT_NAME = "Network fees".freeze
+
+  class CounterpartUnavailable < StandardError; end
+
+  # Prefixes of the errors this job writes on the wallet. Only these are cleared
+  # when an import can proceed; a refresh's own errors are the refresh's to clear.
+  MISMATCHED_LINK_PREFIX = "Not imported:".freeze
+  SKIPPED_ROWS_PREFIX = "Some transactions were not imported:".freeze
+
+  def perform(blockchain_account_id:)
+    return unless AccountSource.exists?(sourceable_type: "Blockchain::Account", sourceable_id: blockchain_account_id)
+
+    blockchain_account = Blockchain::Account.find(blockchain_account_id)
+    ledger_account = blockchain_account.ledger_accounts.first
+    # A link in another currency would book coin minor units in it. The link and
+    # account-edit paths refuse that; import checks again and says why it stopped.
+    unless blockchain_account.linkable_to?(ledger_account)
+      blockchain_account.connection.update!(error: "#{MISMATCHED_LINK_PREFIX} #{ledger_account.name} is not in #{blockchain_account.currency}. Link the wallet to a #{blockchain_account.currency} account.")
+      return
+    end
+    # Linking enqueues an import without a refresh, so an error this job wrote
+    # earlier (before a relink or a rename) would otherwise linger until the
+    # next refresh. A row that still cannot import writes it again below.
+    clear_import_error(blockchain_account.connection)
+
+    transactions = Blockchain::Transaction
+      .confirmed
+      .where(account_id: blockchain_account_id)
+      .includes(account: { connection: :user })
+      .left_joins(:ledger_transactions)
+      .where("transactions.id IS NULL OR (transactions.merged_into_id IS NULL AND transactions.excluded_at IS NULL AND blockchain_transactions.synced_at > COALESCE(transactions.synced_at, '1970-01-01'))")
+
+    Transaction.collecting_sidebar_broadcasts do
+      transactions.find_each do |blockchain_transaction|
+        user = blockchain_transaction.account.connection.user
+
+        description = blockchain_transaction.resolved_description
+        transacted_at = blockchain_transaction.transacted_at || Time.current
+
+        # On-chain amounts are signed correctly, so InferLedgerSide's transfer
+        # override never fires here; the descriptions avoid its wording too.
+        direction = blockchain_transaction.ledger_direction
+        ledger_side = direction.ledger_side
+
+        existing_source = TransactionSource.find_by(sourceable: blockchain_transaction)
+
+        if existing_source
+          ledger_transaction = existing_source.ledger_transaction
+          canonical_source = ledger_transaction.transaction_sources.order(:created_at, :id).first
+
+          # A secondary source never overwrites canonical fields (first writer wins).
+          unless canonical_source.id == existing_source.id
+            ledger_transaction.mark_synced_by_secondary_source!(canonical_source, blockchain_transaction)
+            next
+          end
+
+          ledger_transaction.update!(
+            amount_minor: blockchain_transaction.amount_minor.abs,
+            transacted_at: transacted_at,
+            cleared_at: transacted_at,
+            synced_at: blockchain_transaction.synced_at || Time.current
+          )
+          next
+        elsif (match = Transaction::Reconcile.call(
+          ledger_account: ledger_account,
+          amount_minor: blockchain_transaction.amount_minor.abs,
+          currency_id: ledger_account.currency_id,
+          transacted_at: transacted_at,
+          description: description,
+          ledger_side: ledger_side,
+          incoming_source: blockchain_transaction
+        ))
+          begin
+            Transaction.transaction do
+              canonical_source = match.transaction_sources.order(:created_at, :id).first
+              TransactionSource::Attach.call(
+                transaction: match, sourceable: blockchain_transaction,
+                direction_overridden: direction.direction_overridden?
+              )
+              match.mark_synced_by_secondary_source!(canonical_source, blockchain_transaction)
+            end
+          rescue TransactionSource::Attach::MismatchedTransaction
+            # Another import handled this source; skip this iteration.
+          end
+          next
+        else
+          transaction = Transaction.new
+        end
+
+        rule = user.import_rules.for_description(description).first unless blockchain_transaction.fee?
+        rule_account = rule&.account
+        # On a send the counterpart is the destination, whose currency the
+        # transaction adopts; a rule account in another currency would book the
+        # coin's minor units as, say, cents. Such a rule is not applied.
+        rule_account = nil if rule_account && rule_account.currency_id != ledger_account.currency_id
+        bs_rule_account = rule_account if rule_account&.balance_sheet?
+
+        kind = ledger_side == :src ? :expense : :revenue
+        counterpart = if rule_account && !bs_rule_account
+          rule_account
+        else
+          # One shared counterpart per direction rather than one account per
+          # counterparty address; the address stays in the description, where
+          # an import rule can pick it up.
+          begin
+            counterpart_for(user, counterpart_name(blockchain_transaction, kind), kind, ledger_account.currency)
+          rescue CounterpartUnavailable => e
+            blockchain_account.connection.update!(error: "#{SKIPPED_ROWS_PREFIX} #{e.message}.")
+            next
+          end
+        end
+
+        if ledger_side == :src
+          transaction_src = ledger_account
+          transaction_dest = counterpart
+        else
+          transaction_src = counterpart
+          transaction_dest = ledger_account
+        end
+
+        transaction.user = user
+        transaction.src_account = transaction_src
+        transaction.dest_account = transaction_dest
+        transaction.description = description
+        transaction.amount_minor = blockchain_transaction.amount_minor.abs
+        transaction.currency = ledger_account.currency
+        transaction.transacted_at = transacted_at
+        transaction.cleared_at = transacted_at
+        transaction.synced_at = blockchain_transaction.synced_at || Time.current
+        begin
+          Transaction.transaction do
+            transaction.save!
+            TransactionSource::Attach.call(
+              transaction: transaction, sourceable: blockchain_transaction,
+              direction_overridden: direction.direction_overridden?
+            )
+          end
+        rescue TransactionSource::Attach::MismatchedTransaction
+          next
+        end
+
+        if rule&.exclude?
+          Transaction::Exclude.new(transaction, user: user).call
+        elsif !blockchain_transaction.fee?
+          # A fee is never one leg of a transfer, so it is not offered to AutoMerge.
+          Transaction::AutoMerge.call(transaction, rule_account: bs_rule_account)
+        end
+      end
+    end
+  end
+
+  private
+
+    def clear_import_error(connection)
+      return unless connection.error.to_s.start_with?(MISMATCHED_LINK_PREFIX, SKIPPED_ROWS_PREFIX)
+
+      connection.update!(error: nil)
+    end
+
+    # Account.find_or_create_for_import matches by name alone. If the user
+    # already has an account with that name in another currency (a fiat
+    # "Network fees", say), use a currency-suffixed sibling instead of booking
+    # into it.
+    def counterpart_for(user, name, kind, currency)
+      candidates = [ name, "#{name} (#{currency.code})" ] + (2..9).map { |number| "#{name} (#{currency.code} #{number})" }
+      candidates.each do |candidate|
+        account = Account.find_or_create_for_import(user: user, description: candidate, kind: kind, currency: currency, skip_rules: true)
+        # The helper matches by name only, so check what it actually returned.
+        return account if account.currency_id == currency.id
+      end
+      raise CounterpartUnavailable, "every #{kind} account named like #{name.inspect} is in a currency other than #{currency.code}"
+    end
+
+    def counterpart_name(blockchain_transaction, kind)
+      return FEE_ACCOUNT_NAME if blockchain_transaction.fee?
+
+      asset_name = blockchain_transaction.account.name.presence || "Crypto"
+      kind == :expense ? "#{asset_name} sent" : "#{asset_name} received"
+    end
+end

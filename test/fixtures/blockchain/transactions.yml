@@ -1,0 +1,35 @@
+# Addresses come from the BIP84 test vector; txids are placeholders.
+received:
+  account: xpub_wallet_btc
+  remote_id: "1111111111111111111111111111111111111111111111111111111111111111"
+  txid: "1111111111111111111111111111111111111111111111111111111111111111"
+  kind: transfer
+  amount: "0.02"
+  counterparty: bc1q8c6fshw2dlwun7ekn9qwf37cu2rn755upcp6el
+  block_height: 800000
+  transacted_at: 2026-04-20 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00
+
+sent:
+  account: xpub_wallet_btc
+  remote_id: "2222222222222222222222222222222222222222222222222222222222222222"
+  txid: "2222222222222222222222222222222222222222222222222222222222222222"
+  kind: transfer
+  amount: "-0.0045"
+  counterparty: bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g
+  block_height: 800100
+  transacted_at: 2026-04-22 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00
+
+sent_fee:
+  account: xpub_wallet_btc
+  remote_id: "2222222222222222222222222222222222222222222222222222222222222222:fee"
+  txid: "2222222222222222222222222222222222222222222222222222222222222222"
+  kind: fee
+  amount: "-0.0001"
+  block_height: 800100
+  transacted_at: 2026-04-22 12:00:00
+  confirmed: true
+  synced_at: 2026-04-25 00:00:00

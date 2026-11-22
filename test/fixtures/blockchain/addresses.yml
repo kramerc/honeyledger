@@ -1,0 +1,6 @@
+xpub_wallet_receive_0:
+  connection: xpub_wallet
+  branch: 0
+  index: 0
+  address: bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu
+  used: true

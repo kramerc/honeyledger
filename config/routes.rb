@@ -84,6 +84,21 @@ Rails.application.routes.draw do
     end
   end
 
+  # Self-custody wallets tracked from public chain data (many per user)
+  namespace :blockchain do
+    resources :accounts, only: [] do
+      member do
+        post :link
+        delete :unlink
+      end
+    end
+    resources :connections, only: %i[ new create edit update destroy ] do
+      member do
+        post :refresh
+      end
+    end
+  end
+
   # User-wide index of CSV imports (per-account routes nested under accounts above)
   namespace :csv do
     resources :imports, only: %i[ index ]

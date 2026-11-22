@@ -45,6 +45,10 @@ class ImportRule::RetroactiveApply
       changes = []
 
       candidate_transactions.find_each do |transaction|
+        # Wallet network fees always post to their fee account; the importer
+        # never offers them to rules, so applying rules afterwards must not either.
+        next if wallet_fee?(transaction)
+
         direction, counterpart = identify_counterpart(transaction)
         next unless direction
 
@@ -64,6 +68,9 @@ class ImportRule::RetroactiveApply
         end
 
         next if rule.account_id == counterpart.id
+        # Moving a wallet transaction onto an account in another currency would
+        # reinterpret its coin minor units in that currency (satoshis as cents).
+        next if wallet_sourced?(transaction) && rule.account.currency_id != transaction.currency_id
 
         merge_candidate = nil
         if rule.account.balance_sheet?
@@ -94,6 +101,14 @@ class ImportRule::RetroactiveApply
         .where(merged_into_id: nil, excluded_at: nil, split: false, opening_balance: false, parent_transaction_id: nil)
         .includes(src_account: :account_sources, dest_account: :account_sources, transaction_sources: :sourceable)
         .distinct
+    end
+
+    def wallet_fee?(transaction)
+      transaction.transaction_sources.any? { |source| source.sourceable.is_a?(Blockchain::Transaction) && source.sourceable.fee? }
+    end
+
+    def wallet_sourced?(transaction)
+      transaction.transaction_sources.any? { |source| source.sourceable.is_a?(Blockchain::Transaction) }
     end
 
     def identify_counterpart(transaction)
@@ -148,6 +163,7 @@ class ImportRule::RetroactiveApply
       @user.transactions
         .unmerged
         .unexcluded
+        .excluding_network_fees
         .includes(:src_account, :dest_account)
         .where.not(id: transaction.id)
         .where(amount_minor: transaction.amount_minor, currency_id: transaction.currency_id)

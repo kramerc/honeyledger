@@ -50,6 +50,10 @@ class Transaction < ApplicationRecord
   scope :unmerged, -> { where(merged_into_id: nil) }
   scope :excluded, -> { where.not(excluded_at: nil) }
   scope :unexcluded, -> { where(excluded_at: nil) }
+  # Wallet network fees are never one leg of a transfer, so matching services skip them.
+  scope :excluding_network_fees, -> {
+    where.not(id: TransactionSource.where(sourceable_type: "Blockchain::Transaction", sourceable_id: Blockchain::Transaction.fee.select(:id)).select(:transaction_id))
+  }
 
   def excluded?
     excluded_at.present?

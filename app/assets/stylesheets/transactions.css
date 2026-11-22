@@ -717,6 +717,11 @@
   background-color: var(--cream);
 }
 
+.source-badge--blockchain {
+  color: var(--bark-medium);
+  background-color: var(--cream);
+}
+
 .source-badge--csv {
   color: var(--bark-medium);
   background-color: var(--cream);

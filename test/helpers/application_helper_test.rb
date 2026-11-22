@@ -90,6 +90,11 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal "Lunch Flow", source_badge_label(lunchflow_accounts(:linked_one))
   end
 
+  test "source_badge_label labels wallet sources as On-chain" do
+    assert_equal "On-chain", source_badge_label(blockchain_accounts(:xpub_wallet_btc))
+    assert_equal "On-chain", source_badge_label(blockchain_transactions(:sent))
+  end
+
   test "source_badge_label labels CSV sources as CSV (not Csv::Transaction)" do
     csv_transaction = Csv::Transaction.new
     assert_equal "CSV", source_badge_label(csv_transaction)
@@ -109,6 +114,10 @@ class ApplicationHelperTest < ActionView::TestCase
 
   test "source_badge_modifier returns the Lunch Flow modifier class" do
     assert_equal "source-badge--lunchflow", source_badge_modifier(lunchflow_accounts(:linked_one))
+  end
+
+  test "source_badge_modifier returns the wallet modifier class" do
+    assert_equal "source-badge--blockchain", source_badge_modifier(blockchain_accounts(:xpub_wallet_btc))
   end
 
   test "source_badge_modifier returns the CSV modifier class" do
@@ -131,6 +140,14 @@ class ApplicationHelperTest < ActionView::TestCase
     ordered = sources.sort_by { |source| source_badge_order(source) }.map { |source| source_badge_label(source) }
 
     assert_equal [ "SimpleFIN", "Lunch Flow", "CSV" ], ordered
+  end
+
+  test "source_badge_order ranks wallets between Lunch Flow and CSV" do
+    sources = [ Csv::Transaction.new, blockchain_transactions(:sent), lunchflow_accounts(:linked_one) ]
+
+    ordered = sources.sort_by { |source| source_badge_order(source) }.map { |source| source_badge_label(source) }
+
+    assert_equal [ "Lunch Flow", "On-chain", "CSV" ], ordered
   end
 
   test "source_badge_order sorts unknown sourceable types last" do

@@ -12,6 +12,8 @@
             <%= button_to "Unlink", unlink_simplefin_account_path(sourceable), method: :delete, "aria-label": "Unlink SimpleFIN source #{sourceable.name}", data: { turbo_confirm: "Unlink this source?" } %>
           <% when Lunchflow::Account %>
             <%= button_to "Unlink", unlink_lunchflow_account_path(sourceable), method: :delete, "aria-label": "Unlink Lunch Flow source #{sourceable.name}", data: { turbo_confirm: "Unlink this source?" } %>
+          <% when Blockchain::Account %>
+            <%= button_to "Unlink", unlink_blockchain_account_path(sourceable), method: :delete, "aria-label": "Unlink wallet source #{sourceable.name}", data: { turbo_confirm: "Unlink this source?" } %>
           <% end %>
         </li>
       <% end %>

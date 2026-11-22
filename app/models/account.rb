@@ -36,6 +36,7 @@ class Account < ApplicationRecord
   validates :name, presence: true
   validates :name, uniqueness: { scope: [ :user_id, :kind ], case_sensitive: false }
   validate :name_not_reserved, unless: :virtual?
+  validate :currency_matches_wallet_sources, if: :currency_id_changed?, on: :update
 
   scope :real, -> { where(virtual: false) }
   scope :virtual, -> { where(virtual: true) }
@@ -295,5 +296,14 @@ class Account < ApplicationRecord
       else
         opening_balance_transaction.save!
       end
+    end
+
+    # A linked wallet's amounts are in its coin's minor units; switching the
+    # ledger account to another currency would reinterpret them (satoshis as cents).
+    def currency_matches_wallet_sources
+      wallet_currencies = account_sources.where(sourceable_type: "Blockchain::Account").includes(:sourceable).map { |source| source.sourceable.currency }
+      return if wallet_currencies.all? { |code| code == currency&.code }
+
+      errors.add(:currency, "must stay #{wallet_currencies.uniq.to_sentence} while a wallet is linked")
     end
 end

@@ -1,0 +1,8 @@
+xpub_wallet_btc:
+  connection: xpub_wallet
+  remote_id: BTC
+  name: Bitcoin
+  currency: BTC
+  balance: "0.0154"
+  balance_changed_at: 2026-04-24 10:00:00
+  last_seen_at: 2026-04-25 00:00:00
