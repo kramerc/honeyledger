@@ -100,7 +100,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_000000) do
     t.string "chain", default: "", null: false
     t.string "name", default: "", null: false
     t.string "identifier", default: "", null: false
-    t.string "api_url", default: "", null: false
     t.string "error"
     t.datetime "refreshed_at", precision: nil
     t.datetime "created_at", null: false

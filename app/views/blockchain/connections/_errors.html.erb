@@ -1,0 +1,11 @@
+<% if connection.errors.any? %>
+  <div class="error-panel">
+    <h2><%= pluralize(connection.errors.count, "error") %> prohibited this wallet from being saved:</h2>
+
+    <ul>
+      <% connection.errors.each do |error| %>
+        <li><%= error.full_message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>

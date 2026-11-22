@@ -54,6 +54,7 @@
       <td><%= blockchain_connection.refreshed_at ? blockchain_connection.refreshed_at.strftime("%B %d, %Y %I:%M %p") : "Never" %></td>
       <td style="display: flex; gap: 0.25em; align-items: center">
         <%= button_to "Refresh", refresh_blockchain_connection_path(blockchain_connection), "aria-label": "Refresh #{blockchain_connection.name}" %>
+        <%= button_to "Edit", edit_blockchain_connection_path(blockchain_connection), method: :get, "aria-label": "Edit #{blockchain_connection.name}" %>
         <%= button_to "Remove", blockchain_connection_path(blockchain_connection), method: :delete, "aria-label": "Remove #{blockchain_connection.name}", data: { turbo_confirm: "Stop tracking this wallet? Its imported ledger transactions stay." } %>
       </td>
     </tr>

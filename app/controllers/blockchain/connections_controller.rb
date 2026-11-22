@@ -1,12 +1,12 @@
 class Blockchain::ConnectionsController < ApplicationController
-  before_action :set_blockchain_connection, only: %i[refresh destroy]
+  before_action :set_blockchain_connection, only: %i[edit update refresh destroy]
 
   def new
     @blockchain_connection = current_user.blockchain_connections.build(chain: "bitcoin")
   end
 
   def create
-    @blockchain_connection = current_user.blockchain_connections.build(blockchain_connection_params)
+    @blockchain_connection = current_user.blockchain_connections.build(create_params)
 
     respond_to do |format|
       if @blockchain_connection.save
@@ -17,6 +17,18 @@ class Blockchain::ConnectionsController < ApplicationController
         format.html { render :new, status: :unprocessable_entity }
         format.json { render json: @blockchain_connection.errors, status: :unprocessable_entity }
       end
+    end
+  end
+
+  def edit
+  end
+
+  # Only the label is editable: changing the identifier would be a different wallet.
+  def update
+    if @blockchain_connection.update(update_params)
+      redirect_to integrations_path, notice: "Wallet updated."
+    else
+      render :edit, status: :unprocessable_entity
     end
   end
 
@@ -40,7 +52,11 @@ class Blockchain::ConnectionsController < ApplicationController
       @blockchain_connection = current_user.blockchain_connections.find(params.expect(:id))
     end
 
-    def blockchain_connection_params
-      params.expect(blockchain_connection: [ :chain, :name, :identifier, :api_url ])
+    def create_params
+      params.expect(blockchain_connection: [ :chain, :name, :identifier ])
+    end
+
+    def update_params
+      params.expect(blockchain_connection: [ :name ])
     end
 end

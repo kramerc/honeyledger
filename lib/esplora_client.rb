@@ -21,6 +21,13 @@ class EsploraClient
   MIN_INTERVAL = 0.5
   MAX_RETRIES = 4
   MAX_BACKOFF = 30
+  CHAIN_PAGE_SIZE = 25
+
+  TRANSPORT_ERRORS = [
+    Net::OpenTimeout, Net::ReadTimeout, SocketError, Timeout::Error, IOError,
+    Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::EHOSTUNREACH, Errno::ENETUNREACH, Errno::ETIMEDOUT,
+    OpenSSL::SSL::SSLError, JSON::ParserError, HTTParty::Error
+  ].freeze
 
   def initialize(base_url:, min_interval: MIN_INTERVAL, sleeper: ->(seconds) { sleep(seconds) })
     @base_url = base_url.to_s.chomp("/")
@@ -32,7 +39,7 @@ class EsploraClient
   # Address usage stats: { tx_count:, funded:, spent: } across confirmed and
   # mempool activity. tx_count > 0 marks an address as used for the gap limit.
   def address_stats(address)
-    body = get("/address/#{address}")
+    body = get("/address/#{address}", expect: Hash)
     chain = body.fetch("chain_stats", {})
     mempool = body.fetch("mempool_stats", {})
 
@@ -44,7 +51,8 @@ class EsploraClient
   end
 
   # Every confirmed transaction touching the address, newest first. Pages with
-  # /txs/chain/:last_seen_txid until the server returns an empty page.
+  # /txs/chain/:last_seen_txid; Esplora serves CHAIN_PAGE_SIZE per page, so a
+  # shorter page is the last one.
   def address_transactions(address)
     transactions = []
     last_seen_txid = nil
@@ -52,12 +60,13 @@ class EsploraClient
     loop do
       path = "/address/#{address}/txs/chain"
       path += "/#{last_seen_txid}" if last_seen_txid
-      page = get(path)
-      break if page.blank?
+      page = get(path, expect: Array)
+      break if page.empty?
+      raise Error, "The explorer at #{@base_url} returned an unexpected transaction list" unless page.all?(Hash)
 
       transactions.concat(page.map { |raw_transaction| normalize_transaction(raw_transaction) })
       next_txid = page.last["txid"]
-      break if next_txid == last_seen_txid
+      break if page.size < CHAIN_PAGE_SIZE || next_txid == last_seen_txid
 
       last_seen_txid = next_txid
     end
@@ -67,12 +76,19 @@ class EsploraClient
 
   private
 
-    def get(path)
+    # Every failure surfaces as EsploraClient::Error, so the refresh job can
+    # record it on the wallet instead of crashing.
+    def get(path, expect:)
       attempt = 0
       begin
         response = paced { self.class.get("#{@base_url}#{path}", headers: { "Accept" => "application/json" }) }
         handle_errors!(response)
-        response.parsed_response
+        parsed = response.parsed_response
+        unless parsed.is_a?(expect)
+          raise Error, "The explorer at #{@base_url} did not return JSON; check that ESPLORA_URL points at an Esplora API"
+        end
+
+        parsed
       rescue RateLimitedError
         attempt += 1
         raise if attempt > MAX_RETRIES
@@ -80,8 +96,8 @@ class EsploraClient
         @sleeper.call(backoff(response, attempt))
         retry
       end
-    rescue Net::OpenTimeout, Net::ReadTimeout, SocketError, Errno::ECONNREFUSED => e
-      raise Error, "Could not reach #{@base_url}: #{e.message}"
+    rescue *TRANSPORT_ERRORS => e
+      raise Error, "Could not reach the explorer at #{@base_url} (#{e.class.name.demodulize})"
     end
 
     def paced
@@ -112,8 +128,9 @@ class EsploraClient
       when 429
         raise RateLimitedError, "Rate limited by #{@base_url}; try again later"
       else
-        message = response.body.to_s.strip.first(200).presence || "API error"
-        raise Error, "#{message} (#{response.code})"
+        # The body is logged, not shown: error text belongs to the operator.
+        Rails.logger.warn("Esplora #{response.code} from #{@base_url}: #{response.body.to_s.strip.first(200)}")
+        raise Error, "The explorer returned HTTP #{response.code}"
       end
     end
 

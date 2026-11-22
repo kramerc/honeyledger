@@ -16,14 +16,18 @@ class Blockchain::Bitcoin::ScannerTest < ActiveSupport::TestCase
   class FakeClient
     attr_reader :stats_calls
 
-    def initialize(transactions)
+    # unused_at_stats: addresses whose stats still read as unused, as when a
+    # transaction paying them confirms after the scan checked them.
+    def initialize(transactions, unused_at_stats: [])
       @transactions = transactions
+      @unused_at_stats = unused_at_stats
       @stats_calls = []
     end
 
     def address_stats(address)
       @stats_calls << address
-      { tx_count: touching(address).size, funded: 0, spent: 0 }
+      tx_count = @unused_at_stats.include?(address) ? 0 : touching(address).size
+      { tx_count: tx_count, funded: 0, spent: 0 }
     end
 
     def address_transactions(address)
@@ -94,6 +98,34 @@ class Blockchain::Bitcoin::ScannerTest < ActiveSupport::TestCase
     assert_equal 1, coinjoin_rows.size
     assert_equal "transfer", coinjoin_rows.first.kind
     assert_equal "-0.000005", coinjoin_rows.first.amount
+  end
+
+  test "change paid to an address still marked unused nets out" do
+    funding = transaction("aa", inputs: [ [ FOREIGN, 200_000 ] ], outputs: [ [ RECEIVE_0, 100_000 ] ], fee: 100_000)
+    # Confirms mid-scan: CHANGE_0 read as unused when its stats were fetched.
+    spend = transaction("bb", inputs: [ [ RECEIVE_0, 100_000 ] ], outputs: [ [ OTHER_FOREIGN, 50_000 ], [ CHANGE_0, 49_000 ] ], fee: 1_000)
+    client = FakeClient.new([ funding, spend ], unused_at_stats: [ CHANGE_0 ])
+
+    result = Blockchain::Bitcoin::Scanner.call(@connection, client: client)
+
+    assert_equal "-0.0005", result.rows.find { |row| row.remote_id == "bb" }.amount, "the 49,000 sats of change is not a send"
+    assert_equal "0.00049", result.balance
+  end
+
+  test "a payjoin receive names the payer, not the payer's change" do
+    result = scan(
+      transaction("aa", inputs: [ [ FOREIGN, 100_000 ] ], outputs: [ [ RECEIVE_0, 50_000 ] ], fee: 50_000),
+      transaction("bb", inputs: [ [ RECEIVE_0, 50_000 ], [ OTHER_FOREIGN, 100_000 ] ], outputs: [ [ RECEIVE_1, 140_000 ], [ FOREIGN, 9_000 ] ], fee: 1_000)
+    )
+
+    payjoin = result.rows.find { |row| row.remote_id == "bb" }
+    assert_equal "0.0009", payjoin.amount
+    assert_equal OTHER_FOREIGN, payjoin.counterparty
+  end
+
+  test "reports how many addresses have been used" do
+    assert_equal 0, scan.used_addresses
+    assert_equal 1, scan(transaction("aa", inputs: [ [ FOREIGN, 10_000 ] ], outputs: [ [ RECEIVE_0, 9_000 ] ], fee: 1_000)).used_addresses
   end
 
   test "unconfirmed transactions are left out" do

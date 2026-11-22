@@ -90,6 +90,9 @@ class AccountsController < ApplicationController
         # column gating in accounts/_account_row and Account#linkable?).
         @account.errors.add(:kind, "must be an asset or liability account to link an integration")
         false
+      elsif @blockchain_account && !@blockchain_account.linkable_to?(@account)
+        @account.errors.add(:currency, "must be #{@blockchain_account.currency} to link this wallet")
+        false
       else
         begin
           Account.transaction do

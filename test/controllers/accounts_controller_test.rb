@@ -317,6 +317,20 @@ class AccountsControllerTest < ActionDispatch::IntegrationTest
     assert_equal Account.last, blockchain_account.reload.ledger_account
   end
 
+  test "should refuse to create a wallet-linked account in another currency" do
+    blockchain_account = blockchain_accounts(:xpub_wallet_btc)
+
+    assert_no_difference("Account.count") do
+      post accounts_url, params: {
+        blockchain_account_id: blockchain_account.id,
+        account: { name: "Cold storage", kind: "asset", currency_id: currencies(:usd).id }
+      }
+    end
+
+    assert_response :unprocessable_entity
+    assert_empty blockchain_account.reload.ledger_accounts
+  end
+
   test "should redirect on new with a linked wallet account" do
     blockchain_account = blockchain_accounts(:xpub_wallet_btc)
     AccountSource::Attach.call(account: @user.accounts.create!(name: "Wallet", kind: :asset, currency: currencies(:btc)), sourceable: blockchain_account)

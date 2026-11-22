@@ -15,6 +15,11 @@ class Blockchain::AccountsController < ApplicationController
       return
     end
 
+    unless @blockchain_account.linkable_to?(ledger_account)
+      redirect_to integrations_path, alert: "Link the wallet to an account in #{@blockchain_account.currency}."
+      return
+    end
+
     if @blockchain_account.linked? && @blockchain_account.ledger_account != ledger_account
       redirect_to integrations_path, alert: "Wallet account is already linked to another account."
       return

@@ -22,25 +22,27 @@ class EsploraClientTest < ActiveSupport::TestCase
   end
 
   test "address_transactions pages through confirmed history and normalizes it" do
-    first_page = [ raw_transaction("aa"), raw_transaction("bb") ]
-    second_page = [ raw_transaction("cc") ]
+    full_page = (1..EsploraClient::CHAIN_PAGE_SIZE).map { |index| raw_transaction(format("%02d", index)) }
+    last_page = [ raw_transaction("zz") ]
     pages = {
-      "https://esplora.example/api/address/#{ADDRESS}/txs/chain" => first_page,
-      "https://esplora.example/api/address/#{ADDRESS}/txs/chain/bb" => second_page,
-      "https://esplora.example/api/address/#{ADDRESS}/txs/chain/cc" => []
+      "https://esplora.example/api/address/#{ADDRESS}/txs/chain" => full_page,
+      "https://esplora.example/api/address/#{ADDRESS}/txs/chain/25" => last_page
     }
 
     transactions = EsploraClient.stub :get, ->(url, **_options) { response(pages.fetch(url)) } do
       @client.address_transactions(ADDRESS)
     end
 
-    assert_equal %w[aa bb cc], transactions.map { |transaction| transaction[:txid] }
+    # A short page is the last: no request is made for a page after "zz".
+    assert_equal 26, transactions.size
+    assert_equal "zz", transactions.last[:txid]
     first = transactions.first
     assert_equal 1_000, first[:fee]
     assert_equal 800_000, first[:block_height]
     assert_equal Time.zone.at(1_700_000_000), first[:block_time]
     assert first[:confirmed]
     assert_equal [ { address: "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH", value: 10_000 } ], first[:inputs]
+    assert_equal "01", first[:txid]
     assert_equal [ { address: ADDRESS, value: 9_000 } ], first[:outputs]
   end
 
@@ -88,10 +90,31 @@ class EsploraClientTest < ActiveSupport::TestCase
     assert_in_delta 60, @sleeps.first, 1
   end
 
-  test "other failures raise Error with the response text" do
-    EsploraClient.stub :get, ->(*_args, **_options) { response("Invalid Bitcoin address", code: 400) } do
+  test "other failures raise Error without echoing the response body" do
+    EsploraClient.stub :get, ->(*_args, **_options) { response("internal secret detail", code: 400) } do
       error = assert_raises(EsploraClient::Error) { @client.address_stats(ADDRESS) }
-      assert_equal "Invalid Bitcoin address (400)", error.message
+      assert_equal "The explorer returned HTTP 400", error.message
+    end
+  end
+
+  test "a 200 that is not JSON raises Error" do
+    EsploraClient.stub :get, ->(*_args, **_options) { response("<!doctype html><title>mempool</title>") } do
+      error = assert_raises(EsploraClient::Error) { @client.address_stats(ADDRESS) }
+      assert_match(/did not return JSON/, error.message)
+    end
+  end
+
+  test "a transaction list of non-objects raises Error" do
+    EsploraClient.stub :get, ->(*_args, **_options) { response([ "aa" ]) } do
+      assert_raises(EsploraClient::Error) { @client.address_transactions(ADDRESS) }
+    end
+  end
+
+  test "TLS and parse failures raise Error" do
+    [ OpenSSL::SSL::SSLError, Errno::ECONNRESET, JSON::ParserError ].each do |error_class|
+      EsploraClient.stub :get, ->(*_args, **_options) { raise error_class } do
+        assert_raises(EsploraClient::Error, error_class.name) { @client.address_stats(ADDRESS) }
+      end
     end
   end
 

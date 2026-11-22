@@ -537,6 +537,35 @@ class ImportRule::RetroactiveApplyTest < ActiveSupport::TestCase
     assert_equal :expense, matching.direction
   end
 
+  test "skips wallet network fees and wallet transactions a rule would move into another currency" do
+    btc = currencies(:btc)
+    wallet_ledger_account = Account.create!(user: @user, name: "Cold storage", kind: :asset, currency: btc)
+    AccountSource.create!(account: wallet_ledger_account, sourceable: blockchain_accounts(:xpub_wallet_btc))
+    Blockchain::ImportTransactionsJob.perform_now(blockchain_account_id: blockchain_accounts(:xpub_wallet_btc).id)
+    usd_fees = Account.create!(user: @user, name: "Bank fees", kind: :expense, currency: @currency)
+    ImportRule.create!(user: @user, account: usd_fees, match_pattern: "fee", match_type: :contains, priority: 20)
+    ImportRule.create!(user: @user, account: usd_fees, match_pattern: "Sent to", match_type: :starts_with, priority: 20)
+
+    changes = ImportRule::RetroactiveApply.new(user: @user).preview
+    changed = changes.map(&:transaction)
+
+    assert_not_includes changed, blockchain_transactions(:sent_fee).ledger_transactions.sole
+    assert_not_includes changed, blockchain_transactions(:sent).ledger_transactions.sole
+  end
+
+  test "still reassigns a wallet transaction to an account in its own currency" do
+    btc = currencies(:btc)
+    wallet_ledger_account = Account.create!(user: @user, name: "Cold storage", kind: :asset, currency: btc)
+    AccountSource.create!(account: wallet_ledger_account, sourceable: blockchain_accounts(:xpub_wallet_btc))
+    Blockchain::ImportTransactionsJob.perform_now(blockchain_account_id: blockchain_accounts(:xpub_wallet_btc).id)
+    gifts = Account.create!(user: @user, name: "Gifts", kind: :expense, currency: btc)
+    ImportRule.create!(user: @user, account: gifts, match_pattern: "Sent to", match_type: :starts_with, priority: 20)
+
+    changes = ImportRule::RetroactiveApply.new(user: @user).preview
+
+    assert_includes changes.map(&:transaction), blockchain_transactions(:sent).ledger_transactions.sole
+  end
+
   private
 
     # Build a ledger transaction sourced from a CSV import, mirroring how

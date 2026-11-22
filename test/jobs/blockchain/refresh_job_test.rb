@@ -8,7 +8,7 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
   end
 
   test "upserts the native account and its rows" do
-    result = Scanner::Result.new(balance: "0.00039", rows: [
+    result = Scanner::Result.new(used_addresses: 1, balance: "0.00039", rows: [
       row("aa", "transfer", "0.001", counterparty: "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH"),
       row("bb", "transfer", "-0.0006"),
       row("bb:fee", "fee", "-0.00001", txid: "bb")
@@ -28,7 +28,7 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
   end
 
   test "an unchanged row keeps its synced_at" do
-    result = Scanner::Result.new(balance: "0.001", rows: [ row("aa", "transfer", "0.001") ])
+    result = Scanner::Result.new(used_addresses: 1, balance: "0.001", rows: [ row("aa", "transfer", "0.001") ])
 
     Scanner.stub :call, result do
       Blockchain::RefreshJob.perform_now(@connection.id)
@@ -45,7 +45,7 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
 
   test "enqueues an import only for a linked account" do
     connection = blockchain_connections(:xpub_wallet)
-    result = Scanner::Result.new(balance: "0.0154", rows: [])
+    result = Scanner::Result.new(used_addresses: 1, balance: "0.0154", rows: [])
 
     Scanner.stub :call, result do
       assert_no_enqueued_jobs(only: Blockchain::ImportTransactionsJob) do
@@ -59,6 +59,42 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
         Blockchain::RefreshJob.perform_now(connection.id)
       end
     end
+  end
+
+  test "drops a vanished row that was never imported and keeps an imported one" do
+    connection = blockchain_connections(:xpub_wallet)
+    imported = blockchain_transactions(:sent)
+    ledger_account = users(:one).accounts.create!(name: "Cold storage", kind: :asset, currency: currencies(:btc))
+    AccountSource.create!(account: ledger_account, sourceable: blockchain_accounts(:xpub_wallet_btc))
+    Blockchain::ImportTransactionsJob.perform_now(blockchain_account_id: blockchain_accounts(:xpub_wallet_btc).id)
+    blockchain_transactions(:received).transaction_sources.destroy_all # as if never imported
+
+    # The scanner now reports only the fee row.
+    result = Scanner::Result.new(used_addresses: 1, balance: "-0.0001", rows: [
+      row(blockchain_transactions(:sent_fee).remote_id, "fee", "-0.0001", txid: imported.txid)
+    ])
+    Scanner.stub :call, result do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+
+    assert_not Blockchain::Transaction.exists?(blockchain_transactions(:received).id), "an unimported vanished row is removed"
+    assert Blockchain::Transaction.exists?(imported.id), "an imported vanished row stays, with its ledger transaction"
+    assert imported.ledger_transactions.exists?
+  end
+
+  test "an extended key with no activity explains the key type" do
+    connection = blockchain_connections(:xpub_wallet)
+
+    Scanner.stub :call, Scanner::Result.new(used_addresses: 0, balance: "0.0", rows: []) do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+
+    assert_equal Blockchain::RefreshJob::NO_ACTIVITY_MESSAGE, connection.reload.error
+  end
+
+  test "allows one refresh per wallet at a time" do
+    assert_equal 1, Blockchain::RefreshJob.concurrency_limit
+    assert_equal "blockchain-refresh-7", Blockchain::RefreshJob.new(7).concurrency_key.split("/").last
   end
 
   test "records an explorer error on the connection" do
@@ -75,7 +111,7 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
     @connection.update!(refreshed_at: 2.days.ago)
     scanned = []
 
-    Scanner.stub :call, ->(connection) { scanned << connection.id; Scanner::Result.new(balance: "0", rows: []) } do
+    Scanner.stub :call, ->(connection) { scanned << connection.id; Scanner::Result.new(used_addresses: 1, balance: "0", rows: []) } do
       Blockchain::RefreshJob.perform_now
     end
 

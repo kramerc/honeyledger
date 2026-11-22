@@ -6,22 +6,16 @@
 </p>
 <p>
   An extended public key reveals the wallet's full history to whoever holds it, and the explorer
-  you query sees which addresses you look up. Point the explorer URL at your own Esplora instance
-  if you want to keep that private.
+  the server queries sees which addresses it looks up. The server's operator can point it at a
+  self-hosted explorer to keep those lookups private.
+</p>
+<p>
+  <code>xpub</code> keys are read as legacy (1…) wallets. If your wallet uses native SegWit
+  (bc1q…), export its <code>zpub</code>; for nested SegWit (3…), its <code>ypub</code>.
 </p>
 
 <%= form_with model: @blockchain_connection, url: blockchain_connections_path, method: :post, local: true do |form| %>
-  <% if @blockchain_connection.errors.any? %>
-    <div class="error-panel">
-      <h2><%= pluralize(@blockchain_connection.errors.count, "error") %> prohibited this wallet from being saved:</h2>
-
-      <ul>
-        <% @blockchain_connection.errors.each do |error| %>
-          <li><%= error.full_message %></li>
-        <% end %>
-      </ul>
-    </div>
-  <% end %>
+  <%= render "blockchain/connections/errors", connection: @blockchain_connection %>
 
   <%= form.hidden_field :chain %>
 
@@ -33,11 +27,6 @@
   <div class="field">
     <%= form.label :identifier, "Address or extended public key" %><br>
     <%= form.text_field :identifier, autocomplete: "off", spellcheck: false, size: 60 %>
-  </div>
-
-  <div class="field">
-    <%= form.label :api_url, "Explorer API URL (Esplora)" %><br>
-    <%= form.url_field :api_url, placeholder: Blockchain::Connection::DEFAULT_API_URLS["bitcoin"], size: 60 %>
   </div>
 
   <div class="actions">

@@ -74,6 +74,10 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
 
         rule = user.import_rules.for_description(description).first unless blockchain_transaction.fee?
         rule_account = rule&.account
+        # On a send the counterpart is the destination, whose currency the
+        # transaction adopts; a rule account in another currency would book the
+        # coin's minor units as, say, cents. Such a rule is not applied.
+        rule_account = nil if rule_account && rule_account.currency_id != ledger_account.currency_id
         bs_rule_account = rule_account if rule_account&.balance_sheet?
 
         kind = ledger_side == :src ? :expense : :revenue
@@ -83,10 +87,7 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
           # One shared counterpart per direction rather than one account per
           # counterparty address; the address stays in the description, where
           # an import rule can pick it up.
-          Account.find_or_create_for_import(
-            user: user, description: counterpart_name(blockchain_transaction, kind),
-            kind: kind, currency: ledger_account.currency, skip_rules: true
-          )
+          counterpart_for(user, counterpart_name(blockchain_transaction, kind), kind, ledger_account.currency)
         end
 
         if ledger_side == :src
@@ -129,6 +130,17 @@ class Blockchain::ImportTransactionsJob < ApplicationJob
   end
 
   private
+
+    # Account.find_or_create_for_import matches by name alone. If the user
+    # already has an account with that name in another currency (a fiat
+    # "Network fees", say), use a currency-suffixed sibling instead of booking
+    # into it.
+    def counterpart_for(user, name, kind, currency)
+      existing = user.accounts.where(kind: kind).where("LOWER(name) = LOWER(?)", name).first
+      name = "#{name} (#{currency.code})" if existing && existing.currency_id != currency.id
+
+      Account.find_or_create_for_import(user: user, description: name, kind: kind, currency: currency, skip_rules: true)
+    end
 
     def counterpart_name(blockchain_transaction, kind)
       return FEE_ACCOUNT_NAME if blockchain_transaction.fee?

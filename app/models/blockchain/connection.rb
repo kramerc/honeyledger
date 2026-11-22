@@ -1,11 +1,10 @@
 # A self-custody wallet tracked from public chain data. The identifier is a
 # single address or an extended public key; no private key or credential is
 # ever stored. Unlike the bank aggregators, a user can track many wallets.
+#
+# The explorer it queries is the app-wide Rails.configuration.x.esplora_url,
+# never a per-wallet setting (see config/initializers/blockchain.rb).
 class Blockchain::Connection < ApplicationRecord
-  DEFAULT_API_URLS = {
-    "bitcoin" => "https://mempool.space/api"
-  }.freeze
-
   enum :chain, { bitcoin: "bitcoin" }, validate: true
 
   belongs_to :user
@@ -13,18 +12,23 @@ class Blockchain::Connection < ApplicationRecord
   has_many :addresses, dependent: :delete_all
   has_many :transactions, through: :accounts
 
-  normalizes :identifier, with: ->(value) { value.strip }
-  normalizes :name, :api_url, with: ->(value) { value.to_s.strip }
+  # Bech32 is case-insensitive but explorers report lowercase addresses, and
+  # the scanner matches addresses exactly. Base58 strings are case-sensitive.
+  normalizes :identifier, with: ->(value) {
+    stripped = value.strip
+    stripped.downcase.start_with?("bc1", "tb1") ? stripped.downcase : stripped
+  }
+  normalizes :name, with: ->(value) { value.to_s.strip }
 
   before_validation :apply_defaults
 
   validates :name, :identifier, presence: true
+  validates :name, length: { maximum: 100 }
   validates :identifier, uniqueness: { scope: [ :user_id, :chain ], message: "is already tracked" }
-  validates :api_url, format: { with: %r{\Ahttps?://\S+\z}, message: "must be an http(s) URL" }
   validate :identifier_must_be_valid
 
   def client
-    EsploraClient.new(base_url: api_url)
+    EsploraClient.new(base_url: Rails.configuration.x.esplora_url)
   end
 
   def refresh
@@ -49,7 +53,6 @@ class Blockchain::Connection < ApplicationRecord
   private
 
     def apply_defaults
-      self.api_url = DEFAULT_API_URLS[chain] if api_url.blank? && chain.present?
       self.name = "Bitcoin wallet" if name.blank? && bitcoin?
     end
 

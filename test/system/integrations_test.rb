@@ -347,4 +347,26 @@ class IntegrationsTest < ApplicationSystemTestCase
       assert_text "Rate limited by the explorer"
     end
   end
+
+  test "an unlinked wallet account stays listed after a failed refresh" do
+    # A failed refresh advances the connection's refreshed_at past the account's last_seen_at.
+    blockchain_connections(:xpub_wallet).update!(error: "Rate limited by the explorer", refreshed_at: 1.minute.from_now)
+
+    visit integrations_path
+
+    assert_text "Wallet Accounts"
+    assert_selector "select[name='blockchain_account[ledger_account_id]']"
+    assert_no_text "No wallet history yet"
+  end
+
+  test "edits a wallet's label" do
+    visit integrations_path
+    within("tr", text: "Cold storage", match: :first) { click_button "Edit" }
+
+    fill_in "Label", with: "Vault"
+    click_button "Save"
+
+    assert_text "Wallet updated."
+    assert_text "Vault"
+  end
 end

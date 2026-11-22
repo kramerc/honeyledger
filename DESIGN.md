@@ -143,7 +143,7 @@ Rules that came with it:
 ### Type indicator and badges
 
 - **Transaction type** (`.tx-type`): coloured text, not a pill: an arrow and a word ("↓ Withdrawal", "↑ Deposit", "⇄ Transfer") at `0.8rem`, weight 600, with no background or border. Deposits and refunds use `--color-positive`, withdrawals and clawbacks `--color-negative`, transfers `--bark-light`.
-- **Source badges** (`.source-badge--simplefin`, `--lunchflow`, `--csv`): 3px radius, 1px `currentColor` border, under the date.
+- **Source badges** (`.source-badge--simplefin`, `--lunchflow`, `--blockchain`, `--csv`): 3px radius, 1px `currentColor` border, under the date.
 - **Status badges** (`.excluded-badge`, `.merged-badge`): outlined, 3px radius, beside the type. Merged is a link in the row that toggles the merged details; it is plain text in the edit form.
 - **Status markers** (`.marker`): a parenthetical flag beside a value, such as an aggregator account's "(stale)" or "(missing)" currency, in `--accent-text` with a `title` that explains it.
 - **Inline errors** (`.text-error`): an error message shown as plain text rather than a panel, such as a CSV import's "Error" and "Preview error", the error beside an import's state in the imports list, and a Lunch Flow account's ERROR or DISCONNECTED status, in `--text-error`. Never colour error text with a literal such as `red`.

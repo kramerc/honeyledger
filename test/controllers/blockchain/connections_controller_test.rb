@@ -18,13 +18,49 @@ class Blockchain::ConnectionsControllerTest < ActionDispatch::IntegrationTest
     assert_difference "@user.blockchain_connections.count", 1 do
       assert_enqueued_with(job: Blockchain::RefreshJob) do
         post blockchain_connections_url, params: { blockchain_connection: {
-          chain: "bitcoin", name: "Spending", identifier: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", api_url: ""
+          chain: "bitcoin", name: "Spending", identifier: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
         } }
       end
     end
 
     assert_redirected_to integrations_url
-    assert_equal "https://mempool.space/api", @user.blockchain_connections.find_by(name: "Spending").api_url
+  end
+
+  test "create ignores a user-supplied explorer URL" do
+    post blockchain_connections_url, params: { blockchain_connection: {
+      chain: "bitcoin", identifier: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", api_url: "http://169.254.169.254/"
+    } }
+
+    assert_redirected_to integrations_url
+    assert_not Blockchain::Connection.column_names.include?("api_url")
+  end
+
+  test "edit renders and update changes only the label" do
+    connection = blockchain_connections(:xpub_wallet)
+    get edit_blockchain_connection_url(connection)
+    assert_response :success
+
+    patch blockchain_connection_url(connection), params: { blockchain_connection: { name: "Vault", identifier: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4" } }
+
+    assert_redirected_to integrations_url
+    connection.reload
+    assert_equal "Vault", connection.name
+    assert connection.identifier.start_with?("zpub"), "the identifier is not editable"
+  end
+
+  test "update re-renders on an over-long label" do
+    patch blockchain_connection_url(blockchain_connections(:xpub_wallet)), params: { blockchain_connection: { name: "x" * 101 } }
+
+    assert_response :unprocessable_entity
+  end
+
+  test "update with a blank label falls back to the default" do
+    connection = blockchain_connections(:xpub_wallet)
+
+    patch blockchain_connection_url(connection), params: { blockchain_connection: { name: " " } }
+
+    assert_redirected_to integrations_url
+    assert_equal "Bitcoin wallet", connection.reload.name
   end
 
   test "create re-renders on an invalid identifier" do

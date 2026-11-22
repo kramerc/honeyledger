@@ -4,7 +4,6 @@ xpub_wallet:
   chain: bitcoin
   name: Cold storage
   identifier: zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs
-  api_url: https://mempool.space/api
   refreshed_at: 2026-04-25 00:00:00
 
 address_wallet:
@@ -12,5 +11,4 @@ address_wallet:
   chain: bitcoin
   name: Spending
   identifier: bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4
-  api_url: https://mempool.space/api
   refreshed_at: 2026-04-25 00:00:00

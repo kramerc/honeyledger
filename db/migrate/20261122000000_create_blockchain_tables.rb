@@ -6,7 +6,6 @@ class CreateBlockchainTables < ActiveRecord::Migration[8.1]
       t.string :chain, null: false, default: ""
       t.string :name, null: false, default: ""
       t.string :identifier, null: false, default: ""
-      t.string :api_url, null: false, default: ""
       t.string :error
       t.timestamp :refreshed_at
 

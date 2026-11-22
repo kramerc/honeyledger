@@ -92,7 +92,7 @@ Rails.application.routes.draw do
         delete :unlink
       end
     end
-    resources :connections, only: %i[ new create destroy ] do
+    resources :connections, only: %i[ new create edit update destroy ] do
       member do
         post :refresh
       end

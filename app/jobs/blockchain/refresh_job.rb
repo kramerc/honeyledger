@@ -1,10 +1,18 @@
 class Blockchain::RefreshJob < ApplicationJob
   queue_as :default
 
+  # One refresh per wallet at a time: a paced xpub scan takes minutes, and two
+  # overlapping scans would race on the derived-address cache and double the
+  # request rate against the explorer.
+  limits_concurrency to: 1, key: ->(blockchain_connection_id = nil) { "blockchain-refresh-#{blockchain_connection_id || "sweep"}" }, duration: 30.minutes
+
   # The asset each chain's native account tracks, keyed by chain.
   NATIVE_ASSETS = {
     "bitcoin" => { remote_id: "BTC", name: "Bitcoin", currency: "BTC" }
   }.freeze
+
+  NO_ACTIVITY_MESSAGE = "No activity found for this key. An xpub is read as a legacy (1…) wallet; " \
+    "for a native SegWit (bc1q…) wallet add its zpub, and for nested SegWit (3…) its ypub.".freeze
 
   def perform(blockchain_connection_id = nil)
     connections = if blockchain_connection_id
@@ -51,8 +59,25 @@ class Blockchain::RefreshJob < ApplicationJob
         blockchain_transaction.save!
       end
 
-      blockchain_connection.update!(error: nil, refreshed_at: refreshed_at)
+      prune_vanished_rows(blockchain_account, result.rows.map(&:remote_id))
+
+      error = NO_ACTIVITY_MESSAGE if blockchain_connection.extended_key? && result.used_addresses.zero?
+      blockchain_connection.update!(error: error, refreshed_at: refreshed_at)
 
       Blockchain::ImportTransactionsJob.perform_later(blockchain_account_id: blockchain_account.id) if blockchain_account.linked?
+    end
+
+    # A row the scanner no longer reports (a reorg, or a movement that now nets
+    # to zero) is deleted while it has not reached the ledger. One already
+    # imported is kept and logged: removing a ledger transaction, which the user
+    # may have edited or merged, is not something a refresh should do silently.
+    def prune_vanished_rows(blockchain_account, current_remote_ids)
+      vanished = blockchain_account.transactions.where.not(remote_id: current_remote_ids)
+      imported, unimported = vanished.includes(:transaction_sources).partition { |row| row.transaction_sources.any? }
+
+      unimported.each(&:destroy!)
+      imported.each do |row|
+        Rails.logger.warn("Blockchain row #{row.remote_id} on account #{blockchain_account.id} no longer appears on chain but is imported; left in place")
+      end
     end
 end

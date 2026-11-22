@@ -21,7 +21,9 @@ class Blockchain::Bitcoin::Scanner
   SATOSHIS_PER_COIN = 100_000_000
 
   Row = Data.define(:remote_id, :txid, :kind, :amount, :counterparty, :block_height, :transacted_at, :confirmed)
-  Result = Data.define(:balance, :rows)
+  # used_addresses: how many wallet addresses have ever been used. Zero for an
+  # extended key usually means the wrong key type (an xpub from a SegWit wallet).
+  Result = Data.define(:balance, :rows, :used_addresses)
 
   def self.call(connection, client: connection.client)
     new(connection, client).call
@@ -33,10 +35,9 @@ class Blockchain::Bitcoin::Scanner
   end
 
   def call
-    wallet_addresses = discover_addresses
-    owned = wallet_addresses.to_set
+    used_addresses, owned = discover_addresses
 
-    transactions = wallet_addresses
+    transactions = used_addresses
       .flat_map { |address| @client.address_transactions(address) }
       .uniq { |transaction| transaction[:txid] }
       .select { |transaction| transaction[:confirmed] }
@@ -50,20 +51,26 @@ class Blockchain::Bitcoin::Scanner
       rows_for(transaction, owned, received, spent)
     end
 
-    Result.new(balance: to_coins(balance_satoshis), rows: rows)
+    Result.new(balance: to_coins(balance_satoshis), rows: rows, used_addresses: used_addresses.size)
   end
 
   private
 
+    # Returns [addresses to fetch history for, every address the wallet owns].
+    # Ownership covers every derived address, not just the ones known to be
+    # used: a transaction that confirms mid-scan can pay change to an address
+    # still marked unused, and must net that change out rather than book it as
+    # a send.
     def discover_addresses
       key = @connection.extended_key
-      return [ @connection.identifier ] if key.nil?
+      return [ [ @connection.identifier ], Set[@connection.identifier] ] if key.nil?
 
       [ Blockchain::Address::RECEIVE, Blockchain::Address::CHANGE ].each do |branch|
         scan_branch(key, branch)
       end
 
-      @connection.addresses.where(used: true).order(:branch, :index).pluck(:address)
+      addresses = @connection.addresses.order(:branch, :index).pluck(:address, :used)
+      [ addresses.select(&:last).map(&:first), addresses.map(&:first).to_set ]
     end
 
     def scan_branch(key, branch)
@@ -104,8 +111,11 @@ class Blockchain::Bitcoin::Scanner
           row(transaction, :fee, -fee, nil)
         ].compact
       else
-        counterparty = first_foreign_address(transaction[:outputs], owned)
-        [ row(transaction, :transfer, received - spent, counterparty) ].compact
+        # Net inflow (a payjoin receive): the payer is among the foreign inputs.
+        # Net outflow (a coinjoin send): the payee is among the foreign outputs.
+        net = received - spent
+        counterparty = first_foreign_address(net.positive? ? transaction[:inputs] : transaction[:outputs], owned)
+        [ row(transaction, :transfer, net, counterparty) ].compact
       end
     end
 

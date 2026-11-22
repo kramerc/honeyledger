@@ -58,6 +58,29 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal "Network fees", blockchain_transactions(:sent_fee).ledger_transactions.sole.dest_account.name
   end
 
+  test "a fiat account with a default counterpart name is not booked into" do
+    usd_fees = @user.accounts.create!(name: "Network fees", kind: :expense, currency: currencies(:usd))
+
+    perform
+
+    fee = blockchain_transactions(:sent_fee).ledger_transactions.sole
+    assert_equal "Network fees (BTC)", fee.dest_account.name
+    assert_equal currencies(:btc), fee.currency
+    assert_equal 10_000, fee.amount_minor
+    assert_equal 0, usd_fees.reload.balance_minor
+  end
+
+  test "a rule pointing at an account in another currency is not applied" do
+    usd_gifts = @user.accounts.create!(name: "Gifts", kind: :expense, currency: currencies(:usd))
+    @user.import_rules.create!(match_pattern: "bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g", match_type: :contains, account: usd_gifts)
+
+    perform
+
+    sent = blockchain_transactions(:sent).ledger_transactions.sole
+    assert_equal "Bitcoin sent", sent.dest_account.name
+    assert_equal currencies(:btc), sent.currency
+  end
+
   test "unconfirmed rows are not imported" do
     blockchain_transactions(:received).update!(confirmed: false)
 

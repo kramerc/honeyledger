@@ -21,6 +21,13 @@ class Blockchain::Account < ApplicationRecord
     connection&.name
   end
 
+  # A wallet account only links to a ledger account in its own currency: the
+  # ledger currency's decimal places scale every amount, so a fiat account would
+  # truncate satoshis to cents.
+  def linkable_to?(ledger_account)
+    ledger_account.currency&.code == currency
+  end
+
   def ledger_currency
     @ledger_currency ||= ledger_account&.currency || Currency.find_by(code: currency)
   end
