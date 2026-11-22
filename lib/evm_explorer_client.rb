@@ -3,11 +3,12 @@
 # `module=account&action=txlist` routes and differ only in the base URL, the
 # name of the chain parameter, and the route for the chain tip.
 #
-# Blockscout's PRO API is the default. Its free key covers Ethereum, Arbitrum,
-# Polygon, OP, and Base and returns the OP-stack L1 fee. Etherscan's free,
-# Lite, and Standard plans are licensed for personal and research use only, a
-# server that serves other people needs its commercial plan, and its free tier
-# leaves out OP and Base. Pick it only when those terms fit.
+# Blockscout's PRO API is the default. Its free key covers Ethereum mainnet
+# (and Arbitrum and OP, with the OP-stack L1 fee); since October 2026 Base and
+# Polygon need a paid plan. Etherscan's free, Lite, and Standard plans are
+# licensed for personal and research use only, a server that serves other
+# people needs its commercial plan, and its free tier leaves out OP and Base.
+# Pick it only when those terms fit.
 #
 # Responses are normalized into plain hashes with amounts in wei (Integer) and
 # addresses lowercase, so the scanner does not depend on provider field names:
