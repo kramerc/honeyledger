@@ -1,4 +1,13 @@
 module TransactionsHelper
+  # The index, account-filtered or not, with its excluded toggle and, for a
+  # later page, its Transaction::Page::Cursor.
+  def transactions_page_path(account:, show_excluded:, cursor: nil)
+    query = {}
+    query[:show_excluded] = 1 if show_excluded
+    query.merge!(cursor.to_params) if cursor
+    account ? account_transactions_path(account, query) : transactions_path(query)
+  end
+
   def transaction_type_indicator(transaction, **html_options)
     return tag.span("", **html_options) if transaction.dest_account.nil? || transaction.src_account.nil?
 

@@ -1,0 +1,6 @@
+<%# Puts `transaction` into the list on screen at its sorted position: before
+    `preceding`, the row just below it, or before the end-of-list marker when
+    nothing sorts below it. When that anchor hasn't been loaded yet (the reader
+    hasn't scrolled that far), Turbo drops the stream and the row arrives with
+    its page instead, so it can never appear twice. %>
+<%= turbo_stream.before(preceding ? dom_id(preceding) : "transactions_end", transaction) %>

@@ -976,6 +976,80 @@ class TransactionsTest < ApplicationSystemTestCase
     end
   end
 
+  test "scrolling to the foot of the list loads the next page" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+
+      assert_text "Paged row 01"
+      assert_no_text "Paged row 50"
+
+      scroll_to find(".transactions-page")
+
+      assert_text "Paged row 50"
+      assert_selector ".transaction", count: 50
+      assert_no_link "Load more transactions"
+    end
+  end
+
+  test "a transaction older than every loaded row arrives with its page, once" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+      assert_text "Paged row 01"
+
+      fill_in "transaction[transacted_at]", with: Time.zone.parse("2020-01-01 10:00")
+      fill_in "transaction[description]", with: "Backdated probe"
+      select account.name, from: "transaction[src_account_id]"
+      select accounts(:expense_account).name, from: "transaction[dest_account_id]"
+      fill_in "transaction[amount]", with: "3.00"
+      click_button "Create"
+
+      # The form resets once the create lands; the row's page isn't loaded yet.
+      assert_field "transaction[description]", with: ""
+      assert_no_text "Backdated probe"
+
+      scroll_to find(".transactions-page")
+
+      assert_selector ".transaction", text: "Backdated probe", count: 1
+    end
+  end
+
+  test "an unmerged leg that sorts below the loaded rows arrives with its page, once" do
+    account = accounts(:liability_account)
+    paged_rows(account, 50)
+    currency = currencies(:usd)
+    withdrawal = Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                                     amount_minor: 700, currency: currency, description: "Old withdrawal leg",
+                                     transacted_at: Time.zone.parse("2020-01-01 10:00"))
+    deposit = Transaction.create!(user: @user, src_account: accounts(:revenue_account), dest_account: accounts(:asset_account),
+                                  amount_minor: 700, currency: currency, description: "Old deposit leg",
+                                  transacted_at: Time.zone.parse("2020-01-01 10:00"))
+    merger = Transaction::Merge.new(withdrawal, deposit, user: @user, transacted_at: Time.current)
+    assert merger.call
+    merged = merger.merged_transaction
+
+    Transaction::Page.stub(:size, 40) do
+      visit account_transactions_path(account)
+
+      within_row(merged) do
+        open_row_menu
+        accept_confirm { click_link "Unmerge" }
+      end
+
+      assert_no_selector "##{ActionView::RecordIdentifier.dom_id(merged)}"
+      assert_no_text "Old withdrawal leg"
+
+      scroll_to find(".transactions-page")
+
+      assert_selector ".transaction", text: "Old withdrawal leg", count: 1
+    end
+  end
+
   test "an outside click closes the menu" do
     transaction = manual_transaction("Menu dismiss probe", 1700)
     visit transactions_path
@@ -989,6 +1063,15 @@ class TransactionsTest < ApplicationSystemTestCase
   private
 
   ROW_MENU_TRIGGER = "button[aria-label='Transaction actions']".freeze
+
+  # `count` rows in `account`'s list, "Paged row 01" the newest, one day apart.
+  def paged_rows(account, count)
+    count.times do |index|
+      Transaction.create!(user: @user, src_account: account, dest_account: accounts(:expense_account),
+                          amount_minor: 100, currency: currencies(:usd),
+                          description: format("Paged row %02d", index + 1), transacted_at: (index + 1).days.ago)
+    end
+  end
 
   # Open the row's kebab menu; call inside within_row.
   # Open the row's kebab menu, by click or by Enter on the trigger; call

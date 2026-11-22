@@ -1,0 +1,24 @@
+<%# One page of the index: its rows, then either the lazy frame that fetches
+    the next page when it scrolls into view, or the end-of-list marker.
+    frame_id is set when this renders as the response to that lazy frame. %>
+<% rows = capture do %>
+  <%= render transactions %>
+  <% if next_cursor %>
+    <%= turbo_frame_tag "#{TransactionsController::PAGE_FRAME_PREFIX}#{next_cursor.id}",
+          src: transactions_page_path(account: @account, show_excluded: @show_excluded, cursor: next_cursor),
+          loading: :lazy, class: "transactions-page" do %>
+      <div class="transactions-loading">
+        <%= link_to "Load more transactions", transactions_page_path(account: @account, show_excluded: @show_excluded, cursor: next_cursor) %>
+      </div>
+    <% end %>
+  <% else %>
+    <%# Insertions of a row older than every other land before this marker
+        (transactions/_insert); it exists only once the last page is loaded. %>
+    <div id="transactions_end"></div>
+  <% end %>
+<% end %>
+<% if local_assigns[:frame_id] %>
+  <%= turbo_frame_tag frame_id, class: "transactions-page" do %><%= rows %><% end %>
+<% else %>
+  <%= rows %>
+<% end %>

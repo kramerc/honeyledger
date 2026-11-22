@@ -605,6 +605,28 @@
 
 }
 
+/* Long lists: the browser skips layout and paint for rows scrolled off
+   screen. The intrinsic size is a first guess for a row it has never
+   rendered; `auto` remembers each row's real height once it has been. */
+.transaction {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3rem;
+}
+
+/* Infinite scroll: the frame at the foot of each page fetches the next one
+   when it scrolls into view (transactions/_page). It needs a box of its own
+   for that, so no display: contents. */
+.transactions-page {
+  display: block;
+}
+
+.transactions-loading {
+  padding: 12px;
+  text-align: center;
+  color: var(--bark-light);
+  font-size: 0.85rem;
+}
+
 /* Editing action */
 .transaction .edit {
   display: none; /* Hide edit portion by default */

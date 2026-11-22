@@ -145,6 +145,8 @@ Development uses a single database.
 
 Turbo Frames for partial page updates, Turbo Streams for inline updates (e.g., `TransactionsController` index). Stimulus controllers in `app/javascript/controllers/`. Minimal custom JavaScript.
 
+The transactions index is paginated by keyset (`Transaction::Page`, ordered by `transacted_at, created_at, id` descending) and loads later pages through a lazy frame as the reader scrolls, so the browser holds only the rows scrolled past so far. A Turbo Stream that adds a row must place it with `transactions/_insert` (before the row that sorts just below it, or before the `transactions_end` marker that exists only once the last page is loaded), never `append`/`prepend` to `:transactions`. When that anchor isn't loaded yet, Turbo drops the stream and the row arrives with its page, so it never appears twice.
+
 ### Authentication and Authorization
 
 Authentication is the Rails 8 generator pattern, not Devise: `app/controllers/concerns/authentication.rb` is included in `ApplicationController` and runs `require_authentication` on every action by default, resuming a `Session` row from the signed `session_id` cookie into `Current.session` / `Current.user`. `User` uses `has_secure_password` (bcrypt digests in `password_digest`), `normalizes :email`, and a six-character minimum password. `SessionsController`, `RegistrationsController` (public sign-up), and `PasswordsController` (reset by email, which production has no mailer configured to deliver) are the authentication workflow itself and therefore skip the session requirement.

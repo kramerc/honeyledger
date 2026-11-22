@@ -12,6 +12,45 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test "a later page answers its lazy frame without the layout" do
+    cursor = Transaction::Page::Cursor.after(@transaction)
+    frame_id = "#{TransactionsController::PAGE_FRAME_PREFIX}#{@transaction.id}"
+
+    Transaction::Page.stub(:size, 1) do
+      get transactions_url(cursor.to_params), headers: { "Turbo-Frame" => frame_id }
+    end
+
+    assert_response :success
+    # Turbo only swaps in a response holding the frame it asked for.
+    assert_select "turbo-frame##{frame_id}"
+    assert_select "header", count: 0
+  end
+
+  test "a later page of an account-filtered, show-excluded index answers its frame" do
+    account = accounts(:asset_account)
+    cursor = Transaction::Page::Cursor.after(@transaction)
+    frame_id = "#{TransactionsController::PAGE_FRAME_PREFIX}#{@transaction.id}"
+
+    get account_transactions_url(account, cursor.to_params.merge(show_excluded: 1)), headers: { "Turbo-Frame" => frame_id }
+
+    assert_response :success
+    assert_select "turbo-frame##{frame_id}"
+  end
+
+  test "a malformed cursor falls back to the first page" do
+    get transactions_url(before_at: "yesterday", before_created: "today", before_id: "one")
+
+    assert_response :success
+  end
+
+  test "an index longer than one page renders" do
+    Transaction::Page.stub(:size, 1) do
+      get transactions_url
+    end
+
+    assert_response :success
+  end
+
   test "should get index scoped to account" do
     account = accounts(:asset_account)
     get account_transactions_url(account)
@@ -156,7 +195,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, ActionView::RecordIdentifier.dom_id(unrelated)
   end
 
-  test "create on an account-filtered index with an empty list appends the row" do
+  test "create on an account-filtered index with an empty list inserts the row at the end of the list" do
     account = accounts(:liability_account)
     assert_empty @user.transactions.where(src_account: account).or(@user.transactions.where(dest_account: account))
 
@@ -169,7 +208,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     } }, as: :turbo_stream
 
     assert_response :success
-    assert_includes response.body, %(action="append" target="transactions")
+    assert_includes response.body, %(action="before" target="transactions_end")
     assert_includes response.body, "First row for this account"
   end
 
@@ -190,7 +229,7 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, %(action="append")
   end
 
-  test "create appends a transaction older than every row in the list" do
+  test "create inserts a transaction older than every row before the end-of-list marker" do
     post transactions_url, params: { transaction: {
       transacted_at: 10.days.ago,
       src_account_id: accounts(:asset_account).id,
@@ -200,8 +239,10 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     } }, as: :turbo_stream
 
     assert_response :success
-    assert_includes response.body, %(action="append" target="transactions")
-    assert_not_includes response.body, %(action="before")
+    # Turbo drops this stream unless the last page is loaded, so the row then
+    # arrives with its page instead of appearing twice.
+    assert_includes response.body, %(action="before" target="transactions_end")
+    assert_not_includes response.body, %(action="append")
   end
 
   test "account-filtered index keeps the filter on each row's lazy edit frame" do
@@ -562,22 +603,28 @@ class TransactionsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Unmerge withdrawal leg"
     assert_not_includes response.body, "Unmerge deposit leg"
     assert_not_includes response.body, ActionView::RecordIdentifier.dom_id(deposit)
-    # Anchored to the nearest newer row in the account's list, not to the newer
+    # Anchored to the row below it in the account's list, never to a
     # transaction that belongs to a different account.
-    assert_includes response.body, %(action="after" target="#{ActionView::RecordIdentifier.dom_id(transactions(:one))}")
+    assert_not_includes response.body, %(action="after")
     assert_not_includes response.body, %(target="#{ActionView::RecordIdentifier.dom_id(unrelated)}")
     assert_nil withdrawal.reload.merged_into_id
   end
 
-  test "unmerge on the unfiltered index restores both legs" do
-    _withdrawal, _deposit, merged, unrelated = merged_pair_for_unmerge
+  test "unmerge on the unfiltered index restores both legs, oldest first" do
+    withdrawal, deposit, merged, _unrelated = merged_pair_for_unmerge
 
     post unmerge_transaction_url(merged), as: :turbo_stream
 
     assert_response :success
-    assert_includes response.body, "Unmerge withdrawal leg"
-    assert_includes response.body, "Unmerge deposit leg"
-    assert_includes response.body, %(action="after" target="#{ActionView::RecordIdentifier.dom_id(unrelated)}")
+    withdrawal_index = response.body.index("Unmerge withdrawal leg")
+    deposit_index = response.body.index("Unmerge deposit leg")
+    assert withdrawal_index
+    assert deposit_index
+    # Same date, so the deposit (created later) sorts directly above the
+    # withdrawal and is anchored to it, which must therefore be inserted first.
+    assert_operator withdrawal_index, :<, deposit_index
+    assert_includes response.body, %(action="before" target="#{ActionView::RecordIdentifier.dom_id(withdrawal)}")
+    assert_not_includes response.body, %(target="#{ActionView::RecordIdentifier.dom_id(deposit)}")
   end
 
   test "unmerge on non-merged transaction returns error" do
