@@ -5,7 +5,7 @@
 
 <%= form_with model: @lunchflow_connection, url: lunchflow_connection_path, method: :post, local: true do |form| %>
   <% if @lunchflow_connection.errors.any? %>
-    <div style="color: red">
+    <div class="error-panel">
       <h2><%= pluralize(@lunchflow_connection.errors.count, "error") %> prohibited this Lunch Flow connection from being saved:</h2>
 
       <ul>

@@ -2,7 +2,7 @@
 
 <%= form_with model: @passkey do |form| %>
   <% if @passkey.errors.any? %>
-    <div id="error_explanation">
+    <div id="error_explanation" class="error-panel">
       <h2><%= pluralize(@passkey.errors.count, "error") %> prohibited this passkey from being renamed:</h2>
       <ul>
         <% @passkey.errors.full_messages.each do |message| %>

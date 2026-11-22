@@ -146,13 +146,13 @@ Rules that came with it:
 - **Source badges** (`.source-badge--simplefin`, `--lunchflow`, `--csv`): 3px radius, 1px `currentColor` border, under the date.
 - **Status badges** (`.excluded-badge`, `.merged-badge`): outlined, 3px radius, beside the type. Merged is a link in the row that toggles the merged details; it is plain text in the edit form.
 - **Status markers** (`.marker`): a parenthetical flag beside a value, such as an aggregator account's "(stale)" or "(missing)" currency, in `--accent-text` with a `title` that explains it.
-- **Inline errors** (`.text-error`): an error message shown as a plain paragraph rather than a panel, such as a CSV import's "Error" and "Preview error", in `--text-error`.
+- **Inline errors** (`.text-error`): an error message shown as plain text rather than a panel, such as a CSV import's "Error" and "Preview error", the error beside an import's state in the imports list, and a Lunch Flow account's ERROR or DISCONNECTED status, in `--text-error`. Never colour error text with a literal such as `red`.
 
 ### Forms
 
 - Labels are visually hidden in table rows (still present for screen readers) and shown above each field on phones, in `--accent-text` at `0.75rem`.
 - Field look on desktop: as described under editable cells. On phones: full width, `1rem` text (which also keeps iOS from zooming on focus), 8px 10px padding, `--field-border` outline.
-- Validation errors appear in a panel with `--bg-error`, a 4px `--color-error` left border, and an 8px radius, listing each message.
+- Validation errors appear in a panel (`.error-panel`) with `--bg-error`, `--text-error` text, a 1px `--border-error` outline, a 4px `--color-error` left border, and an 8px radius, listing each message. Every model form and the CSV upload form use it.
 
 ### Flash messages and empty states
 

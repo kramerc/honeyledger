@@ -65,7 +65,7 @@ class AuthenticationTest < ApplicationSystemTestCase
     fill_in "Password confirmation", with: "different1"
     click_button "Sign up"
 
-    within "#error_explanation" do
+    within "#error_explanation.error-panel" do
       assert_text "Email has already been taken"
       assert_text "Password confirmation doesn't match Password"
     end

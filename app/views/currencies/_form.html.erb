@@ -1,6 +1,6 @@
 <%= form_with(model: currency) do |form| %>
   <% if currency.errors.any? %>
-    <div style="color: red">
+    <div class="error-panel">
       <h2><%= pluralize(currency.errors.count, "error") %> prohibited this currency from being saved:</h2>
 
       <ul>

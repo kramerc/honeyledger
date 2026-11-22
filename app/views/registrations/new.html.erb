@@ -2,7 +2,7 @@
 
 <%= form_with model: @user, url: registration_path do |form| %>
   <% if @user.errors.any? %>
-    <div id="error_explanation">
+    <div id="error_explanation" class="error-panel">
       <h2><%= pluralize(@user.errors.count, "error") %> prohibited this account from being created:</h2>
       <ul>
         <% @user.errors.full_messages.each do |message| %>

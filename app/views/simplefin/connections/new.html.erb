@@ -5,7 +5,7 @@
 
 <%= form_with model: @simplefin_connection, url: simplefin_connection_path, method: :post, local: true, data: { controller: "toggle-field" } do |form| %>
   <% if @simplefin_connection.errors.any? %>
-    <div style="color: red">
+    <div class="error-panel">
       <h2><%= pluralize(@simplefin_connection.errors.count, "error") %> prohibited this SimpleFIN connection from being saved:</h2>
 
       <ul>

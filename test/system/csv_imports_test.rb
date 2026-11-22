@@ -21,7 +21,7 @@ class CsvImportsTest < ApplicationSystemTestCase
     attach_file "csv_import_file", fixture_path.to_s
     click_button "Upload"
 
-    assert_text "File must be a CSV file (.csv)"
+    assert_selector ".error-panel li", text: "File must be a CSV file (.csv)"
     assert_equal 0, Csv::Import.where(account: @account).count
   ensure
     File.delete(fixture_path) if fixture_path && File.exist?(fixture_path)
@@ -148,6 +148,18 @@ class CsvImportsTest < ApplicationSystemTestCase
 
     visit confirm_account_csv_import_path(@account, csv_import)
     assert_selector "p.text-error", text: "Preview error"
+  end
+
+  test "an import's error shows as error text beside its state in the imports list" do
+    csv_import = Csv::Import.new(user: @user, account: @account, state: "failed", error: "Sample parse failure")
+    csv_import.file.attach(io: StringIO.new("Date,Description,Amount\n"), filename: "test.csv", content_type: "text/csv")
+    csv_import.save!
+
+    visit account_csv_imports_path(@account)
+
+    within("tr", text: "test.csv") do
+      assert_selector "span.text-error", text: "Sample parse failure"
+    end
   end
 
   private
