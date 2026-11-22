@@ -60,8 +60,9 @@ class IntegrationsHelperTest < ActionView::TestCase
 
     marker = aggregator_currency(simplefin_account)
     assert_includes marker, "(missing)"
-    # A theme-aware token that passes 4.5:1 contrast in both themes.
-    assert_includes marker, "var(--accent-text)"
+    # The .marker class colours it with --accent-text, which passes 4.5:1
+    # contrast in both themes.
+    assert_includes marker, 'class="marker"'
   end
 
   test "aggregator_currency flags a nil currency as missing" do

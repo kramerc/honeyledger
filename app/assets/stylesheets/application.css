@@ -270,6 +270,16 @@ main a:hover {
   border-color: rgba(255, 255, 255, 0.6);
 }
 
+/* Inline status marker beside a value, e.g. "(stale)" or "(missing)" */
+.marker {
+  color: var(--accent-text);
+}
+
+/* Inline error text outside a panel, e.g. a CSV preview error */
+.text-error {
+  color: var(--text-error);
+}
+
 /* Flash messages */
 .flash {
   display: flex;

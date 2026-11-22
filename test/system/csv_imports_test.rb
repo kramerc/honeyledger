@@ -124,6 +124,32 @@ class CsvImportsTest < ApplicationSystemTestCase
     assert_equal 0, page.evaluate_script("document.getElementById('csv_import_file').files.length")
   end
 
+  test "a preview error shows as error text on the show and confirm pages" do
+    csv_import = Csv::Import.new(
+      user: @user,
+      account: @account,
+      state: "mapped",
+      column_mappings: {
+        "date_column" => "Date",
+        "amount_mode" => "signed",
+        "amount_column" => "Amount",
+        "description_columns" => [ "Description" ]
+      }
+    )
+    csv_import.file.attach(
+      io: StringIO.new("Date,Description,Amount\nnot a date,Sample Vendor,-1.00\n"),
+      filename: "test.csv",
+      content_type: "text/csv"
+    )
+    csv_import.save!
+
+    visit account_csv_import_path(@account, csv_import)
+    assert_selector "p.text-error", text: "Preview error"
+
+    visit confirm_account_csv_import_path(@account, csv_import)
+    assert_selector "p.text-error", text: "Preview error"
+  end
+
   private
 
     # Capybara cannot drag a file in from the operating system, so synthesize the

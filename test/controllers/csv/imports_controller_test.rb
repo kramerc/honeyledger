@@ -309,7 +309,6 @@ class Csv::ImportsControllerTest < ActionDispatch::IntegrationTest
 
     get account_csv_import_url(@account, csv_import)
     assert_response :success
-    assert_match "Preview error", response.body
   end
 
   test "GET show pre-checks saved description_columns checkboxes" do

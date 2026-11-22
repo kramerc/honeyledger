@@ -16,11 +16,11 @@
 </dl>
 
 <% if @csv_import.error.present? %>
-  <p style="color: red"><strong>Error:</strong> <%= @csv_import.error %></p>
+  <p class="text-error"><strong>Error:</strong> <%= @csv_import.error %></p>
 <% end %>
 
 <% if preview_error %>
-  <p style="color: orange"><strong>Preview error:</strong> <%= preview_error %></p>
+  <p class="text-error"><strong>Preview error:</strong> <%= preview_error %></p>
 <% end %>
 
 <h2>Step 3: Confirm and import</h2>

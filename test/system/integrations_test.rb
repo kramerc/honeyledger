@@ -275,11 +275,11 @@ class IntegrationsTest < ApplicationSystemTestCase
     visit integrations_path
 
     within("tr", text: stale_linked_simplefin.name) do
-      assert_text "(stale)"
+      assert_selector "span.marker", text: "(stale)"
     end
 
     within("tr", text: stale_linked_lunchflow.name) do
-      assert_text "(stale)"
+      assert_selector "span.marker", text: "(stale)"
     end
   end
 

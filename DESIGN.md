@@ -30,11 +30,13 @@ All colours are CSS custom properties on `:root` in `app/assets/stylesheets/appl
 | `--bark-medium` | `#44403C` | `#FDE68A` | Cell text, secondary text |
 | `--bark-light` | `#78716C` | `#A16207` | Muted text, placeholders, arrows |
 | `--divider` | `#F5E6C8` | `#3A2810` | Borders and rules |
-| `--accent-text` | `#92400E` | `#FCD34D` | Header labels, form labels |
+| `--accent-text` | `#92400E` | `#FCD34D` | Header labels, form labels, status markers |
 | `--color-positive` | `#15803D` | `#4ade80` | Money in, positive balances |
 | `--color-negative` | `#DC2626` | `#f87171` | Money out, negative balances, Delete |
 
-Feedback colours (`--color-success`, `--bg-success`, `--text-success`, and the `-error` set with `--border-error`) are for feedback only: flash messages, error panels, the CSV drop zone's status message, and the danger button's `--color-error` fill.
+Feedback colours (`--color-success`, `--bg-success`, `--text-success`, and the `-error` set with `--border-error`) are for feedback only: flash messages, error panels, inline error text (`.text-error`), the CSV drop zone's status message, and the danger button's `--color-error` fill.
+
+Never use named CSS colours (`orange`, `red`) in a view: they ignore the theme and fail contrast on the light `--cream` background. Use a token, through a class where one exists.
 
 The transactions table adds three local tokens on `.transactions`:
 
@@ -143,6 +145,8 @@ Rules that came with it:
 - **Transaction type** (`.tx-type`): coloured text, not a pill: an arrow and a word ("↓ Withdrawal", "↑ Deposit", "⇄ Transfer") at `0.8rem`, weight 600, with no background or border. Deposits and refunds use `--color-positive`, withdrawals and clawbacks `--color-negative`, transfers `--bark-light`.
 - **Source badges** (`.source-badge--simplefin`, `--lunchflow`, `--csv`): 3px radius, 1px `currentColor` border, under the date.
 - **Status badges** (`.excluded-badge`, `.merged-badge`): outlined, 3px radius, beside the type. Merged is a link in the row that toggles the merged details; it is plain text in the edit form.
+- **Status markers** (`.marker`): a parenthetical flag beside a value, such as an aggregator account's "(stale)" or "(missing)" currency, in `--accent-text` with a `title` that explains it.
+- **Inline errors** (`.text-error`): an error message shown as a plain paragraph rather than a panel, such as a CSV import's "Error" and "Preview error", in `--text-error`.
 
 ### Forms
 
