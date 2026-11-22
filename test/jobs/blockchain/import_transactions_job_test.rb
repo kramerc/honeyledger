@@ -78,6 +78,60 @@ class Blockchain::ImportTransactionsJobTest < ActiveJob::TestCase
     assert_equal 460_000, blockchain_transaction.ledger_transactions.sole.amount_minor
   end
 
+  test "a matching manual entry absorbs the row instead of duplicating it" do
+    sent = blockchain_transactions(:sent)
+    manual = Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @user.accounts.create!(name: "Hardware", kind: :expense, currency: currencies(:btc)),
+      amount_minor: 450_000, currency: currencies(:btc), description: sent.resolved_description, transacted_at: sent.transacted_at
+    )
+
+    assert_difference "Transaction.count", 2 do # the receipt and the fee; the send attaches to the manual entry
+      perform
+    end
+
+    assert_equal [ manual ], sent.ledger_transactions.to_a
+  end
+
+  test "a concurrent attach rolls back the row on either branch" do
+    sent = blockchain_transactions(:sent)
+    Transaction.create!(
+      user: @user, src_account: @ledger_account, dest_account: @user.accounts.create!(name: "Hardware", kind: :expense, currency: currencies(:btc)),
+      amount_minor: 450_000, currency: currencies(:btc), description: sent.resolved_description, transacted_at: sent.transacted_at
+    )
+
+    assert_no_difference [ "Transaction.count", "TransactionSource.count" ] do
+      TransactionSource::Attach.stub :call, ->(**) { raise TransactionSource::Attach::MismatchedTransaction, "race" } do
+        perform
+      end
+    end
+  end
+
+  test "a secondary source only stamps synced_at on resync" do
+    perform
+    sent = blockchain_transactions(:sent)
+    ledger_transaction = sent.ledger_transactions.sole
+    # Another source attached earlier, so the wallet row is the secondary one.
+    other_feed = blockchain_connections(:address_wallet).accounts.create!(remote_id: "BTC", name: "Bitcoin", currency: "BTC")
+    other_row = other_feed.transactions.create!(remote_id: "44" * 32, txid: "44" * 32, amount: "-0.0045", confirmed: true)
+    TransactionSource.create!(ledger_transaction: ledger_transaction, sourceable: other_row, created_at: 1.day.ago)
+    sent.update!(amount: "-0.0099", synced_at: 2.minutes.from_now)
+
+    perform
+
+    ledger_transaction.reload
+    assert_equal 450_000, ledger_transaction.amount_minor, "a secondary source never overwrites canonical fields"
+    assert_operator ledger_transaction.synced_at, :>=, sent.reload.synced_at
+  end
+
+  test "an exclude rule on the counterparty address excludes the transfer" do
+    @user.import_rules.create!(match_pattern: "bc1qnjg0jd8228aq7egyzacy8cys3knf9xvrerkf9g", match_type: :contains, exclude: true)
+
+    perform
+
+    assert blockchain_transactions(:sent).ledger_transactions.sole.excluded?
+    assert_not blockchain_transactions(:sent_fee).ledger_transactions.sole.excluded?
+  end
+
   test "does nothing for an unlinked account" do
     AccountSource.where(sourceable: @blockchain_account).destroy_all
 

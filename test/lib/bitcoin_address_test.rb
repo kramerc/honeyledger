@@ -39,6 +39,26 @@ class BitcoinAddressTest < ActiveSupport::TestCase
     assert_raises(BitcoinAddress::InvalidAddress) { BitcoinAddress.parse(p2pkh.sub(/H\z/, "J")) }
   end
 
+  test "classifies other witness programs" do
+    p2wsh = BitcoinAddress.segwit_encode("bc", 0, "\x01".b * 32)
+    future_version = BitcoinAddress.segwit_encode("bc", 2, "\x01".b * 16)
+
+    assert_equal :p2wsh, BitcoinAddress.parse(p2wsh).type
+    assert_equal :witness_unknown, BitcoinAddress.parse(future_version).type
+  end
+
+  test "rejects malformed addresses" do
+    {
+      "a v0 program that is neither 20 nor 32 bytes" => BitcoinAddress.segwit_encode("bc", 0, "\x01".b * 25),
+      "mixed case" => "bc1qW508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+      "too short to hold a checksum" => "bc1qqqq",
+      "a checksum mismatch" => "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5",
+      "an unknown Base58 version" => BitcoinAddress.base58check_encode("\x30".b + "\x01".b * 20)
+    }.each do |reason, address|
+      assert_raises(BitcoinAddress::InvalidAddress, reason) { BitcoinAddress.parse(address) }
+    end
+  end
+
   test "valid? checks the network" do
     assert BitcoinAddress.valid?("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")
     assert_not BitcoinAddress.valid?("tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c")

@@ -70,6 +70,14 @@ class BitcoinExtendedKeyTest < ActiveSupport::TestCase
     assert_match(/private key/, error.message)
   end
 
+  test "rejects a key whose public key is not on the curve" do
+    # A zpub-shaped payload whose key bytes have an x coordinate above the field prime.
+    payload = [ "04b24746" ].pack("H*") + "\x00".b * 9 + "\x01".b * 32 + "\x02".b + "\xff".b * 32
+
+    error = assert_raises(BitcoinExtendedKey::InvalidKey) { BitcoinExtendedKey.parse(BitcoinAddress.base58check_encode(payload)) }
+    assert_match(/valid public key/, error.message)
+  end
+
   test "rejects a key with a bad checksum" do
     tampered = BIP84_ZPUB.sub(/s\z/, "t")
 
