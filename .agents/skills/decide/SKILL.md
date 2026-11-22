@@ -15,8 +15,8 @@ The issue is the only state. Rerunning this skill reads the issue body and comme
 | What the issue shows | Phase |
 |---|---|
 | Closed, banner present | Done: report the outcome and follow-ups, and stop |
-| Open, banner present, Follow-ups filled in, and every PR it lists is merged (or closed with a named replacement that merged) | 5. Closing |
-| Open, banner present, Follow-ups filled in, a listed PR still open | Waiting on merges: report which PRs are pending, and stop |
+| Open, banner present, Follow-ups filled in, and every PR it lists is merged (or closed with a named replacement that merged), or it lists none | 5. Closing |
+| Open, banner present, Follow-ups filled in, a listed PR not merged (still open, or closed with no merged replacement) | Waiting on merges: report which PRs block closing (ask the maintainer about a closed one), and stop |
 | Open, banner present, Follow-ups still reads `pending` | 4. Propagating (its first step confirms the `AGENTS.md` promotion) |
 | A `## Decision` comment exists, but the banner is missing | 3. Recording, resumed: reuse that comment, never post a second one |
 | Maintainer sign-off in the session or a comment, but no `## Decision` comment | 3. Recording |
@@ -58,7 +58,7 @@ This phase runs without being asked whenever an agent opens a `decision` issue. 
 Only after the maintainer has explicitly signed off on every sub-question.
 
 1. **Post a `## Decision` comment** with these parts:
-   - **Outcome**: one line per sub-question.
+   - **Outcome**: one line per sub-question. For a "not planned" outcome, name the superseding issue as `#N`.
    - **Rationale**: the cost versus cost behind each choice.
    - **Rejected**: one line per option not taken and why, so it isn't proposed again.
    - **Consequences**: what changes and what deliberately stays.
@@ -78,23 +78,23 @@ Only after the maintainer has explicitly signed off on every sub-question.
 1. **Promotion check.** Confirm phase 3 step 3 happened: either an open or merged PR adds this decision to "Known Design Decisions" in `AGENTS.md` (`gh pr list --state all --search '"Records the decision in #N" in:body'`), or the outcome is one-off and needs none. If neither, do it now.
 2. **Blocked issues.** For every issue under **Blocks** and every blocked-by link, update its body to match the outcome. Comment instead when an edit would erase discussion worth keeping, after checking that issue's comments for an earlier one that cites #N. Remove the blocked-by link once nothing it guarded is still open (`gh issue edit X --remove-blocked-by N`).
 3. **Held epic children.** File the children that were waiting on this decision, following "Splitting an epic into sub-issues" in the `triage-issues` skill: re-read any plan comment on the parent first (it may have been edited), list the parent's existing sub-issues (`gh api --paginate repos/{owner}/{repo}/issues/P/sub_issues`) so a rerun reuses children already filed instead of duplicating them, `gh issue create --parent P` for each one still missing, add blocked-by links, triage each child, then `bin/triage sync-estimates`.
-4. **New work.** When the outcome needs implementation and no issue covers it (check first with `gh issue list --state all --search '"Follows the decision in #N"'`, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in #N." Triage each one.
-5. **Follow-ups line.** Edit the Decision comment so Follow-ups lists, as `#N` links, every PR opened and every issue edited or filed, plus any manual step that waits on a merge (for example, deleting a label once the docs stop naming it):
+4. **New work.** When the outcome needs implementation and no issue covers it (check first with `gh issue list --state all --search '"Follows the decision in #N" in:body'`, so a rerun does not file it twice), file the work item(s). Each body says "Follows the decision in #N." Triage each one. When the change is small enough to make now, open the PR directly instead: its body says "Follows the decision in #N." (no closing keyword) and it goes under Follow-ups.
+5. **Follow-ups line.** Edit the Decision comment so Follow-ups lists, as `#N` links, every PR opened and every issue edited or filed, plus any manual step that waits on a merge (for example, deleting a label once the docs stop naming it). Write `none` when there is nothing to list:
 
    ```
    gh api -X PATCH repos/{owner}/{repo}/issues/comments/<comment_id> -F body=@tmp/decision-N.md
    ```
 
 6. **Claude Code only:** update or delete memory files that tracked the pending decision (for example, held epic splits waiting on it).
-7. **Report to the user**: the outcome, the issues edited, filed, and triaged, and the PRs the issue now waits on. Leave the issue open.
+7. **Report to the user**: the outcome, the issues edited, filed, and triaged, and the PRs the issue now waits on. If no listed PR is unmerged, continue straight to phase 5; otherwise leave the issue open.
 
 ## 5. Closing
 
-Run this once every PR listed under Follow-ups has merged; a rerun that finds one still open reports it and stops. Filed work items (phase 4 step 4) don't hold the issue open, since they track their own progress.
+Run this once every PR listed under Follow-ups has merged; a rerun that finds one unmerged reports it and stops. Filed work items (phase 4 step 4) don't hold the issue open, since they track their own progress.
 
 1. **Finish manual steps** that Follow-ups says wait on a merge, then mark each one done in the Follow-ups line.
 2. **Close the issue.**
    - `gh issue close N --reason completed` when an answer was chosen, including "keep the current behaviour".
-   - `gh issue close N --reason "not planned"` when the question was dropped or superseded. Name the superseding issue in the Decision comment.
+   - `gh issue close N --reason "not planned"` when the question was dropped or superseded. The Decision comment names the superseding issue (phase 3).
    - Keep the `decision` label, so closed decisions stay searchable as a log (`gh issue list --label decision --state closed`).
 3. **Report to the user**: that the decision is closed and in effect.

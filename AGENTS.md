@@ -216,7 +216,7 @@ Bot reviews are nondeterministic, so a PR is reviewed in bounded rounds, not unt
 
 ## Known Design Decisions
 
-Entries here normally come from a closed `decision` issue and cite it as "issue N"; the `decide` skill adds them when an outcome is durable.
+Entries here normally come from a settled `decision` issue and cite it as "issue N"; the `decide` skill adds them when an outcome is durable.
 
 - Sources are many-to-many by design (`account_sources`, `transaction_sources`) with **first-writer-wins** for canonical fields. A per-account "primary source" and "most recent wins" were both considered and rejected; don't propose them without flagging that decision. A future "promote source" action is the intended escape hatch for a wrong first writer and is out of scope until asked for.
 - "Duplicate transactions" means one of three distinct scenarios — pick the right one before proposing a fix: (1) an aggregator reissuing IDs for the same institution on reconnect, handled by `Transaction::Reconcile`'s exact matching; (2) switching a ledger account between aggregators (issue 115), unsolved and needing fuzzier matching because the feeds' descriptions and dates are not one-to-one; (3) stale aggregator-account rows cluttering the integrations page, handled by `last_seen_at` visibility thresholds.
