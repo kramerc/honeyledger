@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_21_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -33,7 +33,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.boolean "virtual", default: false, null: false
-    t.bigint "balance_minor"
+    t.decimal "balance_minor", precision: 78
     t.index "user_id, kind, lower((name)::text)", name: "index_accounts_on_user_id_kind_lower_name", unique: true
     t.index ["currency_id"], name: "index_accounts_on_currency_id"
     t.index ["user_id", "kind"], name: "index_accounts_on_user_id_and_kind"
@@ -98,7 +98,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
     t.datetime "transacted_at", null: false
     t.datetime "posted_at"
     t.string "description", default: "", null: false
-    t.integer "amount_minor", null: false
+    t.decimal "amount_minor", precision: 78, null: false
     t.datetime "synced_at"
     t.jsonb "raw", default: {}, null: false
     t.datetime "created_at", null: false
@@ -263,14 +263,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_200000) do
   end
 
   create_table "transactions", force: :cascade do |t|
-    t.integer "amount_minor", default: 0, null: false
+    t.decimal "amount_minor", precision: 78, default: "0", null: false
     t.bigint "category_id"
     t.datetime "cleared_at", precision: nil
     t.datetime "created_at", null: false
     t.bigint "currency_id", null: false
     t.string "description", default: "", null: false
     t.bigint "dest_account_id", null: false
-    t.integer "fx_amount_minor"
+    t.decimal "fx_amount_minor", precision: 78
     t.bigint "fx_currency_id"
     t.text "notes", default: "", null: false
     t.bigint "parent_transaction_id"

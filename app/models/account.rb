@@ -7,6 +7,8 @@ class Account < ApplicationRecord
   belongs_to :user
   belongs_to :currency, optional: true
 
+  attribute :balance_minor, MinorUnitsType.new
+
   # Initialize the balance except for virtual accounts, as those don't have balances.
   before_create -> { self.balance_minor = self.balance_minor.to_i }, unless: :virtual?
 

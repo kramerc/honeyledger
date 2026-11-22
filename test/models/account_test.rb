@@ -212,6 +212,26 @@ class AccountTest < ActiveSupport::TestCase
     assert_equal expected, account.balance_minor
   end
 
+  test "reset_balance stays exact for 18-decimal amounts" do
+    eth = Currency.create!(name: "Ether", symbol: "Ξ", code: "ETH", decimal_places: 18, kind: :crypto, active: true)
+    wallet = Account.create!(user: users(:one), currency: eth, name: "ETH Wallet", kind: :asset)
+    Transaction.create!(
+      user: users(:one), src_account: accounts(:revenue_account), dest_account: wallet,
+      amount_minor: 10**21 + 1, currency: eth, transacted_at: Time.current
+    )
+    Transaction.create!(
+      user: users(:one), src_account: wallet, dest_account: accounts(:expense_account),
+      amount_minor: 5000, currency: currencies(:usd),
+      fx_amount_minor: 10**18, fx_currency: eth, transacted_at: Time.current
+    )
+
+    wallet.update_column(:balance_minor, 0)
+    wallet.reset_balance
+
+    assert_equal 10**21 + 1 - 10**18, wallet.reload.balance_minor
+    assert_kind_of Integer, wallet.balance_minor
+  end
+
   test "reset_balance does not recalculate balances for virtual accounts" do
     account = accounts(:opening_balance_expense)
 

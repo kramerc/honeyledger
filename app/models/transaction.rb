@@ -1,5 +1,7 @@
 class Transaction < ApplicationRecord
   include Minorable
+  attribute :amount_minor, MinorUnitsType.new
+  attribute :fx_amount_minor, MinorUnitsType.new
   unminorable :amount_minor, with: :currency
   unminorable :fx_amount_minor, with: :fx_currency
 

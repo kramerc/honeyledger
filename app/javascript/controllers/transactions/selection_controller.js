@@ -430,9 +430,14 @@ export default class extends Controller {
     this.hideDeleteConfirmation()
   }
 
+  // String math, not Number: minor amounts of 18-decimal currencies exceed
+  // Number.MAX_SAFE_INTEGER.
   formatAmount(minorStr, decimalPlaces) {
-    const minor = parseInt(minorStr, 10)
-    const divisor = Math.pow(10, decimalPlaces)
-    return (minor / divisor).toFixed(decimalPlaces)
+    const places = parseInt(decimalPlaces, 10) || 0
+    const negative = minorStr.startsWith("-")
+    const digits = minorStr.replace(/^[-+]/, "").padStart(places + 1, "0")
+    const whole = digits.slice(0, digits.length - places)
+    const fraction = places > 0 ? `.${digits.slice(-places)}` : ""
+    return `${negative ? "-" : ""}${whole}${fraction}`
   }
 }
