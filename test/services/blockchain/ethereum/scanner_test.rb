@@ -10,7 +10,9 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
   FEE = 21_000 * 20_000_000_000 # 0.00042 ETH
   TIP = 20_000_000
 
-  FakeClient = Struct.new(:normal, :internal, :tip) do
+  # chain_balance nil: the explorer reported nothing to compare against.
+  FakeClient = Struct.new(:normal, :internal, :tip, :chain_balance) do
+    def balance(_address) = chain_balance
     def normal_transactions(_address) = normal
     def internal_transactions(_address) = internal
     def block_number = tip
@@ -137,6 +139,28 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
     assert_equal "1.0", result.balance
   end
 
+  test "a chain balance the history explains raises no warning" do
+    result = scan(normal: [ normal_tx("a", from: PAYER, to: WALLET, value: ETHER) ], chain_balance: ETHER)
+
+    assert_nil result.warning
+  end
+
+  test "a chain balance the history does not explain is a warning" do
+    # e.g. 0.5 ETH of staking withdrawals, which no transaction list shows
+    result = scan(normal: [ normal_tx("a", from: PAYER, to: WALLET, value: ETHER) ], chain_balance: ETHER + ETHER / 2)
+
+    assert_equal "1.0", result.balance, "the balance stays what the history adds up to"
+    assert result.warning.start_with?(Blockchain::Ethereum::Scanner::BALANCE_MISMATCH_PREFIX)
+    assert_includes result.warning, "the chain reports 1.5 ETH but the imported history adds up to 1.0 ETH (0.5 ETH unexplained)"
+  end
+
+  test "the comparison waits while any row is unconfirmed" do
+    recent = TIP - Blockchain::Ethereum::Scanner::FINALITY_DEPTH + 2
+    result = scan(normal: [ normal_tx("a", from: PAYER, to: WALLET, value: ETHER, block: recent) ], chain_balance: ETHER)
+
+    assert_nil result.warning, "the node already counts the unconfirmed row; the history total does not yet"
+  end
+
   test "keeps every wei" do
     result = scan(normal: [ normal_tx("a", from: PAYER, to: WALLET, value: ETHER + 1) ])
 
@@ -161,8 +185,8 @@ class Blockchain::Ethereum::ScannerTest < ActiveSupport::TestCase
 
   private
 
-    def scan(normal: [], internal: [])
-      Blockchain::Ethereum::Scanner.new(WALLET, FakeClient.new(normal, internal, TIP)).call
+    def scan(normal: [], internal: [], chain_balance: nil)
+      Blockchain::Ethereum::Scanner.new(WALLET, FakeClient.new(normal, internal, TIP, chain_balance)).call
     end
 
     def tx_hash(seed)

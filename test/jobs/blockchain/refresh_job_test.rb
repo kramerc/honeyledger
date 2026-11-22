@@ -139,6 +139,21 @@ class Blockchain::RefreshJobTest < ActiveJob::TestCase
     assert_nil connection.reload.error
   end
 
+  test "a scan warning is shown on the wallet and cleared once resolved" do
+    connection = blockchain_connections(:eth_wallet)
+    warned = Scanner::Result.new(used_addresses: 1, balance: "1.0", rows: [], warning: "Balance mismatch: the chain reports 1.5 ETH")
+
+    Blockchain::Ethereum::Scanner.stub :call, warned do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+    assert_equal "Balance mismatch: the chain reports 1.5 ETH", connection.reload.error
+
+    Blockchain::Ethereum::Scanner.stub :call, Scanner::Result.new(used_addresses: 1, balance: "1.5", rows: []) do
+      Blockchain::RefreshJob.perform_now(connection.id)
+    end
+    assert_nil connection.reload.error
+  end
+
   test "records an EVM explorer error on the connection" do
     connection = blockchain_connections(:eth_wallet)
 

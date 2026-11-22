@@ -92,6 +92,16 @@ class EvmExplorerClient
     paginate("txlistinternal", address, key: ->(entry) { [ entry[:hash], entry[:trace_id] ] }) { |raw| normalize_internal(raw) }
   end
 
+  # The address's current balance in wei, as the explorer's node reports it.
+  # It includes ETH no transaction list shows (beacon withdrawals, block
+  # rewards), so it is the yardstick for what the scanned history explains.
+  def balance(address)
+    result = get({ module: "account", action: "balance", address: address })["result"]
+    raise Error, "The explorer returned an unexpected balance" unless result.is_a?(String) && result.match?(/\A\d+\z/)
+
+    result.to_i
+  end
+
   # The chain tip's block number, for counting confirmations.
   def block_number
     body = get(@preset[:tip])

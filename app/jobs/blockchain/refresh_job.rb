@@ -76,6 +76,10 @@ class Blockchain::RefreshJob < ApplicationJob
       prune_vanished_rows(blockchain_account, result.rows.map(&:remote_id))
 
       error = NO_ACTIVITY_MESSAGE if blockchain_connection.extended_key? && result.used_addresses.zero?
+      # A scan that succeeded can still have something to say (a balance its
+      # history does not explain); it shows where refresh errors do, and the
+      # next refresh clears it once resolved.
+      error ||= result.warning
       blockchain_connection.update!(error: error, refreshed_at: refreshed_at)
 
       Blockchain::ImportTransactionsJob.perform_later(blockchain_account_id: blockchain_account.id) if blockchain_account.linked?

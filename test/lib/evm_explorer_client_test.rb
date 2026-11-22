@@ -51,6 +51,20 @@ class EvmExplorerClientTest < ActiveSupport::TestCase
     assert_equal [ "block", "eth_block_number" ], calls.sole.values_at(:module, :action)
   end
 
+  test "balance reads the address's wei balance" do
+    calls = []
+
+    balance = EvmExplorerClient.stub :get, ->(_url, query:, **_options) { calls << query; response(envelope("4311373694308678363")) } do
+      @client.balance(WALLET)
+    end
+
+    assert_equal 4_311_373_694_308_678_363, balance
+    assert_equal [ "account", "balance", WALLET ], calls.sole.values_at(:module, :action, :address)
+    [ envelope("1.5"), envelope(nil), { "status" => "0", "message" => "NOTOK", "result" => "Error! Invalid address format" } ].each do |body|
+      assert_raises(EvmExplorerClient::Error, body.inspect) { stub_responses(body) { @client.balance(WALLET) } }
+    end
+  end
+
   test "an unknown provider is an Error" do
     error = assert_raises(EvmExplorerClient::Error) { build_client(provider: "nope") }
 

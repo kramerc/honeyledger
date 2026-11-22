@@ -7,6 +7,12 @@ module Blockchain::Scan
 
   # balance: the wallet's confirmed balance in whole coins. used_addresses: how
   # many of the wallet's addresses have ever been used; zero for a Bitcoin
-  # extended key usually means the wrong key type.
-  Result = Data.define(:balance, :rows, :used_addresses)
+  # extended key usually means the wrong key type. warning: a problem worth
+  # showing on the wallet that did not stop the scan, such as a balance the
+  # history does not explain.
+  Result = Data.define(:balance, :rows, :used_addresses, :warning) do
+    def initialize(balance:, rows:, used_addresses:, warning: nil)
+      super
+    end
+  end
 end

@@ -37,6 +37,9 @@ class Blockchain::Ethereum::Scanner
   end
 
   def call
+    # Read before the history: anything that lands in between is newer than
+    # the finality depth, shows up as unconfirmed, and skips the comparison.
+    chain_balance_wei = @client.balance(@address)
     normal = @client.normal_transactions(@address)
     internal = @client.internal_transactions(@address)
     tip = @client.block_number
@@ -66,10 +69,30 @@ class Blockchain::Ethereum::Scanner
       ].compact
     end
 
-    Result.new(balance: to_ether(balance_wei), rows: rows, used_addresses: hashes.any? ? 1 : 0)
+    Result.new(
+      balance: to_ether(balance_wei), rows: rows, used_addresses: hashes.any? ? 1 : 0,
+      warning: balance_warning(chain_balance_wei, balance_wei, rows)
+    )
   end
 
+  BALANCE_MISMATCH_PREFIX = "Balance mismatch:".freeze
+
   private
+
+    # The chain's balance against what the confirmed history adds up to. ETH
+    # that arrives without a listed transaction (beacon withdrawals, block
+    # rewards, a protocol-level state change) would otherwise leave the ledger
+    # silently wrong. Skipped while any row is unconfirmed, since the node's
+    # balance already includes those rows and the history total does not.
+    def balance_warning(chain_balance_wei, history_wei, rows)
+      return nil if chain_balance_wei.nil? || chain_balance_wei == history_wei
+      return nil if rows.any? { |row| !row.confirmed }
+
+      "#{BALANCE_MISMATCH_PREFIX} the chain reports #{to_ether(chain_balance_wei)} ETH but the imported history " \
+        "adds up to #{to_ether(history_wei)} ETH (#{to_ether(chain_balance_wei - history_wei)} ETH unexplained). " \
+        "ETH that arrives without a transaction, such as staking withdrawals, is not imported; " \
+        "add an adjustment to the ledger account to match."
+    end
 
     # Blockscout lists a contract creation's top-level "create" trace in the
     # internal list as well, repeating the outer transaction's value; counting
