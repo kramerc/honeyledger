@@ -21,6 +21,8 @@ bin/brakeman --no-pager                          # Security scan (Ruby)
 bin/bundler-audit                                # Security scan (gems)
 bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
+                                                 # Local ENV goes in gitignored .env.<RAILS_ENV>[.local] / .env (dotenv; .dockerignore keeps them out of images).
+                                                 # Read at Rails boot, so PORT and RAILS_ENV (read earlier by bin/ scripts) still come from the shell
 bin/rails db:create db:migrate                   # Set up database
 bin/worktree-clean --drop                        # Drop test databases left by deleted worktrees
 bin/sweep-pr status [123]                        # Review-sweep state of a PR, current branch's by default (see "Review sweep")
@@ -57,8 +59,9 @@ Everything derives from the worktree's path, via `config/worktree_database.rb`:
   name. `PARALLEL_WORKERS=1` runs them serially, which helps when debugging one
   failure.
 - **Secrets and local settings.** Run `bin/worktree-setup` after creating a
-  worktree: it symlinks the gitignored `config/master.key` and
-  `.claude/settings.local.json` from the primary checkout, installs any
+  worktree: it symlinks the gitignored `config/master.key`,
+  `.claude/settings.local.json`, and any `.env` / `.env.*` files from the primary
+  checkout, installs any
   gems the worktree's `Gemfile.lock` needs (a merged dependency bump may not
   be installed yet), and runs `db:prepare`. It is idempotent and a no-op in
   the primary checkout.
@@ -74,8 +77,9 @@ checkout, `bin/worktree-clean` lists them and `--drop` removes the orphaned
 databases are only ever reported with the `dropdb` command to run by hand.
 
 **Caveat.** `DATABASE_URL` naming a database outranks `database.yml` and defeats
-the isolation; `bin/worktree-setup` warns instead of claiming it. A URL with no
-database path (what CI uses) is fine.
+the isolation, whether it comes from the shell or a `.env*` file; `bin/worktree-setup`
+checks both and warns instead of claiming it. A URL with no database path (what
+CI uses) is fine.
 
 ## Architecture
 

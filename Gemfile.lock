@@ -453,6 +453,7 @@ DEPENDENCIES
   bundler-audit
   capybara
   debug
+  dotenv
   hotwire-livereload (~> 2.1)
   httparty
   image_processing (~> 2.2)
