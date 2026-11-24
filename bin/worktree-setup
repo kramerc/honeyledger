@@ -18,9 +18,10 @@ require File.join(APP_ROOT, "config", "worktree_database")
 
 # Symlinked rather than copied, so rotating a credential or adding a permission
 # in the primary checkout applies everywhere at once. Dotenv files (.env,
-# .env.development, .env.test.local, ...) are matched by ENV_FILE_PATTERN.
+# .env.development, .env.test.local, ...) are matched by ENV_FILE_PATTERNS,
+# which leaves out look-alikes such as direnv's .envrc.
 LINKED_PATHS = [ "config/master.key", ".claude/settings.local.json" ].freeze
-ENV_FILE_PATTERN = ".env*"
+ENV_FILE_PATTERNS = [ ".env", ".env.*" ].freeze
 
 def say(message)
   puts JSON.generate(systemMessage: message)
@@ -33,7 +34,7 @@ listing = `git -C #{APP_ROOT.shellescape} worktree list --porcelain 2>/dev/null`
 primary_checkout = listing.lines.first.to_s[/\Aworktree (.+)/, 1]&.strip
 exit 0 if !$?.success? || primary_checkout.nil? || File.realpath(primary_checkout) == File.realpath(APP_ROOT)
 
-env_files = Dir.glob(ENV_FILE_PATTERN, File::FNM_DOTMATCH, base: primary_checkout)
+env_files = Dir.glob(ENV_FILE_PATTERNS, File::FNM_DOTMATCH, base: primary_checkout)
                 .select { |relative_path| File.file?(File.join(primary_checkout, relative_path)) }
 
 linked = (LINKED_PATHS + env_files.sort).select do |relative_path|
@@ -63,24 +64,34 @@ unless system(FROZEN_BUNDLE, "bundle", "install", chdir: APP_ROOT, out: File::NU
   exit 0
 end
 
-# The gems are installed now, so dotenv can be loaded to read the .env files.
-# Frozen like every other Bundler call here, so Gemfile.lock is never rewritten.
-ENV["BUNDLE_GEMFILE"] ||= File.join(APP_ROOT, "Gemfile")
-ENV.update(FROZEN_BUNDLE)
-begin
-  require "bundler/setup"
-rescue StandardError, LoadError => error
-  say "Could not load this worktree's gems to check its .env files (#{error.class}) -- run bin/rails db:prepare by hand."
-  exit 0
-end
-
 # The symlinks above are useful regardless, but database preparation is only
 # worth doing when it prepares databases of this worktree's own. Rails reads
 # DATABASE_URL from the shell or from the .env files linked above, and
-# db:prepare touches both the development and test databases.
-if %w[development test].any? { |environment| WorktreeDatabase.database_url_names_database?(WorktreeDatabase.effective_database_url(APP_ROOT, environment)) }
+# db:prepare touches both the development and test databases. Reading the
+# files needs the locked dotenv, so the check runs under bundle exec in a
+# child process: activating Bundler in this one would clash with the json and
+# uri versions it has already loaded whenever Gemfile.lock pins others.
+SHARED_DATABASE_STATUS = 2
+DATABASE_URL_CHECK = <<~RUBY
+  root = ARGV.fetch(0)
+  require File.join(root, "config", "worktree_database")
+  shared = %w[development test].any? do |environment|
+    WorktreeDatabase.database_url_names_database?(WorktreeDatabase.effective_database_url(root, environment))
+  end
+  exit(shared ? #{SHARED_DATABASE_STATUS} : 0)
+RUBY
+
+system(FROZEN_BUNDLE, "bundle", "exec", "ruby", "-e", DATABASE_URL_CHECK, APP_ROOT, chdir: APP_ROOT, out: File::NULL, err: File::NULL)
+case $?.exitstatus
+when 0
+  nil
+when SHARED_DATABASE_STATUS
   say "Worktree databases are NOT isolated: DATABASE_URL (from the shell or a .env file) names a " \
       "database, which outranks config/database.yml, so every worktree shares it. Unset it or drop its database path."
+  exit 0
+else
+  say "Could not check whether DATABASE_URL (from the shell or a .env file) names a shared database, " \
+      "so this worktree's databases were not prepared -- run bin/rails db:prepare by hand once you have checked."
   exit 0
 end
 

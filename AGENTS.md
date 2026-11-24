@@ -21,7 +21,8 @@ bin/brakeman --no-pager                          # Security scan (Ruby)
 bin/bundler-audit                                # Security scan (gems)
 bin/importmap audit                              # Security scan (JS)
 bin/setup                                        # Bootstrap project
-                                                 # Local ENV goes in gitignored .env.<RAILS_ENV>[.local] / .env (dotenv; .dockerignore keeps them out of images)
+                                                 # Local ENV goes in gitignored .env.<RAILS_ENV>[.local] / .env (dotenv; .dockerignore keeps them out of images).
+                                                 # Read at Rails boot, so PORT and RAILS_ENV (read earlier by bin/ scripts) still come from the shell
 bin/rails db:create db:migrate                   # Set up database
 bin/worktree-clean --drop                        # Drop test databases left by deleted worktrees
 bin/sweep-pr status [123]                        # Review-sweep state of a PR, current branch's by default (see "Review sweep")
@@ -59,7 +60,7 @@ Everything derives from the worktree's path, via `config/worktree_database.rb`:
   failure.
 - **Secrets and local settings.** Run `bin/worktree-setup` after creating a
   worktree: it symlinks the gitignored `config/master.key`,
-  `.claude/settings.local.json`, and any `.env*` files from the primary
+  `.claude/settings.local.json`, and any `.env` / `.env.*` files from the primary
   checkout, installs any
   gems the worktree's `Gemfile.lock` needs (a merged dependency bump may not
   be installed yet), and runs `db:prepare`. It is idempotent and a no-op in
