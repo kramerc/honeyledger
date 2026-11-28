@@ -123,6 +123,12 @@
   width: 45%;
 }
 
+/* Beside each amount, since this table has no Currency column. */
+.dashboard__currency-code {
+  color: var(--bark-light);
+  font-size: 0.8rem;
+}
+
 /* The type indicator stands in for From → To on phones only. */
 .dashboard__phone-type {
   display: none;

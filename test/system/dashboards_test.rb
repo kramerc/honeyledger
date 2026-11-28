@@ -39,7 +39,7 @@ class DashboardsTest < ApplicationSystemTestCase
       within("tr", text: "Sample Vendor purchase") do
         assert_text Time.current.strftime("%Y-%m-%d")
         assert_selector "td[title='Asset Account → Expense Account']", text: "Asset Account → Expense Account"
-        assert_text "$12.50"
+        assert_selector "td.numeric", text: "$12.50 USD"
         # The phone stand-in for From → To stays hidden on wider screens.
         assert_no_selector ".dashboard__phone-type", visible: true
       end
@@ -101,6 +101,7 @@ class DashboardsTest < ApplicationSystemTestCase
 
     within(".dashboard__recent tr", text: "Sample Vendor purchase") do
       assert_selector ".dashboard__phone-type", text: "Withdrawal"
+      assert_selector ".dashboard__currency-code", text: "USD"
       assert_no_text "Asset Account → Expense Account"
     end
   ensure

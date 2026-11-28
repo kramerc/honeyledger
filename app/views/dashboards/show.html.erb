@@ -85,7 +85,9 @@
                   <td class="dashboard__truncate dashboard__description" title="<%= description %>"><%= description %></td>
                   <td class="dashboard__truncate dashboard__accounts-column" title="<%= accounts %>"><%= accounts %></td>
                   <td class="numeric">
+                    <%# The code too: a symbol alone is ambiguous (USD and USDC are both $). %>
                     <%= transaction_amount_with_currency(transaction) %>
+                    <span class="dashboard__currency-code"><%= transaction.currency.code %></span>
                     <%# From → To hides on phones; the indicator keeps money in or out readable there. %>
                     <%= transaction_type_indicator(transaction, class: "dashboard__phone-type") %>
                   </td>
