@@ -109,17 +109,29 @@
   overflow-wrap: anywhere;
 }
 
-/* Narrow screens keep the figure that matters in each table: Amount for
-   transactions below 768px, and Net for net worth only once even its four
-   short columns can't fit long amounts (eight-decimal BTC, six figures). */
+/* Narrow screens keep the figure that matters in each table. Transactions
+   drop From → To below 768px. Net worth keeps all four columns while they
+   fit; the fit-columns controller adds --compact (Net only) when they
+   don't, since that depends on the figures, not the screen. */
 @media (max-width: 767px) {
   .dashboard__accounts-column {
     display: none;
   }
 }
 
+.dashboard__table-wrap--compact .dashboard__breakdown-column {
+  display: none;
+}
+
+/* Phones: tighter cells so four columns fit more often. */
 @media (max-width: 479px) {
-  .dashboard__breakdown-column {
-    display: none;
+  .dashboard__table {
+    font-size: 0.8125rem;
+  }
+
+  .dashboard__table th,
+  .dashboard__table td {
+    padding-left: 6px;
+    padding-right: 6px;
   }
 }

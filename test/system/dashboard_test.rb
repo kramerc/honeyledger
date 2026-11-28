@@ -65,22 +65,26 @@ class DashboardTest < ApplicationSystemTestCase
     assert_no_selector ".dashboard__net-worth"
   end
 
-  test "the net worth table drops its breakdown only on narrow phones, and never scrolls" do
+  test "the net worth table drops its breakdown only when it would not fit, and never scrolls" do
     user = users(:one)
     user.accounts.create!(name: "Coins", kind: :asset, currency: currencies(:btc)).update_column(:balance_minor, 289_912_845)
     accounts(:liability_account).update_column(:balance_minor, -37_257_344)
     sign_in_as(user)
-    page.driver.browser.manage.window.resize_to(390, 900)
 
+    page.driver.browser.manage.window.resize_to(600, 900)
+    within(".dashboard__net-worth") { assert_text "Liabilities" }
+    assert_not net_worth_overflows?
+
+    page.driver.browser.manage.window.resize_to(320, 900)
     within(".dashboard__net-worth") do
       assert_text "BTC"
       assert_no_text "Liabilities"
     end
     assert_not net_worth_overflows?
 
+    # Widening again brings the breakdown back.
     page.driver.browser.manage.window.resize_to(600, 900)
     within(".dashboard__net-worth") { assert_text "Liabilities" }
-    assert_not net_worth_overflows?
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1400)
   end

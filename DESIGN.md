@@ -72,6 +72,7 @@ Transitions only answer the user (hover, open, close) and stay short: 0.1–0.2s
   - `1024–1279px`: the transactions table hides Description, Currency, Category, and Cleared.
   - `≥ 1280px`: the full transactions table.
 - Every page must work at 390px wide with no horizontal page scroll; only a wide table may scroll inside its own box.
+- When whether a column fits depends on its figures rather than the screen (long crypto balances, six-figure amounts), don't pick a breakpoint: mark the optional columns and let the `fit-columns` Stimulus controller hide them only when the table would overflow. The dashboard's net worth table is the example.
 
 ## Components
 

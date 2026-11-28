@@ -28,10 +28,11 @@
       </div>
     </div>
   <% else %>
-    <section class="dashboard__section" aria-labelledby="dashboard-net-worth">
+    <section class="dashboard__section" aria-labelledby="dashboard-net-worth"
+             data-controller="fit-columns" data-fit-columns-compact-class="dashboard__table-wrap--compact">
       <h2 id="dashboard-net-worth">Net worth</h2>
       <% if @dashboard.net_worth.any? %>
-        <div class="dashboard__table-wrap dashboard__table-wrap--fit">
+        <div class="dashboard__table-wrap dashboard__table-wrap--fit" data-fit-columns-target="wrapper">
           <table class="dashboard__table dashboard__net-worth">
             <thead>
               <tr>
