@@ -93,7 +93,8 @@ class Dashboard
       connection.accounts.where(status: LUNCHFLOW_PROBLEM_STATUSES.keys).includes(:ledger_accounts).order(:name).each do |lunchflow_account|
         next if lunchflow_account.unlinked?
 
-        items << error("Lunch Flow account #{lunchflow_account.name} #{LUNCHFLOW_PROBLEM_STATUSES.fetch(lunchflow_account.status)}")
+        name = lunchflow_account.name.presence || lunchflow_account.institution_name.presence || "##{lunchflow_account.remote_id}"
+        items << error("Lunch Flow account #{name} #{LUNCHFLOW_PROBLEM_STATUSES.fetch(lunchflow_account.status)}")
       end
       items << stale_notice("Lunch Flow", connection) if stale?(connection)
       items
@@ -121,8 +122,11 @@ class Dashboard
       [ notice("#{pluralize(count, "aggregator account")} #{verb} linked to a ledger account") ]
     end
 
+    # A connection never refreshed is measured from its last change instead,
+    # so one just added or re-claimed (claiming clears refreshed_at) gets the
+    # same grace period while its first refresh job runs.
     def stale?(connection)
-      connection.refreshed_at.nil? || connection.refreshed_at < STALE_AFTER.ago
+      (connection.refreshed_at || connection.updated_at) < STALE_AFTER.ago
     end
 
     def stale_notice(name, connection)

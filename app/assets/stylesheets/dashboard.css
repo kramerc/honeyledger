@@ -105,16 +105,45 @@
   white-space: nowrap;
 }
 
+/* Long text stays on one line with an ellipsis (full text in title), so
+   rows keep a steady height. max-width: 0 lets an auto-layout table cell
+   shrink below its content; the widths share out the remaining space. */
+.dashboard__truncate {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dashboard__description {
-  overflow-wrap: anywhere;
+  width: 55%;
+}
+
+.dashboard__accounts-column {
+  width: 45%;
+}
+
+/* The type indicator stands in for From → To on phones only. */
+.dashboard__phone-type {
+  display: none;
 }
 
 /* Narrow screens keep the figure that matters in each table. Transactions
-   drop From → To below 768px. Net worth keeps all four columns while they
-   fit; the fit-columns controller adds --compact (Net only) when they
-   don't, since that depends on the figures, not the screen. */
+   drop From → To below 768px and show the type indicator instead. Net
+   worth keeps all four columns while they fit, which depends on the
+   figures, not the screen: the fit-columns controller measures and sets
+   --full or --compact. Until it has, phones start compact so the first
+   paint never overflows, and wider screens start full. */
 @media (max-width: 767px) {
   .dashboard__accounts-column {
+    display: none;
+  }
+
+  .dashboard__phone-type {
+    display: block;
+  }
+
+  .dashboard__table-wrap--fit:not(.dashboard__table-wrap--full) .dashboard__breakdown-column {
     display: none;
   }
 }

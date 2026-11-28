@@ -28,10 +28,11 @@
       </div>
     </div>
   <% else %>
-    <section class="dashboard__section" aria-labelledby="dashboard-net-worth"
-             data-controller="fit-columns" data-fit-columns-compact-class="dashboard__table-wrap--compact">
+    <% net_worth = @dashboard.net_worth %>
+    <%= tag.section class: "dashboard__section", aria: { labelledby: "dashboard-net-worth" },
+          data: ({ controller: "fit-columns", fit_columns_full_class: "dashboard__table-wrap--full", fit_columns_compact_class: "dashboard__table-wrap--compact" } if net_worth.any?) do %>
       <h2 id="dashboard-net-worth">Net worth</h2>
-      <% if @dashboard.net_worth.any? %>
+      <% if net_worth.any? %>
         <div class="dashboard__table-wrap dashboard__table-wrap--fit" data-fit-columns-target="wrapper">
           <table class="dashboard__table dashboard__net-worth">
             <thead>
@@ -43,7 +44,7 @@
               </tr>
             </thead>
             <tbody>
-              <% @dashboard.net_worth.each do |row| %>
+              <% net_worth.each do |row| %>
                 <tr>
                   <td><%= row.currency.code %></td>
                   <td class="numeric dashboard__breakdown-column"><%= amount_to_currency(row.assets_minor, row.currency) %></td>
@@ -59,7 +60,7 @@
       <% else %>
         <p class="dashboard__muted">No balances yet.</p>
       <% end %>
-    </section>
+    <% end %>
 
     <section class="dashboard__section" aria-labelledby="dashboard-recent">
       <h2 id="dashboard-recent">Recent transactions</h2>
@@ -78,10 +79,16 @@
             <tbody>
               <% recent_transactions.each do |transaction| %>
                 <tr>
-                  <td class="dashboard__date"><%= transaction.transacted_at&.to_date&.to_fs(:short) %></td>
-                  <td class="dashboard__description"><%= transaction.description.presence || "—" %></td>
-                  <td class="dashboard__accounts-column"><%= transaction.src_account&.name %> → <%= transaction.dest_account&.name %></td>
-                  <td class="numeric"><%= transaction_amount_with_currency(transaction) %></td>
+                  <% description = transaction.description.presence || "—" %>
+                  <% accounts = "#{transaction.src_account&.name} → #{transaction.dest_account&.name}" %>
+                  <td class="dashboard__date"><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
+                  <td class="dashboard__truncate dashboard__description" title="<%= description %>"><%= description %></td>
+                  <td class="dashboard__truncate dashboard__accounts-column" title="<%= accounts %>"><%= accounts %></td>
+                  <td class="numeric">
+                    <%= transaction_amount_with_currency(transaction) %>
+                    <%# From → To hides on phones; the indicator keeps money in or out readable there. %>
+                    <%= transaction_type_indicator(transaction, class: "dashboard__phone-type") %>
+                  </td>
                 </tr>
               <% end %>
             </tbody>

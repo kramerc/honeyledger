@@ -42,7 +42,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   # have set, skipping the form round trip that most tests don't exercise.
   # Shares its name with the cookie-based SessionTestHelper#sign_in_as used by
   # integration tests, so a test reads the same way regardless of its base
-  # class. Ends on the home page, so a test can click navigation straight away.
+  # class. Visits the home page, which sends a signed-in user to the dashboard,
+  # so a test can click navigation straight away.
   def sign_in_as(user)
     session = user.sessions.create!
 

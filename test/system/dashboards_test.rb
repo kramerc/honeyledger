@@ -1,6 +1,6 @@
 require "application_system_test_case"
 
-class DashboardTest < ApplicationSystemTestCase
+class DashboardsTest < ApplicationSystemTestCase
   test "signed out, the home page offers login and sign-up" do
     visit root_path
 
@@ -37,8 +37,11 @@ class DashboardTest < ApplicationSystemTestCase
     end
     within(".dashboard__recent") do
       within("tr", text: "Sample Vendor purchase") do
-        assert_text "Asset Account → Expense Account"
+        assert_text Time.current.strftime("%Y-%m-%d")
+        assert_selector "td[title='Asset Account → Expense Account']", text: "Asset Account → Expense Account"
         assert_text "$12.50"
+        # The phone stand-in for From → To stays hidden on wider screens.
+        assert_no_selector ".dashboard__phone-type", visible: true
       end
     end
     assert_link "View all transactions", href: transactions_path
@@ -89,13 +92,28 @@ class DashboardTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1400)
   end
 
+  test "on a phone a recent transaction shows its direction instead of From → To" do
+    user = users(:one)
+    Transaction.create!(user: user, src_account: accounts(:asset_account), dest_account: accounts(:expense_account),
+      description: "Sample Vendor purchase", amount_minor: 1_250, currency: currencies(:usd), transacted_at: Time.current)
+    sign_in_as(user)
+    page.driver.browser.manage.window.resize_to(390, 900)
+
+    within(".dashboard__recent tr", text: "Sample Vendor purchase") do
+      assert_selector ".dashboard__phone-type", text: "Withdrawal"
+      assert_no_text "Asset Account → Expense Account"
+    end
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+  end
+
   private
 
     def net_worth_overflows?
       page.evaluate_script(<<~JS)
         (() => {
-          const wrap = document.querySelector(".dashboard__net-worth").parentElement
-          return wrap.scrollWidth > wrap.clientWidth
+          const wrapper = document.querySelector(".dashboard__net-worth").parentElement
+          return wrapper.scrollWidth > wrapper.clientWidth
         })()
       JS
     end

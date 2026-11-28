@@ -106,6 +106,15 @@ class DashboardTest < ActiveSupport::TestCase
       @dashboard.attention_items.map(&:message)
   end
 
+  test "a Lunch Flow account without a name is identified by its institution or remote id" do
+    connection = @user.create_lunchflow_connection!(api_key: "key", refreshed_at: 1.hour.ago)
+    link(connection.accounts.create!(remote_id: 1, name: nil, institution_name: "Test Bank", status: "ERROR", last_seen_at: 1.hour.ago))
+    link(connection.accounts.create!(remote_id: 2, name: nil, status: "DISCONNECTED", last_seen_at: 1.hour.ago))
+
+    assert_equal [ "Lunch Flow account #2 is disconnected", "Lunch Flow account Test Bank reports an error" ].sort,
+      @dashboard.attention_items.map(&:message).sort
+  end
+
   test "a wallet error, such as a balance mismatch, needs attention" do
     @user.blockchain_connections.create!(chain: "bitcoin", name: "Hot wallet", identifier: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
       refreshed_at: 1.hour.ago, error: "Balance mismatch: the chain reports more than the history adds up to")
@@ -118,7 +127,7 @@ class DashboardTest < ActiveSupport::TestCase
   test "a connection not refreshed for three days needs a nudge" do
     travel_to Time.zone.local(2026, 11, 27, 12) do
       @user.create_simplefin_connection!(demo: true, url: "https://example.com", refreshed_at: 5.days.ago)
-      @user.create_lunchflow_connection!(api_key: "key", refreshed_at: nil)
+      @user.create_lunchflow_connection!(api_key: "key", refreshed_at: nil).update_column(:updated_at, 4.days.ago)
 
       items = @dashboard.attention_items
       assert_equal [ "SimpleFIN was last refreshed 5 days ago", "Lunch Flow has never been refreshed" ], items.map(&:message)
@@ -132,6 +141,13 @@ class DashboardTest < ActiveSupport::TestCase
 
       assert_empty @dashboard.attention_items
     end
+  end
+
+  test "a connection waiting for its first refresh gets the same grace period" do
+    @user.create_lunchflow_connection!(api_key: "key", refreshed_at: nil)
+    @user.create_simplefin_connection!(demo: true, url: "https://example.com", refreshed_at: nil)
+
+    assert_empty @dashboard.attention_items
   end
 
   test "unlinked aggregator accounts are counted as the integrations page lists them" do
@@ -207,7 +223,7 @@ class DashboardTest < ActiveSupport::TestCase
     end
 
     def link(aggregator_account)
-      ledger_account = @user.accounts.create!(name: "Ledger #{aggregator_account.name}", kind: :asset, currency: currencies(:usd))
+      ledger_account = @user.accounts.create!(name: "Ledger #{aggregator_account.remote_id}", kind: :asset, currency: currencies(:usd))
       aggregator_account.account_sources.create!(account: ledger_account)
       aggregator_account
     end

@@ -171,7 +171,7 @@ Authentication is the Rails 8 generator pattern, not Devise: `app/controllers/co
 
 The only other public controller is `HomeController`, which opts out with `allow_unauthenticated_access` because the landing page carries no user data. Everything else, including `CurrenciesController`, is authenticated implicitly, and user-owned queries are scoped to `current_user` to prevent cross-user data access. In views and controllers use `authenticated?` and `current_user`.
 
-Tests: integration tests call `sign_in_as(user)` / `sign_out` from `test/test_helpers/session_test_helper.rb` (sets the cookie directly); system tests call the `sign_in_as(user)` defined in `ApplicationSystemTestCase`, which creates the session row and hands the browser its signed cookie (`SessionTestHelper.signed_session_cookie`), then lands on the home page. Only tests of the login flow itself use `sign_in_through_form(user)`. Every user fixture carries the `"password123"` digest.
+Tests: integration tests call `sign_in_as(user)` / `sign_out` from `test/test_helpers/session_test_helper.rb` (sets the cookie directly); system tests call the `sign_in_as(user)` defined in `ApplicationSystemTestCase`, which creates the session row and hands the browser its signed cookie (`SessionTestHelper.signed_session_cookie`), then visits the home page, which redirects to the dashboard. Only tests of the login flow itself use `sign_in_through_form(user)`. Every user fixture carries the `"password123"` digest.
 
 ### Passkeys
 
