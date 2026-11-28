@@ -63,7 +63,7 @@ class AccountsController < ApplicationController
 
     source_account = @simplefin_account || @lunchflow_account || @blockchain_account
     if source_account
-      @account.name = source_account.name
+      @account.name = source_account.suggested_ledger_account_name
       @account.currency = Currency.find_by(code: source_account.currency)
 
       if (opening_balance = source_account.suggested_opening_balance)
