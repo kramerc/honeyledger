@@ -21,6 +21,17 @@ class Blockchain::Account < ApplicationRecord
     connection&.name
   end
 
+  # "Cold storage (Bitcoin)": the account's own name is only the asset, which
+  # every wallet shares. The asset stays in the name even when the label
+  # already mentions it, because a wallet can hold several assets and each
+  # ledger account holds only one.
+  def suggested_ledger_account_name
+    wallet_name = connection&.name.to_s.strip
+    return name if wallet_name.blank?
+
+    "#{wallet_name} (#{name})"
+  end
+
   # A wallet account only links to a ledger account in its own currency: the
   # ledger currency's decimal places scale every amount, so a fiat account would
   # truncate satoshis to cents.

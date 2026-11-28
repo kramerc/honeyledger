@@ -25,6 +25,10 @@ class Simplefin::AccountTest < ActiveSupport::TestCase
     assert_not @linked_simplefin_account.unlinked?
   end
 
+  test "suggests its own name as the ledger account name" do
+    assert_equal "Checking", Simplefin::Account.new(name: "Checking").suggested_ledger_account_name
+  end
+
   test "institution_name returns the org name" do
     account = Simplefin::Account.new(org: { "name" => "Test Bank" })
 

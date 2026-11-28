@@ -375,6 +375,15 @@ class IntegrationsTest < ApplicationSystemTestCase
     assert_text "On-chain: Bitcoin"
   end
 
+  test "import link pre-fills a wallet account with its wallet label and asset" do
+    visit integrations_path
+
+    row = find("select[name='blockchain_account[ledger_account_id]']").ancestor("tr")
+    within(row) { click_link "Import" }
+
+    assert_field "Name", with: "Cold storage (Bitcoin)"
+  end
+
   test "shows a wallet refresh error in its connection row" do
     blockchain_connections(:xpub_wallet).update!(error: "Rate limited by the explorer")
 

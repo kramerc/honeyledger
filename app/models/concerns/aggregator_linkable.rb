@@ -27,6 +27,11 @@ module AggregatorLinkable
     !linked?
   end
 
+  # The name an imported ledger account starts with on the new-account form.
+  def suggested_ledger_account_name
+    name
+  end
+
   class_methods do
     def transaction_class
       "#{name.deconstantize}::Transaction".constantize

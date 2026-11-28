@@ -14,6 +14,20 @@ class Blockchain::AccountTest < ActiveSupport::TestCase
     assert_equal "Cold storage", @blockchain_account.institution_name
   end
 
+  test "suggests the wallet label and asset as the ledger account name" do
+    assert_equal "Cold storage (Bitcoin)", @blockchain_account.suggested_ledger_account_name
+  end
+
+  test "suggests a distinct name for each asset in one wallet" do
+    token_account = @blockchain_account.connection.accounts.new(remote_id: "TOKEN", name: "Sample Token", currency: "BTC")
+
+    assert_equal "Cold storage (Sample Token)", token_account.suggested_ledger_account_name
+  end
+
+  test "suggests the asset name alone without a wallet label" do
+    assert_equal "Bitcoin", Blockchain::Account.new(name: "Bitcoin").suggested_ledger_account_name
+  end
+
   test "resolves its currency and computes balance_minor in satoshis" do
     assert_equal currencies(:btc), @blockchain_account.ledger_currency
     assert_equal 1_540_000, @blockchain_account.balance_minor
