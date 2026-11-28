@@ -109,10 +109,16 @@
   overflow-wrap: anywhere;
 }
 
-/* Phones keep the figure that matters in each table: Net for net worth,
-   Amount for transactions. */
+/* Narrow screens keep the figure that matters in each table: Amount for
+   transactions below 768px, and Net for net worth only once even its four
+   short columns can't fit long amounts (eight-decimal BTC, six figures). */
 @media (max-width: 767px) {
-  .dashboard__accounts-column,
+  .dashboard__accounts-column {
+    display: none;
+  }
+}
+
+@media (max-width: 479px) {
   .dashboard__breakdown-column {
     display: none;
   }
