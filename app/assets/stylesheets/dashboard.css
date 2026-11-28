@@ -2,6 +2,10 @@
    transactions table's header row; every selector is namespaced under
    .dashboard. */
 
+.dashboard {
+  max-width: 1100px;
+}
+
 .dashboard__section {
   margin-bottom: 24px;
 }
@@ -78,6 +82,16 @@
 
 .dashboard__net {
   font-weight: 600;
+}
+
+/* Four short columns: size to the figures instead of spanning the page. */
+.dashboard__table-wrap--fit {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.dashboard__net-worth .numeric {
+  width: 8em; /* a floor: auto table layout widens a cell past it as needed */
 }
 
 .dashboard__table .dashboard__net--positive { color: var(--color-positive); }
