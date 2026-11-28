@@ -1,6 +1,6 @@
 /* Dashboard — the signed-in landing page. Native tables styled like the
-   transactions table's header row; every selector is namespaced under
-   .dashboard. */
+   accounts and transactions tables, header row included; every selector
+   is namespaced under .dashboard. */
 
 .dashboard {
   max-width: 1100px;
@@ -57,12 +57,12 @@
 
 .dashboard__table th {
   background-color: var(--honey-pale);
-  color: var(--accent-text);
-  font-size: 0.75rem;
+  color: var(--bark-medium);
+  font-size: 0.875rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
   text-align: left;
   padding: 7px 10px;
-  border-bottom: 1px solid var(--divider);
 }
 
 .dashboard__table td {
@@ -70,8 +70,27 @@
   padding: 7px 10px;
 }
 
-.dashboard__table tbody tr + tr td {
-  border-top: 1px solid var(--divider);
+/* Grid lines like the accounts and transactions tables: every cell has a
+   right and bottom divider, except along the wrapper's own border. */
+.dashboard__table th,
+.dashboard__table td {
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+}
+
+.dashboard__table tr > :last-child {
+  border-right: 0;
+}
+
+.dashboard__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Row hover on desktop only, as on the accounts table. */
+@media (min-width: 768px) {
+  .dashboard__table tbody tr:hover {
+    background-color: var(--honey-light);
+  }
 }
 
 .dashboard__table .numeric {

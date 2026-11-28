@@ -29,9 +29,7 @@
 .passkeys .row.header {
   background-color: var(--honey-pale);
   font-weight: 600;
-  font-size: 0.75rem;
   letter-spacing: 0.02em;
-  color: var(--accent-text);
 }
 
 /* Cells */

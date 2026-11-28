@@ -30,7 +30,7 @@ All colours are CSS custom properties on `:root` in `app/assets/stylesheets/appl
 | `--bark-medium` | `#44403C` | `#FDE68A` | Cell text, secondary text |
 | `--bark-light` | `#78716C` | `#A16207` | Muted text, placeholders, arrows |
 | `--divider` | `#F5E6C8` | `#3A2810` | Borders and rules |
-| `--accent-text` | `#92400E` | `#FCD34D` | Header labels, form labels, status markers |
+| `--accent-text` | `#92400E` | `#FCD34D` | Form labels, phone card labels, status markers |
 | `--color-positive` | `#15803D` | `#4ade80` | Money in, positive balances |
 | `--color-negative` | `#DC2626` | `#f87171` | Money out, negative balances, Delete |
 
@@ -48,7 +48,7 @@ The transactions table adds three local tokens on `.transactions`:
 
 - One family: the system UI stack on `body` (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, …`). Don't add web fonts.
 - Base size 14px, line height 1.5.
-- Scale in use: `1.25rem` header title; `1rem` phone row titles and amounts; `0.875rem` table cells and body copy; `0.8rem` actions, buttons, the transaction type indicator, secondary details; `0.75rem` table headers and form labels; `0.7rem` badges.
+- Scale in use: `1.25rem` header title; `1rem` phone row titles and amounts; `0.875rem` table cells, table headers, and body copy; `0.8rem` actions, buttons, the transaction type indicator, secondary details; `0.75rem` form labels; `0.7rem` badges.
 - Weights: 400 body, 600 headers, labels, and buttons, 700 the header title.
 - Numbers: `font-variant-numeric: tabular-nums` and right alignment in numeric columns (`.numeric`).
 - Case: sentence case for copy and buttons, title case for table headers, never `text-transform: uppercase` in tables. The sidebar's small group labels are the one existing uppercase treatment; don't extend it.
@@ -80,7 +80,8 @@ Transitions only answer the user (hover, open, close) and stay short: 0.1–0.2s
 
 The main data tables (transactions, accounts, passkeys) are CSS grids of `.row` elements: one grid template per table, cells as `div`s, header row first, collapsing to cards or phone rows below their breakpoint. The rules below describe those. Integrations, Import Rules (the list and its previews), and the CSV import screens use native `<table>` markup; that is fine as it is and doesn't need converting, though a new data table that collapses on phones should use the grid pattern.
 
-- Header row (`.row.header`): `--honey-pale` background, `0.75rem`, weight 600, `--accent-text`, title case. Sticky on the transactions table.
+- Header row (`.row.header`): `--honey-pale` background; text the same as a cell (`--bark-medium` at `0.875rem`, which the cell rule sets) but weight 600 with `0.02em` letter spacing; title case. Header cells keep the cells' dividers. Sticky on the transactions table. Header text is not `--accent-text` and not `0.75rem`; those are for form labels.
+- Native `<table>` headers that should read as one of these tables (the dashboard's) set the same values on `th` directly: `--honey-pale` background, `--bark-medium`, `0.875rem`, weight 600, `0.02em` letter spacing, and the cells' `7px 10px` padding. Their `th` and `td` take the same 1px right and bottom `--divider` borders as grid cells, dropped on the last column and the last row, where the wrapper's own border takes over. Body rows take the same desktop hover.
 - Cells: 1px right and bottom `--divider` borders, `--bark-medium` text at `0.875rem`.
 - Row hover (desktop only): `--honey-light` background.
 - Long text (description, account names): one line with an ellipsis, the full text in `title`.
