@@ -90,8 +90,12 @@
   max-width: 100%;
 }
 
-.dashboard__net-worth .numeric {
-  width: 8em; /* a floor: auto table layout widens a cell past it as needed */
+/* A floor for each figure column (auto table layout widens a cell past it
+   as needed). Phones skip it: three 8em columns don't fit at 390px. */
+@media (min-width: 768px) {
+  .dashboard__net-worth .numeric {
+    width: 8em;
+  }
 }
 
 .dashboard__table .dashboard__net--positive { color: var(--color-positive); }
@@ -105,8 +109,11 @@
   overflow-wrap: anywhere;
 }
 
+/* Phones keep the figure that matters in each table: Net for net worth,
+   Amount for transactions. */
 @media (max-width: 767px) {
-  .dashboard__accounts-column {
+  .dashboard__accounts-column,
+  .dashboard__breakdown-column {
     display: none;
   }
 }

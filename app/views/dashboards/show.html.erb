@@ -36,8 +36,8 @@
             <thead>
               <tr>
                 <th>Currency</th>
-                <th class="numeric">Assets</th>
-                <th class="numeric">Liabilities</th>
+                <th class="numeric dashboard__breakdown-column">Assets</th>
+                <th class="numeric dashboard__breakdown-column">Liabilities</th>
                 <th class="numeric">Net</th>
               </tr>
             </thead>
@@ -45,8 +45,8 @@
               <% @dashboard.net_worth.each do |row| %>
                 <tr>
                   <td><%= row.currency.code %></td>
-                  <td class="numeric"><%= amount_to_currency(row.assets_minor, row.currency) %></td>
-                  <td class="numeric"><%= amount_to_currency(row.liabilities_minor, row.currency) %></td>
+                  <td class="numeric dashboard__breakdown-column"><%= amount_to_currency(row.assets_minor, row.currency) %></td>
+                  <td class="numeric dashboard__breakdown-column"><%= amount_to_currency(row.liabilities_minor, row.currency) %></td>
                   <td class="<%= class_names("numeric", "dashboard__net", "dashboard__net--positive": row.net_minor.positive?, "dashboard__net--negative": row.net_minor.negative?) %>">
                     <%= amount_to_currency(row.net_minor, row.currency) %>
                   </td>

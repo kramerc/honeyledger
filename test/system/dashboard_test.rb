@@ -64,4 +64,20 @@ class DashboardTest < ApplicationSystemTestCase
     end
     assert_no_selector ".dashboard__net-worth"
   end
+
+  test "on a phone the net worth table shows only the net, without scrolling" do
+    user = users(:one)
+    user.accounts.create!(name: "Coins", kind: :asset, currency: currencies(:btc)).update_column(:balance_minor, 289_912_845)
+    accounts(:liability_account).update_column(:balance_minor, -37_257_344)
+    sign_in_as(user)
+    page.driver.browser.manage.window.resize_to(390, 900)
+
+    within(".dashboard__net-worth") do
+      assert_text "BTC"
+      assert_no_text "Liabilities"
+    end
+    assert_not page.evaluate_script("document.querySelector('.dashboard__net-worth').parentElement.scrollWidth > document.querySelector('.dashboard__net-worth').parentElement.clientWidth")
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1400)
+  end
 end
