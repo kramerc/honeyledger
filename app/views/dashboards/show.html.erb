@@ -71,6 +71,7 @@
             <thead>
               <tr>
                 <th>Date</th>
+                <th class="dashboard__type-column">Type</th>
                 <th>Description</th>
                 <th class="dashboard__accounts-column">From → To</th>
                 <th class="numeric">Amount</th>
@@ -82,13 +83,14 @@
                   <% description = transaction.description.presence || "—" %>
                   <% accounts = "#{transaction.src_account&.name} → #{transaction.dest_account&.name}" %>
                   <td class="dashboard__date"><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
+                  <td class="dashboard__type-column"><%= transaction_type_indicator(transaction) %></td>
                   <td class="dashboard__truncate dashboard__description" title="<%= description %>"><%= description %></td>
                   <td class="dashboard__truncate dashboard__accounts-column" title="<%= accounts %>"><%= accounts %></td>
                   <td class="numeric">
                     <%# The code too: a symbol alone is ambiguous (USD and USDC are both $). %>
                     <%= transaction_amount_with_currency(transaction) %>
                     <span class="dashboard__currency-code"><%= transaction.currency.code %></span>
-                    <%# From → To hides on phones; the indicator keeps money in or out readable there. %>
+                    <%# Phones hide the Type and From → To columns; this keeps money in or out readable there. %>
                     <%= transaction_type_indicator(transaction, class: "dashboard__phone-type") %>
                   </td>
                 </tr>

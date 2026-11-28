@@ -129,18 +129,25 @@
   font-size: 0.8rem;
 }
 
-/* The type indicator stands in for From → To on phones only. */
+.dashboard__type-column {
+  white-space: nowrap;
+}
+
+/* On phones the indicator moves under the amount, standing in for the
+   hidden Type and From → To columns. */
 .dashboard__phone-type {
   display: none;
 }
 
 /* Narrow screens keep the figure that matters in each table. Transactions
-   drop From → To below 768px and show the type indicator instead. Net
+   drop Type and From → To below 768px and show the indicator under the
+   amount instead. Net
    worth keeps all four columns while they fit, which depends on the
    figures, not the screen: the fit-columns controller measures and sets
    --full or --compact. Until it has, phones start compact so the first
    paint never overflows, and wider screens start full. */
 @media (max-width: 767px) {
+  .dashboard__type-column,
   .dashboard__accounts-column {
     display: none;
   }

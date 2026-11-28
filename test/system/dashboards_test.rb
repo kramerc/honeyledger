@@ -40,7 +40,8 @@ class DashboardsTest < ApplicationSystemTestCase
         assert_text Time.current.strftime("%Y-%m-%d")
         assert_selector "td[title='Asset Account → Expense Account']", text: "Asset Account → Expense Account"
         assert_selector "td.numeric", text: "$12.50 USD"
-        # The phone stand-in for From → To stays hidden on wider screens.
+        assert_selector "td.dashboard__type-column", text: "Withdrawal"
+        # The phone stand-in under the amount stays hidden on wider screens.
         assert_no_selector ".dashboard__phone-type", visible: true
       end
     end
@@ -103,6 +104,7 @@ class DashboardsTest < ApplicationSystemTestCase
       assert_selector ".dashboard__phone-type", text: "Withdrawal"
       assert_selector ".dashboard__currency-code", text: "USD"
       assert_no_text "Asset Account → Expense Account"
+      assert_no_selector "td.dashboard__type-column", visible: true
     end
   ensure
     page.driver.browser.manage.window.resize_to(1400, 1400)
