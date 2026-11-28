@@ -123,12 +123,9 @@
   display: none;
 }
 
-/* Phones: tighter cells so four columns fit more often. */
+/* Phones: narrower cell padding so four columns fit more often. The type
+   stays full size; the fit-columns controller handles what still won't fit. */
 @media (max-width: 479px) {
-  .dashboard__table {
-    font-size: 0.8125rem;
-  }
-
   .dashboard__table th,
   .dashboard__table td {
     padding-left: 6px;
