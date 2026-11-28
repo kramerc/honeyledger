@@ -1,0 +1,98 @@
+/* Dashboard — the signed-in landing page. Native tables styled like the
+   transactions table's header row; every selector is namespaced under
+   .dashboard. */
+
+.dashboard__section {
+  margin-bottom: 24px;
+}
+
+.dashboard__section h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.dashboard__muted {
+  color: var(--bark-light);
+  margin: 0;
+}
+
+/* Needs attention: one link per item, errors in the error text colour. */
+.dashboard__attention {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+}
+
+.dashboard__attention-item {
+  padding: 7px 10px;
+  font-size: 0.875rem;
+}
+
+.dashboard__attention-item + .dashboard__attention-item {
+  border-top: 1px solid var(--divider);
+}
+
+.dashboard__attention-item--error a {
+  color: var(--text-error);
+}
+
+/* Tables scroll inside their own box rather than widening the page. */
+.dashboard__table-wrap {
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.dashboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.dashboard__table th {
+  background-color: var(--honey-pale);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.dashboard__table td {
+  color: var(--bark-medium);
+  padding: 7px 10px;
+}
+
+.dashboard__table tbody tr + tr td {
+  border-top: 1px solid var(--divider);
+}
+
+.dashboard__table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dashboard__net {
+  font-weight: 600;
+}
+
+.dashboard__table .dashboard__net--positive { color: var(--color-positive); }
+.dashboard__table .dashboard__net--negative { color: var(--color-negative); }
+
+.dashboard__date {
+  white-space: nowrap;
+}
+
+.dashboard__description {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .dashboard__accounts-column {
+    display: none;
+  }
+}

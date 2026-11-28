@@ -158,6 +158,7 @@ Rules that came with it:
 
 - Flashes: an 8px-radius panel with a 4px left border in the feedback colour, dismissible.
 - Empty states: `--honey-pale` panel, 8px radius, centred, with the next action as a link. Treat emptiness as a prompt to act, not a mood.
+- Attention lists (the dashboard's "Needs attention"): one linked line per problem inside an 8px-radius `--divider` box, errors first in `--text-error`, notices as ordinary links. With nothing to show, a single muted line replaces the box.
 
 ## Phones
 

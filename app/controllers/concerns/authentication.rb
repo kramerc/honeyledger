@@ -43,14 +43,14 @@ module Authentication
     end
 
     def after_authentication_url
-      session.delete(:return_to_after_authenticating) || root_path
+      session.delete(:return_to_after_authenticating) || dashboard_path
     end
 
     # For the login and sign-up entry points: someone who already has a
-    # session is sent home rather than allowed to open a second one, which
+    # session is sent to the dashboard rather than allowed to open a second one, which
     # would silently swap accounts and strand the old session server-side.
     def redirect_signed_in_users
-      redirect_to root_path if authenticated?
+      redirect_to dashboard_path if authenticated?
     end
 
     def start_new_session_for(user)

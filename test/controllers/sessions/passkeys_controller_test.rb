@@ -48,7 +48,7 @@ module Sessions
       post passkey_session_path, params: { credential: assertion }, as: :json
 
       assert_response :success
-      assert_equal root_path, response.parsed_body["redirect_url"]
+      assert_equal dashboard_path, response.parsed_body["redirect_url"]
       assert cookies[:session_id]
       assert_equal 1, @user.sessions.count
       @passkey.reload

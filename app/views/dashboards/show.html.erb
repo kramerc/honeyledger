@@ -1,0 +1,95 @@
+<% content_for :title, "Dashboard" %>
+
+<div class="dashboard">
+  <h1>Dashboard</h1>
+
+  <section class="dashboard__section" aria-labelledby="dashboard-attention">
+    <h2 id="dashboard-attention">Needs attention</h2>
+    <% if @dashboard.attention_items.any? %>
+      <ul class="dashboard__attention">
+        <% @dashboard.attention_items.each do |item| %>
+          <li class="<%= class_names("dashboard__attention-item", "dashboard__attention-item--error": item.error?) %>">
+            <%= link_to item.message, item.path %>
+          </li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="dashboard__muted">Everything's in sync.</p>
+    <% end %>
+  </section>
+
+  <% if @dashboard.empty? %>
+    <div class="empty-state">
+      <h2>Get started</h2>
+      <p>Add an account, connect a bank or wallet, or import a CSV export to start tracking balances.</p>
+      <div class="empty-state__actions">
+        <%= link_to "New account", new_account_path %>
+        <%= link_to "Go to Integrations", integrations_path %>
+      </div>
+    </div>
+  <% else %>
+    <section class="dashboard__section" aria-labelledby="dashboard-net-worth">
+      <h2 id="dashboard-net-worth">Net worth</h2>
+      <% if @dashboard.net_worth.any? %>
+        <div class="dashboard__table-wrap">
+          <table class="dashboard__table dashboard__net-worth">
+            <thead>
+              <tr>
+                <th>Currency</th>
+                <th class="numeric">Assets</th>
+                <th class="numeric">Liabilities</th>
+                <th class="numeric">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @dashboard.net_worth.each do |row| %>
+                <tr>
+                  <td><%= row.currency.code %></td>
+                  <td class="numeric"><%= amount_to_currency(row.assets_minor, row.currency) %></td>
+                  <td class="numeric"><%= amount_to_currency(row.liabilities_minor, row.currency) %></td>
+                  <td class="<%= class_names("numeric", "dashboard__net", "dashboard__net--positive": row.net_minor.positive?, "dashboard__net--negative": row.net_minor.negative?) %>">
+                    <%= amount_to_currency(row.net_minor, row.currency) %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="dashboard__muted">No balances yet.</p>
+      <% end %>
+    </section>
+
+    <section class="dashboard__section" aria-labelledby="dashboard-recent">
+      <h2 id="dashboard-recent">Recent transactions</h2>
+      <% recent_transactions = @dashboard.recent_transactions.to_a %>
+      <% if recent_transactions.any? %>
+        <div class="dashboard__table-wrap">
+          <table class="dashboard__table dashboard__recent">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th class="dashboard__accounts-column">From → To</th>
+                <th class="numeric">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% recent_transactions.each do |transaction| %>
+                <tr>
+                  <td class="dashboard__date"><%= transaction.transacted_at&.to_date&.to_fs(:short) %></td>
+                  <td class="dashboard__description"><%= transaction.description.presence || "—" %></td>
+                  <td class="dashboard__accounts-column"><%= transaction.src_account&.name %> → <%= transaction.dest_account&.name %></td>
+                  <td class="numeric"><%= transaction_amount_with_currency(transaction) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="dashboard__muted">No transactions yet.</p>
+      <% end %>
+      <p><%= link_to "View all transactions", transactions_path %></p>
+    </section>
+  <% end %>
+</div>

@@ -6,10 +6,10 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "should get index when signed in" do
+  test "sends a signed-in user to the dashboard" do
     sign_in_as(users(:one))
     get root_url
-    assert_response :success
+    assert_redirected_to dashboard_path
   end
 
   # The row action menus need the Popover API, which Firefox shipped in 125.

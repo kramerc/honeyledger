@@ -39,6 +39,20 @@ module AggregatorLinkable
   end
 
   class << self
+    # A bank aggregator connection's accounts as the integrations page lists
+    # them: linked ones always, unlinked ones only while the last refresh still
+    # reported them, so an account the bank dropped stops cluttering the page.
+    def visible_accounts(connection)
+      return [] if connection.nil?
+
+      threshold = connection.refreshed_at
+      connection.accounts.includes(:ledger_accounts).select do |aggregator_account|
+        aggregator_account.linked? || aggregator_account.current?(threshold)
+      end.sort_by do |aggregator_account|
+        [ aggregator_account.institution_name.to_s.downcase, aggregator_account.name.to_s.downcase ]
+      end
+    end
+
     # Store class names (stable strings) rather than class objects so the registry
     # stays correct across Zeitwerk reloads. After a reload, redefined classes
     # become new objects; if we held the old objects we'd either leak them or

@@ -11,7 +11,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   test "create with valid credentials" do
     post session_path, params: { email: @user.email, password: "password123" }
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
     assert cookies[:session_id]
     assert_equal 1, @user.sessions.count
   end
@@ -19,7 +19,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   test "create normalizes the email before matching" do
     post session_path, params: { email: "  ONE@example.com ", password: "password123" }
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
     assert cookies[:session_id]
   end
 
@@ -54,15 +54,15 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to new_session_path
 
     post session_path, params: { email: @user.email, password: "password123" }
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
   end
 
-  test "a signed-in user is sent home instead of the login form" do
+  test "a signed-in user is sent to the dashboard instead of the login form" do
     sign_in_as(@user)
 
     get new_session_path
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
   end
 
   test "a signed-in user cannot open a second session or switch accounts by logging in again" do
@@ -71,7 +71,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
     post session_path, params: { email: users(:two).email, password: "password123" }
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
     assert_equal original_cookie, cookies[:session_id]
     assert_equal 1, @user.sessions.count
     assert_equal 0, users(:two).sessions.count

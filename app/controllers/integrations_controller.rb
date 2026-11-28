@@ -2,8 +2,8 @@ class IntegrationsController < ApplicationController
   def show
     @simplefin_connection = current_user.simplefin_connection
     @lunchflow_connection = current_user.lunchflow_connection
-    @simplefin_accounts = visible_aggregator_accounts(@simplefin_connection)
-    @lunchflow_accounts = visible_aggregator_accounts(@lunchflow_connection)
+    @simplefin_accounts = AggregatorLinkable.visible_accounts(@simplefin_connection)
+    @lunchflow_accounts = AggregatorLinkable.visible_accounts(@lunchflow_connection)
     @blockchain_connections = current_user.blockchain_connections.order(:name, :id).to_a
     # Wallet accounts are always shown: an asset on chain never vanishes upstream
     # the way a bank aggregator account can, so a failed refresh must not hide it.
@@ -11,17 +11,4 @@ class IntegrationsController < ApplicationController
       .includes(:connection, :ledger_accounts).sort_by { |account| [ account.connection.name.downcase, account.name.downcase ] }
     @linkable_accounts = current_user.accounts.linkable.order(:name)
   end
-
-  private
-
-    def visible_aggregator_accounts(connection)
-      return [] if connection.nil?
-
-      threshold = connection.refreshed_at
-      connection.accounts.includes(:ledger_accounts).select do |aggregator_account|
-        aggregator_account.linked? || aggregator_account.current?(threshold)
-      end.sort_by do |aggregator_account|
-        [ aggregator_account.institution_name.to_s.downcase, aggregator_account.name.to_s.downcase ]
-      end
-    end
 end
