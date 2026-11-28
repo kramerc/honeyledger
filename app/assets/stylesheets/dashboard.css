@@ -141,11 +141,11 @@
 
 /* Narrow screens keep the figure that matters in each table. Transactions
    drop Type and From → To below 768px and show the indicator under the
-   amount instead. Net
-   worth keeps all four columns while they fit, which depends on the
-   figures, not the screen: the fit-columns controller measures and sets
-   --full or --compact. Until it has, phones start compact so the first
-   paint never overflows, and wider screens start full. */
+   amount instead. Net worth keeps all four columns while they fit, which
+   depends on the figures, not the screen: the fit-columns controller
+   measures and sets --full or --compact. Until it has, phones start
+   compact so the first paint never overflows, and wider screens start
+   full. */
 @media (max-width: 767px) {
   .dashboard__type-column,
   .dashboard__accounts-column {
