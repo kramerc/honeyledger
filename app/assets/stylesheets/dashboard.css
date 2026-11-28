@@ -1,0 +1,167 @@
+/* Dashboard — the signed-in landing page. Native tables styled like the
+   transactions table's header row; every selector is namespaced under
+   .dashboard. */
+
+.dashboard {
+  max-width: 1100px;
+}
+
+.dashboard__section {
+  margin-bottom: 24px;
+}
+
+.dashboard__section h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.dashboard__muted {
+  color: var(--bark-light);
+  margin: 0;
+}
+
+/* Needs attention: one link per item, errors in the error text colour. */
+.dashboard__attention {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+}
+
+.dashboard__attention-item {
+  padding: 7px 10px;
+  font-size: 0.875rem;
+}
+
+.dashboard__attention-item + .dashboard__attention-item {
+  border-top: 1px solid var(--divider);
+}
+
+.dashboard__attention-item--error a {
+  color: var(--text-error);
+}
+
+/* Tables scroll inside their own box rather than widening the page. */
+.dashboard__table-wrap {
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.dashboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.dashboard__table th {
+  background-color: var(--honey-pale);
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.dashboard__table td {
+  color: var(--bark-medium);
+  padding: 7px 10px;
+}
+
+.dashboard__table tbody tr + tr td {
+  border-top: 1px solid var(--divider);
+}
+
+.dashboard__table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dashboard__net {
+  font-weight: 600;
+}
+
+/* Four short columns: size to the figures instead of spanning the page. */
+.dashboard__table-wrap--fit {
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* A floor for each figure column (auto table layout widens a cell past it
+   as needed). Phones skip it: three 8em columns don't fit at 390px. */
+@media (min-width: 768px) {
+  .dashboard__net-worth .numeric {
+    width: 8em;
+  }
+}
+
+.dashboard__table .dashboard__net--positive { color: var(--color-positive); }
+.dashboard__table .dashboard__net--negative { color: var(--color-negative); }
+
+.dashboard__date {
+  white-space: nowrap;
+}
+
+/* Long text stays on one line with an ellipsis (full text in title), so
+   rows keep a steady height. max-width: 0 lets an auto-layout table cell
+   shrink below its content; the widths share out the remaining space. */
+.dashboard__truncate {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard__description {
+  width: 55%;
+}
+
+.dashboard__accounts-column {
+  width: 45%;
+}
+
+/* Beside each amount, since this table has no Currency column. */
+.dashboard__currency-code {
+  color: var(--bark-light);
+  font-size: 0.8rem;
+}
+
+.dashboard__type-column {
+  white-space: nowrap;
+}
+
+/* On phones the indicator moves under the amount, standing in for the
+   hidden Type and From → To columns. */
+.dashboard__phone-type {
+  display: none;
+}
+
+/* Narrow screens keep the figure that matters in each table. Transactions
+   drop Type and From → To below 768px and show the indicator under the
+   amount instead. Net worth keeps all four columns while they fit, which
+   depends on the figures, not the screen: the fit-columns controller
+   measures and sets --full or --compact. Until it has, phones start
+   compact so the first paint never overflows, and wider screens start
+   full. */
+@media (max-width: 767px) {
+  .dashboard__type-column,
+  .dashboard__accounts-column {
+    display: none;
+  }
+
+  .dashboard__phone-type {
+    display: block;
+  }
+
+  .dashboard__table-wrap--fit:not(.dashboard__table-wrap--full) .dashboard__breakdown-column {
+    display: none;
+  }
+}
+
+.dashboard__table-wrap--compact .dashboard__breakdown-column {
+  display: none;
+}
+

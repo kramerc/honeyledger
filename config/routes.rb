@@ -11,6 +11,7 @@ Rails.application.routes.draw do
   end
   resource :reauthentication, only: %i[ new create ]
   resource :settings, only: %i[ show ]
+  resource :dashboard, only: %i[ show ]
 
   resources :accounts do
     collection do

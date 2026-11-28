@@ -1,0 +1,107 @@
+<% content_for :title, "Dashboard" %>
+
+<div class="dashboard">
+  <h1>Dashboard</h1>
+
+  <section class="dashboard__section" aria-labelledby="dashboard-attention">
+    <h2 id="dashboard-attention">Needs attention</h2>
+    <% if @dashboard.attention_items.any? %>
+      <ul class="dashboard__attention">
+        <% @dashboard.attention_items.each do |item| %>
+          <li class="<%= class_names("dashboard__attention-item", "dashboard__attention-item--error": item.error?) %>">
+            <%= link_to item.message, item.path %>
+          </li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="dashboard__muted">Everything's in sync.</p>
+    <% end %>
+  </section>
+
+  <% if @dashboard.empty? %>
+    <div class="empty-state">
+      <h2>Get started</h2>
+      <p>Add an account, connect a bank or wallet, or import a CSV export to start tracking balances.</p>
+      <div class="empty-state__actions">
+        <%= link_to "New account", new_account_path %>
+        <%= link_to "Go to Integrations", integrations_path %>
+      </div>
+    </div>
+  <% else %>
+    <% net_worth = @dashboard.net_worth %>
+    <%= tag.section class: "dashboard__section", aria: { labelledby: "dashboard-net-worth" },
+          data: ({ controller: "fit-columns", fit_columns_full_class: "dashboard__table-wrap--full", fit_columns_compact_class: "dashboard__table-wrap--compact" } if net_worth.any?) do %>
+      <h2 id="dashboard-net-worth">Net worth</h2>
+      <% if net_worth.any? %>
+        <div class="dashboard__table-wrap dashboard__table-wrap--fit" data-fit-columns-target="wrapper">
+          <table class="dashboard__table dashboard__net-worth">
+            <thead>
+              <tr>
+                <th>Currency</th>
+                <th class="numeric dashboard__breakdown-column">Assets</th>
+                <th class="numeric dashboard__breakdown-column">Liabilities</th>
+                <th class="numeric">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% net_worth.each do |row| %>
+                <tr>
+                  <td><%= row.currency.code %></td>
+                  <td class="numeric dashboard__breakdown-column"><%= amount_to_currency(row.assets_minor, row.currency) %></td>
+                  <td class="numeric dashboard__breakdown-column"><%= amount_to_currency(row.liabilities_minor, row.currency) %></td>
+                  <td class="<%= class_names("numeric", "dashboard__net", "dashboard__net--positive": row.net_minor.positive?, "dashboard__net--negative": row.net_minor.negative?) %>">
+                    <%= amount_to_currency(row.net_minor, row.currency) %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="dashboard__muted">No balances yet.</p>
+      <% end %>
+    <% end %>
+
+    <section class="dashboard__section" aria-labelledby="dashboard-recent">
+      <h2 id="dashboard-recent">Recent transactions</h2>
+      <% recent_transactions = @dashboard.recent_transactions.to_a %>
+      <% if recent_transactions.any? %>
+        <div class="dashboard__table-wrap">
+          <table class="dashboard__table dashboard__recent">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="dashboard__type-column">Type</th>
+                <th>Description</th>
+                <th class="dashboard__accounts-column">From → To</th>
+                <th class="numeric">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% recent_transactions.each do |transaction| %>
+                <tr>
+                  <% description = transaction.description.presence || "—" %>
+                  <% accounts = "#{transaction.src_account&.name} → #{transaction.dest_account&.name}" %>
+                  <td class="dashboard__date"><%= transaction.transacted_at&.strftime("%Y-%m-%d") %></td>
+                  <td class="dashboard__type-column"><%= transaction_type_indicator(transaction) %></td>
+                  <td class="dashboard__truncate dashboard__description" title="<%= description %>"><%= description %></td>
+                  <td class="dashboard__truncate dashboard__accounts-column" title="<%= accounts %>"><%= accounts %></td>
+                  <td class="numeric">
+                    <%# The code too: a symbol alone is ambiguous (USD and USDC are both $). %>
+                    <%= transaction_amount_with_currency(transaction) %>
+                    <span class="dashboard__currency-code"><%= transaction.currency.code %></span>
+                    <%# Phones hide the Type and From → To columns; this keeps money in or out readable there. %>
+                    <%= transaction_type_indicator(transaction, class: "dashboard__phone-type") %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="dashboard__muted">No transactions yet.</p>
+      <% end %>
+      <p><%= link_to "View all transactions", transactions_path %></p>
+    </section>
+  <% end %>
+</div>

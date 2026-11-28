@@ -72,6 +72,7 @@ Transitions only answer the user (hover, open, close) and stay short: 0.1–0.2s
   - `1024–1279px`: the transactions table hides Description, Currency, Category, and Cleared.
   - `≥ 1280px`: the full transactions table.
 - Every page must work at 390px wide with no horizontal page scroll; only a wide table may scroll inside its own box.
+- When whether a column fits depends on its figures rather than the screen (long crypto balances, six-figure amounts), don't pick a breakpoint: mark the optional columns and let the `fit-columns` Stimulus controller hide them only when the table would overflow. The dashboard's net worth table is the example.
 
 ## Components
 
@@ -83,6 +84,7 @@ The main data tables (transactions, accounts, passkeys) are CSS grids of `.row` 
 - Cells: 1px right and bottom `--divider` borders, `--bark-medium` text at `0.875rem`.
 - Row hover (desktop only): `--honey-light` background.
 - Long text (description, account names): one line with an ellipsis, the full text in `title`.
+- Amounts in a table without a Currency column carry the currency code beside them (`--bark-light`, `0.8rem`, same line), since a symbol alone is ambiguous (USD and USDC are both `$`). The dashboard's recent transactions are the example.
 - Actions cell (transactions): icons only, with no visible header (the word "Actions" stays for screen readers). The column (`--actions-column`) is one icon button wide plus padding, and widens to two buttons only while a row is being edited (`.transactions:has(.transaction.editing)`); both widths derive from the button size, so the icons fill the cell exactly. Opening an edit shifts the other columns slightly; that is the accepted cost of not reserving the room. A shown row has its kebab menu (see Action menus); the new-transaction and edit form rows have their icon form actions (see Buttons).
 - Long lists (transactions): infinite scroll, never page links. The server sends one page (`Transaction::Page::SIZE` rows); a lazy Turbo Frame at its foot (`.transactions-page`) fetches the next page when it scrolls into view, showing a centred "Load more transactions" link in `--bark-light` at `0.85rem` until it does (the link is also the no-JavaScript fallback). Rows carry `content-visibility: auto`, so the browser skips off-screen rows however far the reader scrolls.
 
@@ -158,6 +160,7 @@ Rules that came with it:
 
 - Flashes: an 8px-radius panel with a 4px left border in the feedback colour, dismissible.
 - Empty states: `--honey-pale` panel, 8px radius, centred, with the next action as a link. Treat emptiness as a prompt to act, not a mood.
+- Attention lists (the dashboard's "Needs attention"): one linked line per problem inside an 8px-radius `--divider` box, errors first in `--text-error`, notices as ordinary links. With nothing to show, a single muted line replaces the box.
 
 ## Phones
 

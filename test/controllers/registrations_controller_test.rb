@@ -11,7 +11,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       post registration_path, params: { user: { email: "new@example.com", password: "password123", password_confirmation: "password123" } }
     end
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
     assert cookies[:session_id]
     assert_equal "new@example.com", User.last.email
   end
@@ -32,15 +32,15 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     post session_path, params: { email: "new@example.com", password: "password123" }
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
   end
 
-  test "a signed-in user is sent home instead of the sign-up form" do
+  test "a signed-in user is sent to the dashboard instead of the sign-up form" do
     sign_in_as(users(:one))
 
     get new_registration_path
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
   end
 
   test "a signed-in user cannot create another account" do
@@ -50,7 +50,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       post registration_path, params: { user: { email: "another@example.com", password: "password123", password_confirmation: "password123" } }
     end
 
-    assert_redirected_to root_path
+    assert_redirected_to dashboard_path
   end
 
   test "create rejects a duplicate email" do
